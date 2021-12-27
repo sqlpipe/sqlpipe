@@ -35,6 +35,7 @@ func (app *application) routes() http.Handler {
 	// *************
 
 	// UI
+	// Create transfer get
 	// Create transfer post
 	// Get all transfers get
 	// Get one transfer get
@@ -49,9 +50,11 @@ func (app *application) routes() http.Handler {
 	// ***************
 
 	// UI
+	// Create Connection get
 	// Create Connection post
 	// Get all Connections get
 	// Get one Connection get
+	// Update connection get
 	// Update connection patch
 	// Delete connection delete
 
@@ -67,18 +70,15 @@ func (app *application) routes() http.Handler {
 	// ***********
 
 	// UI
+	// Create Query get
 	// Create Query post
 	// Get all Queries get
 	// Get one Query get
-	// Update Query patch
-	// Delete Query delete
 
 	// API
 	// Create Query post
 	// Get all Queries get
 	// Get one Query get
-	// Update Query patch
-	// Delete Query delete
 
 	// **********
 	// **Static**
@@ -94,25 +94,35 @@ func (app *application) routes() http.Handler {
 	// UI
 	// Create user get
 	// Create user post
+	// Get all users get
+	// Get one user get
+	// Update user get
+	// Update user patch
+	// Delete user delete
 	// Login user get
 	// Login user post
 	// Logout user post
-	// Change user password get
-	// Change user password post
 
 	// API
 	// Create user post
-	// Activate user put
-	// Change user password put
+	// Get all users get
+	// Get one user get
+	// Update user patch
+	// Delete user delete
+	// Activate user patch
 
 	// **********
 	// **Tokens**
 	// **********
 
+	// UI
+	// Create user password reset token get
+	// Activate user with token get
+
 	// API
-	// Create activation token post
-	// Create authentication token post
-	// Create password reset post
+	// Create user activation token post
+	// Create user authentication token post
+	// Create user password reset token post
 
 	return commonMiddleware.Then(router)
 }
