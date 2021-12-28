@@ -10,18 +10,49 @@ import (
 
 func (app *application) routes() http.Handler {
 
-	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.logRequest, app.enableCORS, app.rateLimit)
+	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.logRequest, app.rateLimit)
 
-	// uiStandardMiddleware := alice.New()
-	// uiDynamicMiddleware := alice.New()
-
-	// apiStandardMiddleware := alice.New()
-	// apiDynamicMiddleware := alice.New()
+	apiStandardMiddleware := alice.New(app.enableCORS)
+	apiDynamicMiddleware := apiStandardMiddleware.Append(app.requireAuthentication)
 
 	router := httprouter.New()
 
 	router.NotFound = http.HandlerFunc(app.notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
+
+	// *********
+	// **Users**
+	// *********
+
+	// API
+	// Create user post
+	router.Handler(http.MethodPost, "/api/v1/users", apiDynamicMiddleware.ThenFunc(app.registerUserHandler))
+	// Get all users get
+	// router.Handler(http.MethodGet, "/api/v1/users", apiDynamicMiddleware.ThenFunc(testMe))
+	// Get one user get
+	// Update user patch
+	// Delete user delete
+	// Activate user patch
+	// Reset user password token post
+	// Create user authentication token post
+
+	// UI
+	// Create user get
+	// Create user post
+	// Get all users get
+	// Get one user get
+	// Update user get
+	// Update user patch
+	// Delete user delete
+	// Login user get
+	// Login user post
+	// Logout user post
+	// Activate user get
+	// Activate user post
+	// Reset user password get
+	// Reset user password post
+	// Create user authentication token get
+	// Create user authentication token post
 
 	// **************
 	// **Operations**
@@ -88,38 +119,6 @@ func (app *application) routes() http.Handler {
 
 	// UI
 	// Embedded FS get
-
-	// *********
-	// **Users**
-	// *********
-
-	// UI
-	// Create user get
-	// Create user post
-	// Get all users get
-	// Get one user get
-	// Update user get
-	// Update user patch
-	// Delete user delete
-	// Login user get
-	// Login user post
-	// Logout user post
-	// Activate user get
-	// Activate user post
-	// Reset user password get
-	// Reset user password post
-	// Create user authentication token get
-	// Create user authentication token post
-
-	// API
-	// Create user post
-	// Get all users get
-	// Get one user get
-	// Update user patch
-	// Delete user delete
-	// Activate user patch
-	// Reset user password token post
-	// Create user authentication token post
 
 	return commonMiddleware.Then(router)
 }

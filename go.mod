@@ -9,6 +9,7 @@ require (
 	github.com/go-mail/mail/v2 v2.3.0
 	github.com/golangcollege/sessions v1.2.0
 	github.com/justinas/alice v1.2.0
+	github.com/lib/pq v1.10.4
 	github.com/spf13/cobra v1.3.0
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3

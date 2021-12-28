@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"errors"
 	"expvar"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
 	"github.com/calmitchell617/sqlpipe/internal/mailer"
+	"github.com/calmitchell617/sqlpipe/internal/models/postgresql"
 	"github.com/golangcollege/sessions"
 	"github.com/spf13/cobra"
 )
@@ -44,7 +46,12 @@ type config struct {
 	port   int
 	env    string
 	secret string
-	db     struct {
+	init   struct {
+		username string
+		email    string
+		password string
+	}
+	db struct {
 		dsn          string
 		maxOpenConns int
 		maxIdleConns int
@@ -73,7 +80,7 @@ type application struct {
 	templateCache map[string]*template.Template
 
 	config config
-	// models postgresql.Models
+	models postgresql.Models
 	mailer mailer.Mailer
 	wg     sync.WaitGroup
 
@@ -101,6 +108,9 @@ func init() {
 	Serve.Flags().StringVar(&cfg.smtp.password, "smtp-password", "", "SMTP password")
 	Serve.Flags().StringVar(&cfg.smtp.sender, "smtp-sender", "", "SMTP sender")
 
+	Serve.Flags().StringVar(&cfg.init.username, "admin-username", "", "Admin username")
+	Serve.Flags().StringVar(&cfg.init.password, "admin-password", "", "Admin password")
+
 	Serve.Flags().BoolVar(&displayVersion, "version", false, "SMTP sender")
 
 	Serve.Flags().StringSliceVar(&cfg.cors.trustedOrigins, "cors-trusted-origins", []string{}, "Trusted CORS origins (comma separated)")
@@ -120,12 +130,12 @@ func serve(cmd *cobra.Command, args []string) {
 
 	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
 
-	// db, err := openDB(cfg)
-	// if err != nil {
-	// logger.PrintFatal(err, nil)
-	// }
-	// defer db.Close()
-	// logger.PrintInfo("database connection pool established", nil)
+	db, err := openDB(cfg)
+	if err != nil {
+		logger.PrintFatal(err, nil)
+	}
+	defer db.Close()
+	logger.PrintInfo("database connection pool established", nil)
 
 	expvar.NewString("version").Set(version)
 	expvar.Publish("goroutines", expvar.Func(func() interface{} {
@@ -169,6 +179,12 @@ func serve(cmd *cobra.Command, args []string) {
 		// models:        postgresql.NewModels(db),
 		// mailer:        mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
+
+	app.registerInitialUser(
+		cfg.init.username,
+		cfg.init.email,
+		cfg.init.password,
+	)
 
 	err = app.serve()
 	if err != nil {
@@ -234,4 +250,33 @@ func (app *application) serve() error {
 	})
 
 	return nil
+}
+
+func openDB(cfg config) (*sql.DB, error) {
+	fmt.Println(cfg)
+	db, err := sql.Open("postgres", cfg.db.dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	db.SetMaxOpenConns(cfg.db.maxOpenConns)
+
+	db.SetMaxIdleConns(cfg.db.maxIdleConns)
+
+	duration, err := time.ParseDuration(cfg.db.maxIdleTime)
+	if err != nil {
+		return nil, err
+	}
+
+	db.SetConnMaxIdleTime(duration)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = db.PingContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }

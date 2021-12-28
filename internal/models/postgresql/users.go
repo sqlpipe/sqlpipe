@@ -24,6 +24,7 @@ type User struct {
 	Password  password  `json:"-"`
 	Activated bool      `json:"activated"`
 	Version   int       `json:"-"`
+	Admin     bool      `json:"admin"`
 }
 
 type password struct {
@@ -62,8 +63,9 @@ func (p *password) Matches(plaintextPassword string) (bool, error) {
 }
 
 func ValidateEmail(v *validator.Validator, email string) {
-	v.Check(email != "", "email", "must be provided")
-	v.Check(validator.Matches(email, validator.EmailRX), "email", "must be a valid email address")
+	if email != "" {
+		v.Check(validator.Matches(email, validator.EmailRX), "email", "must be a valid email address")
+	}
 }
 
 func ValidatePasswordPlaintext(v *validator.Validator, password string) {
@@ -104,12 +106,7 @@ func (m UserModel) Insert(user *User) error {
 
 	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.ID, &user.CreatedAt, &user.Version)
 	if err != nil {
-		switch {
-		case err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"`:
-			return ErrDuplicateEmail
-		default:
-			return err
-		}
+		return err
 	}
 
 	return nil

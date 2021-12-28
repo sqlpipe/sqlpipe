@@ -21,7 +21,16 @@ confirm:
 ## run/server: build and run a sqlpipe server
 .PHONY: run/server
 run/server:
-	go run ./cmd/sqlpipe server
+	go run ./cmd/sqlpipe server \
+		--admin-username=admin \
+		--admin-password=Mypass123 \
+		--smtp-host=${SMTP-HOST} \
+		--smtp-username=${SMTP-USERNAME} \
+		--smtp-password=${SMTP-PASSWORD} \
+		--smtp-sender=${SMTP-SENDER} \
+		--admin-username=${ADMIN-USERNAME} \
+		--admin-password=${ADMIN-PASSWORD} \
+		--dsn=postgres://sqlpipe:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable
 
 ## db/init: Initialize a fresh instance of postgresql
 .PHONY: db/init
