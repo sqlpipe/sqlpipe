@@ -18,10 +18,10 @@ confirm:
 # DEVELOPMENT
 # ==================================================================================== #
 
-## run/api: build and run sqlpipe
+## run/sqlpipe: build and run sqlpipe
 .PHONY: run/sqlpipe
-run/api:
-	go run ./cmd/sqlpipe -db-dsn=${SQLPIPE_DB_DSN}
+run/serve:
+	go run ./cmd/sqlpipe serve
 
 ## db/psql: connect to the database using psql
 .PHONY: db/psql
