@@ -3,6 +3,7 @@ package mailer
 import (
 	"bytes"
 	"embed"
+	"fmt"
 	"html/template"
 	"time"
 
@@ -20,6 +21,8 @@ type Mailer struct {
 func New(host string, port int, username, password, sender string) Mailer {
 	dialer := mail.NewDialer(host, port, username, password)
 	dialer.Timeout = 5 * time.Second
+
+	fmt.Println(host, port, username, password)
 
 	return Mailer{
 		dialer: dialer,

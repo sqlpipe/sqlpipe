@@ -47,9 +47,10 @@ type config struct {
 	env    string
 	secret string
 	init   struct {
-		username string
-		email    string
-		password string
+		createAdmin bool
+		username    string
+		email       string
+		password    string
 	}
 	db struct {
 		dsn          string
@@ -108,7 +109,9 @@ func init() {
 	Serve.Flags().StringVar(&cfg.smtp.password, "smtp-password", "", "SMTP password")
 	Serve.Flags().StringVar(&cfg.smtp.sender, "smtp-sender", "", "SMTP sender")
 
+	Serve.Flags().BoolVar(&cfg.init.createAdmin, "create-admin", false, "Create admin user")
 	Serve.Flags().StringVar(&cfg.init.username, "admin-username", "", "Admin username")
+	Serve.Flags().StringVar(&cfg.init.email, "admin-email", "", "Admin email")
 	Serve.Flags().StringVar(&cfg.init.password, "admin-password", "", "Admin password")
 
 	Serve.Flags().BoolVar(&displayVersion, "version", false, "SMTP sender")
@@ -119,8 +122,6 @@ func init() {
 func serve(cmd *cobra.Command, args []string) {
 
 	var err error
-
-	fmt.Printf("%+v\n", cfg)
 
 	if displayVersion {
 		fmt.Printf("Version:\t%s\n", version)
@@ -176,15 +177,17 @@ func serve(cmd *cobra.Command, args []string) {
 		// templateCache: templateCache,
 		config:    cfg,
 		tlsConfig: tlsConfig,
-		// models:        postgresql.NewModels(db),
-		// mailer:        mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		models:    postgresql.NewModels(db),
+		mailer:    mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
-	app.registerInitialUser(
-		cfg.init.username,
-		cfg.init.email,
-		cfg.init.password,
-	)
+	if cfg.init.createAdmin {
+		app.registerInitialUser(
+			cfg.init.username,
+			cfg.init.email,
+			cfg.init.password,
+		)
+	}
 
 	err = app.serve()
 	if err != nil {
@@ -253,7 +256,6 @@ func (app *application) serve() error {
 }
 
 func openDB(cfg config) (*sql.DB, error) {
-	fmt.Println(cfg)
 	db, err := sql.Open("postgres", cfg.db.dsn)
 	if err != nil {
 		return nil, err

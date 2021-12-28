@@ -11,7 +11,7 @@ import (
 
 func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name     string `json:"name"`
+		Username string `json:"username"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
@@ -23,7 +23,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	user := &postgresql.User{
-		Name:      input.Name,
+		Username:  input.Username,
 		Email:     input.Email,
 		Activated: false,
 	}
@@ -258,10 +258,10 @@ func (app *application) updateUserPasswordHandler(w http.ResponseWriter, r *http
 	}
 }
 
-func (app *application) registerInitialUser(name string, email string, password string) {
+func (app *application) registerInitialUser(username string, email string, password string) {
 
 	user := &postgresql.User{
-		Name:      name,
+		Username:  username,
 		Email:     email,
 		Activated: false,
 		Admin:     true,

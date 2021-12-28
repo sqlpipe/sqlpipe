@@ -32,6 +32,23 @@ run/server:
 		--admin-password=${ADMIN-PASSWORD} \
 		--dsn=postgres://sqlpipe:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable
 
+## run/init: build and run a sqlpipe server and create an admin user
+.PHONY: run/init
+run/init:
+	go run ./cmd/sqlpipe server \
+		--admin-username=admin \
+		--admin-password=Mypass123 \
+		--smtp-host=${SMTP-HOST} \
+		--smtp-username=${SMTP-USERNAME} \
+		--smtp-password=${SMTP-PASSWORD} \
+		--smtp-sender=${SMTP-SENDER} \
+		--smtp-port=${SMTP-PORT} \
+		--admin-username=${ADMIN-USERNAME} \
+		--admin-password=${ADMIN-PASSWORD} \
+		--admin-email=${ADMIN-EMAIL} \
+		--dsn=postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable \
+		--create-admin
+
 ## db/init: Initialize a fresh instance of postgresql
 .PHONY: db/init
 db/init:
@@ -42,12 +59,16 @@ db/init:
 .PHONY: db/setup
 db/setup:
 	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
-	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/postgres?sslmode=disable -c "CREATE ROLE sqlpipe WITH LOGIN PASSWORD '${SQLPIPE-PASSWORD}'"
 	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable -c 'CREATE EXTENSION IF NOT EXISTS citext;'
 
-## db/shell: connect to the sqlpipe database as postgres user
-.PHONY: db/shell
-db/shell:
+## db/postgres-shell: connect to the sqlpipe database as postgres user
+.PHONY: db/postgres-shell
+db/postgres-shell:
+	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable
+
+## db/sqlpipe-shell: connect to the sqlpipe database as postgres user
+.PHONY: db/sqlpipe-shell
+db/sqlpipe-shell:
 	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable
 
 ## db/migrations/new name=$1: create a new database migration
