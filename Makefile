@@ -18,15 +18,28 @@ confirm:
 # DEVELOPMENT
 # ==================================================================================== #
 
-## run/sqlpipe: build and run sqlpipe
-.PHONY: run/sqlpipe
-run/serve:
-	go run ./cmd/sqlpipe serve
+## run/server: build and run a sqlpipe server
+.PHONY: run/server
+run/server:
+	go run ./cmd/sqlpipe server
 
-## db/psql: connect to the database using psql
-.PHONY: db/psql
-db/psql:
-	psql ${SQLPIPE_DB_DSN}
+## db/init: Initialize a fresh instance of postgresql
+.PHONY: db/init
+db/init:
+	docker container rm -f ${DB-CONTAINER-NAME};
+	docker container run -d -p 5432:5432 --name ${DB-CONTAINER-NAME} -e POSTGRES_PASSWORD=${POSTGRES-PASSWORD} postgres:14.1
+
+## db/setup: Create a database and user
+.PHONY: db/setup
+db/setup:
+	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
+	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/postgres?sslmode=disable -c "CREATE ROLE sqlpipe WITH LOGIN PASSWORD '${SQLPIPE-PASSWORD}'"
+	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable -c 'CREATE EXTENSION IF NOT EXISTS citext;'
+
+## db/shell: connect to the sqlpipe database as postgres user
+.PHONY: db/shell
+db/shell:
+	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable
 
 ## db/migrations/new name=$1: create a new database migration
 .PHONY: db/migrations/new
@@ -38,7 +51,13 @@ db/migrations/new:
 .PHONY: db/migrations/up
 db/migrations/up: confirm
 	@echo 'Running up migrations...'
-	migrate -path ./migrations -database ${SQLPIPE_DB_DSN} up
+	migrate -path ./migrations -database postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable up
+
+## docker/prune: Prune unused docker stuff
+.PHONY: docker/prune
+docker/prune:
+	@echo 'Pruning unused docker objects'
+	docker system prune -f --volumes
 
 # ==================================================================================== #
 # QUALITY CONTROL

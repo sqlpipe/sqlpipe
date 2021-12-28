@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/calmitchell617/sqlpipe/cmd/sqlpipe/serve"
+	"github.com/calmitchell617/sqlpipe/cmd/sqlpipe/server"
 	"github.com/spf13/cobra"
 )
 
@@ -11,7 +11,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(serve.Serve)
+	rootCmd.AddCommand(server.Serve)
 	// rootCmd.AddCommand(transfer.TransferCmd)
 	// rootCmd.AddCommand(query.QueryCmd)
 }
