@@ -28,16 +28,23 @@ run/server:
 		--smtp-username=${SMTP-USERNAME} \
 		--smtp-password=${SMTP-PASSWORD} \
 		--smtp-sender=${SMTP-SENDER} \
+		--smtp-port=${SMTP-PORT} \
 		--admin-username=${ADMIN-USERNAME} \
 		--admin-password=${ADMIN-PASSWORD} \
-		--dsn=postgres://sqlpipe:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable
+		--admin-email=${ADMIN-EMAIL} \
+		--dsn=postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable \
+		--secret=${SECRET}
 
-## run/init: build and run a sqlpipe server and create an admin user
+## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server
 .PHONY: run/init
 run/init:
+	docker container rm -f ${DB-CONTAINER-NAME};
+	docker container run -d -p 5432:5432 --name ${DB-CONTAINER-NAME} -e POSTGRES_PASSWORD=${POSTGRES-PASSWORD} postgres:14.1
+	sleep 1
+	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
+	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable -c 'CREATE EXTENSION IF NOT EXISTS citext;'
+	migrate -path ./migrations -database postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable up
 	go run ./cmd/sqlpipe server \
-		--admin-username=admin \
-		--admin-password=Mypass123 \
 		--smtp-host=${SMTP-HOST} \
 		--smtp-username=${SMTP-USERNAME} \
 		--smtp-password=${SMTP-PASSWORD} \
@@ -47,6 +54,7 @@ run/init:
 		--admin-password=${ADMIN-PASSWORD} \
 		--admin-email=${ADMIN-EMAIL} \
 		--dsn=postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable \
+		--secret=${SECRET} \
 		--create-admin
 
 ## db/init: Initialize a fresh instance of postgresql
@@ -64,11 +72,6 @@ db/setup:
 ## db/postgres-shell: connect to the sqlpipe database as postgres user
 .PHONY: db/postgres-shell
 db/postgres-shell:
-	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable
-
-## db/sqlpipe-shell: connect to the sqlpipe database as postgres user
-.PHONY: db/sqlpipe-shell
-db/sqlpipe-shell:
 	docker exec -it ${DB-CONTAINER-NAME} psql postgres://postgres:${POSTGRES-PASSWORD}@localhost/sqlpipe?sslmode=disable
 
 ## db/migrations/new name=$1: create a new database migration

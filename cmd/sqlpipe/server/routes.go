@@ -25,16 +25,17 @@ func (app *application) routes() http.Handler {
 	// *********
 
 	// API
-	// Create user post
-	router.Handler(http.MethodPost, "/api/v1/users", apiDynamicMiddleware.ThenFunc(app.registerUserHandler))
+	router.Handler(http.MethodPost, "/api/v1/users", apiDynamicMiddleware.ThenFunc(app.createUserHandler))
 	// Get all users get
 	// router.Handler(http.MethodGet, "/api/v1/users", apiDynamicMiddleware.ThenFunc(testMe))
 	// Get one user get
 	// Update user patch
 	// Delete user delete
 	// Activate user patch
+	router.Handler(http.MethodPatch, "/api/v1/users/activate", apiStandardMiddleware.ThenFunc(app.activateUserHandler))
 	// Reset user password token post
 	// Create user authentication token post
+	router.Handler(http.MethodPost, "/api/v1/users/authenticate", apiStandardMiddleware.ThenFunc(app.createAuthenticationTokenHandler))
 
 	// UI
 	// Create user get

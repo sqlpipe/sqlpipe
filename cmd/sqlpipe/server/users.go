@@ -9,11 +9,12 @@ import (
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 )
 
-func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Admin    bool   `json:"admin"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -25,6 +26,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	user := &postgresql.User{
 		Username:  input.Username,
 		Email:     input.Email,
+		Admin:     input.Admin,
 		Activated: false,
 	}
 
@@ -44,8 +46,8 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	err = app.models.Users.Insert(user)
 	if err != nil {
 		switch {
-		case errors.Is(err, postgresql.ErrDuplicateEmail):
-			v.AddError("email", "a user with this email address already exists")
+		case errors.Is(err, postgresql.ErrDuplicateUsername):
+			v.AddError("username", "a user with this username already exists")
 			app.failedValidationResponse(w, r, v.Errors)
 		default:
 			app.serverErrorResponse(w, r, err)
@@ -79,7 +81,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 
 func (app *application) createActivationTokenHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Email string `json:"email"`
+		Username string `json:"username"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -90,16 +92,16 @@ func (app *application) createActivationTokenHandler(w http.ResponseWriter, r *h
 
 	v := validator.New()
 
-	if postgresql.ValidateEmail(v, input.Email); !v.Valid() {
+	if postgresql.ValidateEmail(v, input.Username); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
-	user, err := app.models.Users.GetByEmail(input.Email)
+	user, err := app.models.Users.GetByUsername(input.Username)
 	if err != nil {
 		switch {
 		case errors.Is(err, postgresql.ErrRecordNotFound):
-			v.AddError("email", "no matching email address found")
+			v.AddError("username", "no matching username found")
 			app.failedValidationResponse(w, r, v.Errors)
 		default:
 			app.serverErrorResponse(w, r, err)
@@ -316,4 +318,60 @@ func (app *application) registerInitialUser(username string, email string, passw
 		"successfully created inital admin user",
 		map[string]string{},
 	)
+}
+
+func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	v := validator.New()
+
+	postgresql.ValidateUsername(v, input.Username)
+	postgresql.ValidatePasswordPlaintext(v, input.Password)
+
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	user, err := app.models.Users.GetByUsername(input.Username)
+	if err != nil {
+		switch {
+		case errors.Is(err, postgresql.ErrRecordNotFound):
+			app.invalidCredentialsResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	match, err := user.Password.Matches(input.Password)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	if !match {
+		app.invalidCredentialsResponse(w, r)
+		return
+	}
+
+	token, err := app.models.Tokens.New(user.ID, 24*time.Hour, postgresql.ScopeAuthentication)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusCreated, envelope{"authentication_token": token}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }

@@ -142,21 +142,21 @@ func serve(cmd *cobra.Command, args []string) {
 	expvar.Publish("goroutines", expvar.Func(func() interface{} {
 		return runtime.NumGoroutine()
 	}))
-	// expvar.Publish("database", expvar.Func(func() interface{} {
-	// return db.Stats()
-	// }))
+	expvar.Publish("database", expvar.Func(func() interface{} {
+		return db.Stats()
+	}))
 	expvar.Publish("timestamp", expvar.Func(func() interface{} {
 		return time.Now().Unix()
 	}))
 
-	// templateCache, err := newTemplateCache()
-	// if err != nil {
-	// logger.PrintFatal(err, nil)
-	// }
+	templateCache, err := newTemplateCache()
+	if err != nil {
+		logger.PrintFatal(err, nil)
+	}
 
-	// session := sessions.New([]byte(*secret))
-	// session.Lifetime = 12 * time.Hour
-	// session.Secure = true
+	session := sessions.New([]byte(cfg.secret))
+	session.Lifetime = 12 * time.Hour
+	session.Secure = true
 
 	tlsConfig := &tls.Config{
 		PreferServerCipherSuites: true,
@@ -172,13 +172,13 @@ func serve(cmd *cobra.Command, args []string) {
 	}
 
 	app := &application{
-		logger: logger,
-		// session:       session,
-		// templateCache: templateCache,
-		config:    cfg,
-		tlsConfig: tlsConfig,
-		models:    postgresql.NewModels(db),
-		mailer:    mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		logger:        logger,
+		session:       session,
+		templateCache: templateCache,
+		config:        cfg,
+		tlsConfig:     tlsConfig,
+		models:        postgresql.NewModels(db),
+		mailer:        mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
 	if cfg.init.createAdmin {
