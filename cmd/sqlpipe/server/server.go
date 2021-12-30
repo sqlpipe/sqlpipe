@@ -38,8 +38,6 @@ var (
 	displayVersion bool
 )
 
-type contextKey string
-
 const contextKeyIsAuthenticated = contextKey("isAuthenticated")
 
 type config struct {

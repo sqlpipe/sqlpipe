@@ -13,7 +13,8 @@ func (app *application) routes() http.Handler {
 	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.logRequest, app.rateLimit)
 
 	apiStandardMiddleware := alice.New(app.enableCORS)
-	apiDynamicMiddleware := apiStandardMiddleware.Append(app.requireAuthentication)
+	apiRequireAdminMiddleware := apiStandardMiddleware.Append(app.authenticate, app.requireAdminUser)
+	// apiRequireLoggedInMiddleware := apiStandardMiddleware.Append(app.requireAuthentication)
 
 	router := httprouter.New()
 
@@ -25,7 +26,7 @@ func (app *application) routes() http.Handler {
 	// *********
 
 	// API
-	router.Handler(http.MethodPost, "/api/v1/users", apiDynamicMiddleware.ThenFunc(app.createUserHandler))
+	router.Handler(http.MethodPost, "/api/v1/users", apiRequireAdminMiddleware.ThenFunc(app.createUserHandler))
 	// Get all users get
 	// router.Handler(http.MethodGet, "/api/v1/users", apiDynamicMiddleware.ThenFunc(testMe))
 	// Get one user get

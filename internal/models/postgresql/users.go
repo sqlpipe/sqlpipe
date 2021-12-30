@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/validator"
@@ -70,8 +69,6 @@ func ValidateEmail(v *validator.Validator, email string) {
 }
 
 func ValidateUsername(v *validator.Validator, username string) {
-	fmt.Println("HEEEEY")
-	fmt.Println(username)
 	if username != "" {
 		v.Check(validator.Matches(username, validator.UsernameRX), "username", "must be 6-30 characters, contain alphanumeric characters or underscores, and first letter must be a letter")
 	}
