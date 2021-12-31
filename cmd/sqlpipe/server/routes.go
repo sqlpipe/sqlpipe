@@ -12,9 +12,8 @@ func (app *application) routes() http.Handler {
 
 	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.logRequest, app.rateLimit)
 
-	apiStandardMiddleware := alice.New(app.enableCORS)
-	apiRequireAdminMiddleware := apiStandardMiddleware.Append(app.authenticate, app.requireAdminUser)
-	// apiRequireLoggedInMiddleware := apiStandardMiddleware.Append(app.requireAuthentication)
+	// apiRequireLoggedInMiddleware := commonMiddleware.Append(app.requireLoggedInUser)
+	apiRequireAdminMiddleware := alice.New(app.requireAdminUser)
 
 	router := httprouter.New()
 
@@ -27,16 +26,11 @@ func (app *application) routes() http.Handler {
 
 	// API
 	router.Handler(http.MethodPost, "/api/v1/users", apiRequireAdminMiddleware.ThenFunc(app.createUserHandler))
-	// Get all users get
-	// router.Handler(http.MethodGet, "/api/v1/users", apiDynamicMiddleware.ThenFunc(testMe))
+	// router.Handler(http.MethodGet, "/api/v1/users", apiRequireLoggedInMiddleware.ThenFunc(app.getAllUsersHandler))
 	// Get one user get
 	// Update user patch
 	// Delete user delete
-	// Activate user patch
-	router.Handler(http.MethodPatch, "/api/v1/users/activate", apiStandardMiddleware.ThenFunc(app.activateUserHandler))
-	// Reset user password token post
-	// Create user authentication token post
-	router.Handler(http.MethodPost, "/api/v1/users/authenticate", apiStandardMiddleware.ThenFunc(app.createAuthenticationTokenHandler))
+	router.Handler(http.MethodPost, "/api/v1/users/authenticate", http.HandlerFunc(app.createAuthenticationTokenHandler))
 
 	// UI
 	// Create user get

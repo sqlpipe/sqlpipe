@@ -13,13 +13,10 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
-	"text/template"
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
-	"github.com/calmitchell617/sqlpipe/internal/mailer"
 	"github.com/calmitchell617/sqlpipe/internal/models/postgresql"
-	"github.com/golangcollege/sessions"
 	"github.com/spf13/cobra"
 )
 
@@ -38,13 +35,9 @@ var (
 	displayVersion bool
 )
 
-const contextKeyIsAuthenticated = contextKey("isAuthenticated")
-
 type config struct {
-	port   int
-	env    string
-	secret string
-	init   struct {
+	port int
+	init struct {
 		createAdmin bool
 		username    string
 		email       string
@@ -61,26 +54,13 @@ type config struct {
 		burst   int
 		enabled bool
 	}
-	smtp struct {
-		host     string
-		port     int
-		username string
-		password string
-		sender   string
-	}
-	cors struct {
-		trustedOrigins []string
-	}
 }
 
 type application struct {
-	logger        *jsonLog.Logger
-	session       *sessions.Session
-	templateCache map[string]*template.Template
+	logger *jsonLog.Logger
 
 	config config
 	models postgresql.Models
-	mailer mailer.Mailer
 	wg     sync.WaitGroup
 
 	tlsConfig *tls.Config
@@ -88,8 +68,6 @@ type application struct {
 
 func init() {
 	Serve.Flags().IntVar(&cfg.port, "port", 9000, "The port SQLPipe will run on. Default 9000")
-	Serve.Flags().StringVar(&cfg.env, "env", "", "Environment (development|staging|production)")
-	Serve.Flags().StringVar(&cfg.secret, "secret", "", "Secret key")
 
 	Serve.Flags().StringVar(&cfg.db.dsn, "dsn", "", "Database backend connection string")
 
@@ -101,20 +79,12 @@ func init() {
 	Serve.Flags().IntVar(&cfg.limiter.burst, "limiter-burst", 200, "Rate limiter maximum burst")
 	Serve.Flags().BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
 
-	Serve.Flags().StringVar(&cfg.smtp.host, "smtp-host", "", "SMTP host")
-	Serve.Flags().IntVar(&cfg.smtp.port, "smtp-port", 25, "SMTP port")
-	Serve.Flags().StringVar(&cfg.smtp.username, "smtp-username", "", "SMTP username")
-	Serve.Flags().StringVar(&cfg.smtp.password, "smtp-password", "", "SMTP password")
-	Serve.Flags().StringVar(&cfg.smtp.sender, "smtp-sender", "", "SMTP sender")
-
 	Serve.Flags().BoolVar(&cfg.init.createAdmin, "create-admin", false, "Create admin user")
 	Serve.Flags().StringVar(&cfg.init.username, "admin-username", "", "Admin username")
 	Serve.Flags().StringVar(&cfg.init.email, "admin-email", "", "Admin email")
 	Serve.Flags().StringVar(&cfg.init.password, "admin-password", "", "Admin password")
 
 	Serve.Flags().BoolVar(&displayVersion, "version", false, "SMTP sender")
-
-	Serve.Flags().StringSliceVar(&cfg.cors.trustedOrigins, "cors-trusted-origins", []string{}, "Trusted CORS origins (comma separated)")
 }
 
 func serve(cmd *cobra.Command, args []string) {
@@ -147,15 +117,6 @@ func serve(cmd *cobra.Command, args []string) {
 		return time.Now().Unix()
 	}))
 
-	templateCache, err := newTemplateCache()
-	if err != nil {
-		logger.PrintFatal(err, nil)
-	}
-
-	session := sessions.New([]byte(cfg.secret))
-	session.Lifetime = 12 * time.Hour
-	session.Secure = true
-
 	tlsConfig := &tls.Config{
 		PreferServerCipherSuites: true,
 		CurvePreferences:         []tls.CurveID{tls.X25519, tls.CurveP256},
@@ -170,19 +131,15 @@ func serve(cmd *cobra.Command, args []string) {
 	}
 
 	app := &application{
-		logger:        logger,
-		session:       session,
-		templateCache: templateCache,
-		config:        cfg,
-		tlsConfig:     tlsConfig,
-		models:        postgresql.NewModels(db),
-		mailer:        mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		logger:    logger,
+		config:    cfg,
+		tlsConfig: tlsConfig,
+		models:    postgresql.NewModels(db),
 	}
 
 	if cfg.init.createAdmin {
-		app.registerInitialUser(
+		app.createAdminUser(
 			cfg.init.username,
-			cfg.init.email,
 			cfg.init.password,
 		)
 	}
@@ -233,7 +190,6 @@ func (app *application) serve() error {
 
 	app.logger.PrintInfo("starting server", map[string]string{
 		"addr": srv.Addr,
-		"env":  app.config.env,
 	})
 
 	err := srv.ListenAndServeTLS("./tls/cert.pem", "./tls/key.pem")

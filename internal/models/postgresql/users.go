@@ -62,12 +62,6 @@ func (p *password) Matches(plaintextPassword string) (bool, error) {
 	return true, nil
 }
 
-func ValidateEmail(v *validator.Validator, email string) {
-	if email != "" {
-		v.Check(validator.Matches(email, validator.EmailRX), "email", "must provide a valid email address, or no email address")
-	}
-}
-
 func ValidateUsername(v *validator.Validator, username string) {
 	if username != "" {
 		v.Check(validator.Matches(username, validator.UsernameRX), "username", "must be 6-30 characters, contain alphanumeric characters or underscores, and first letter must be a letter")
@@ -84,7 +78,6 @@ func ValidateUser(v *validator.Validator, user *User) {
 	v.Check(user.Username != "", "username", "must be provided")
 	v.Check(len(user.Username) <= 500, "username", "must not be more than 500 bytes long")
 
-	ValidateEmail(v, user.Email)
 	ValidateUsername(v, user.Username)
 
 	if user.Password.plaintext != nil {
@@ -102,11 +95,11 @@ type UserModel struct {
 
 func (m UserModel) Insert(user *User) error {
 	query := `
-        INSERT INTO users (username, email, password_hash, admin, activated) 
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO users (username, email, password_hash, admin) 
+        VALUES ($1, $2, $3, $4)
         RETURNING id, created_at, version`
 
-	args := []interface{}{user.Username, user.Email, user.Password.hash, user.Admin, user.Activated}
+	args := []interface{}{user.Username, user.Email, user.Password.hash, user.Admin}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
