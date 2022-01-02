@@ -18,24 +18,18 @@ confirm:
 # DEVELOPMENT
 # ==================================================================================== #
 
-## run/server: build and run a sqlpipe server
-.PHONY: run/server
-run/server:
-	go run ./cmd/sqlpipe server \
+## run/serve: build and run a sqlpipe server
+.PHONY: run/serve
+run/serve:
+	go run ./cmd/sqlpipe serve \
 		--admin-username=sqlpipe \
 		--admin-password=Mypass123 \
 		--dsn=postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable
 
 ## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server
 .PHONY: run/init
-run/init:
-	docker container rm -f sqlpipe-postgresql;
-	docker container run -d -p 5432:5432 --name sqlpipe-postgresql -e POSTGRES_PASSWORD=Mypass123 postgres:14.1
-	sleep 1
-	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
-	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable -c 'CREATE EXTENSION IF NOT EXISTS citext;'
-	migrate -path ./migrations -database postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable up
-	go run ./cmd/sqlpipe server \
+run/init: db/init
+	go run ./cmd/sqlpipe serve \
 		--admin-username=sqlpipe \
 		--admin-password=Mypass123 \
 		--dsn=postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable \
@@ -46,16 +40,13 @@ run/init:
 db/init:
 	docker container rm -f sqlpipe-postgresql;
 	docker container run -d -p 5432:5432 --name sqlpipe-postgresql -e POSTGRES_PASSWORD=Mypass123 postgres:14.1
-
-## db/setup: Create a database and user
-.PHONY: db/setup
-db/setup:
+	sleep 1
 	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
-	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable -c 'CREATE EXTENSION IF NOT EXISTS citext;'
+	go run ./cmd/sqlpipe initialize --dsn=postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable --force
 
-## db/postgres-shell: connect to the sqlpipe database as postgres user
-.PHONY: db/postgres-shell
-db/postgres-shell:
+## db/shell: connect to the sqlpipe database as postgres user
+.PHONY: db/shell
+db/shell:
 	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable
 
 ## db/migrations/new name=$1: create a new database migration
@@ -91,22 +82,6 @@ audit: vendor
 	@echo 'Running tests...'
 	go test -v -race -vet=off ./...
 
-## integration: spinup test db and run integration tests
-.PHONY: audit
-audit: vendor
-	@echo 'Formatting code...'
-	go fmt ./...
-	@echo 'Vetting code...'
-	go vet ./...
-	staticcheck ./...
-	@echo 'Initializing test DB'
-	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/postgres?sslmode=disable  -c 'DROP DATABASE IF EXISTS sqlpipe_test'
-	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe_test'
-	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/sqlpipe_test?sslmode=disable -c 'CREATE EXTENSION IF NOT EXISTS citext;'
-	migrate -path ./migrations -database postgres://postgres:Mypass123@localhost/sqlpipe_test?sslmode=disable up
-	@echo 'Running tests...'
-	go test -v -race -vet=off ./...
-
 ## vendor: tidy and vendor dependencies
 .PHONY: vendor
 vendor:
@@ -124,11 +99,11 @@ current_time = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 git_description = $(shell git describe --always --dirty --tags --long)
 linker_flags = '-s -X main.buildTime=${current_time} -X main.version=${git_description}'
 
-## build/api: build the cmd/api application
-.PHONY: build/api
-build/api:
-	@echo 'Building cmd/api...'
-	go build -ldflags=${linker_flags} -o=./bin/api ./cmd/api
-	GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/api ./cmd/api
-	GOOS=darwin GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/darwin_arm64/api ./cmd/api
-	GOOS=windows GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/windows_arm64/api ./cmd/api
+## build/sqlpipe: build the cmd/sqlpipe application
+.PHONY: build/sqlpipe
+build/sqlpipe:
+	@echo 'Building cmd/sqlpipe...'
+	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd/sqlpipe
+	GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd/sqlpipe
+	GOOS=darwin GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/darwin_arm64/sqlpipe ./cmd/sqlpipe
+	GOOS=windows GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/windows_arm64/sqlpipe ./cmd/sqlpipe
