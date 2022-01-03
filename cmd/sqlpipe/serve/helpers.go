@@ -5,13 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 )
@@ -114,35 +111,6 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst int
 	}
 
 	return nil
-}
-
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789!@#$%^&*()_+=-][}{;:/?.,<>`~")
-
-func randomCharacters(length int) string {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]rune, length)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
-}
-
-func randomSeed() int {
-	bytes := make([]byte, 999)
-
-	_, err := rand.Read(bytes)
-	if err != nil {
-		fmt.Println("unable to create a random session secret")
-		os.Exit(1)
-		return int(time.Now().Unix())
-	}
-
-	result := 1
-	for _, b := range bytes {
-		result = result + int(b)
-	}
-
-	return result
 }
 
 // func (app *application) badRequestResponse(w http.ResponseWriter, r *http.Request, err error) {

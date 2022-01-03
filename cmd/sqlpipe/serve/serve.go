@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"database/sql"
 	"errors"
@@ -100,9 +101,9 @@ func init() {
 	Serve.Flags().StringVar(&cfg.adminCredentials.username, "admin-username", "", "Admin username")
 	Serve.Flags().StringVar(&cfg.adminCredentials.password, "admin-password", "", "Admin password")
 
-	Serve.Flags().StringVar(&secret, "secret", "", "Secret key")
-
 	Serve.Flags().BoolVar(&displayVersion, "version", false, "Display SQLpipe version")
+
+	Serve.Flags().StringVar(&secret, "secret", randomCharacters(32), "Secret key")
 }
 
 func serve(cmd *cobra.Command, args []string) {
@@ -118,12 +119,6 @@ func serve(cmd *cobra.Command, args []string) {
 	logger.PrintInfo("database connection pool established", nil)
 
 	publishMetrics(db)
-
-	if secret == "" {
-		secret = randomCharacters(32)
-	}
-
-	fmt.Println(secret)
 
 	session := sessions.New([]byte(secret))
 	session.Lifetime = 12 * time.Hour
@@ -256,4 +251,25 @@ func (app *application) serve() error {
 	})
 
 	return nil
+}
+
+func randomCharacters(length int) string {
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789!@#$%^&*()_+=-][}{;:/?.,<>`~")
+	b := make([]rune, 32)
+
+	for i := range b {
+		bytes := make([]byte, 1)
+		_, err := rand.Read(bytes)
+		if err != nil {
+			fmt.Println("unable to generate random characters for session security, please enter a 32 character string with the --secret flag")
+			os.Exit(1)
+		}
+
+		randomInt := int(bytes[0])
+		lettersLen := len(letters)
+		randomIndex := randomInt % lettersLen
+		b[i] = letters[randomIndex]
+	}
+
+	return string(b)
 }
