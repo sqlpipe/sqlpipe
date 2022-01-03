@@ -22,8 +22,6 @@ confirm:
 .PHONY: run/serve
 run/serve:
 	go run ./cmd/sqlpipe serve \
-		--admin-username=sqlpipe \
-		--admin-password=Mypass123 \
 		--dsn=postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable
 
 ## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server

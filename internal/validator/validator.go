@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	UsernameRX = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]\w{5,29}$`)
+	UsernameRX = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]\w{3,29}$`)
 )
 
 type Validator struct {

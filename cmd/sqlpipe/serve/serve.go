@@ -17,7 +17,6 @@ import (
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
-	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 )
 

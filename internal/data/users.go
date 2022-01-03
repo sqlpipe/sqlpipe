@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -23,7 +22,6 @@ type User struct {
 	Username  string    `json:"username"`
 	Password  password  `json:"-"`
 	Admin     bool      `json:"admin"`
-	Activated bool      `json:"activated"`
 	Version   int       `json:"-"`
 }
 
@@ -64,7 +62,7 @@ func (p *password) Matches(plaintextPassword string) (bool, error) {
 
 func ValidateUsername(v *validator.Validator, username string) {
 	if username != "" {
-		v.Check(validator.Matches(username, validator.UsernameRX), "username", "must be 6-30 characters, contain alphanumeric characters or underscores, and first letter must be a letter")
+		v.Check(validator.Matches(username, validator.UsernameRX), "username", "must be 5-30 characters, contain alphanumeric characters or underscores, and first letter must be a letter")
 	}
 }
 
@@ -119,7 +117,7 @@ func (m UserModel) Insert(user *User) error {
 
 func (m UserModel) GetByUsername(username string) (*User, error) {
 	query := `
-        SELECT id, created_at, username, password_hash, admin, activated, version
+        SELECT id, created_at, username, password_hash, admin, version
         FROM users
         WHERE username = $1`
 
@@ -134,7 +132,38 @@ func (m UserModel) GetByUsername(username string) (*User, error) {
 		&user.Username,
 		&user.Password.hash,
 		&user.Admin,
-		&user.Activated,
+		&user.Version,
+	)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
+}
+
+func (m UserModel) GetById(id int64) (*User, error) {
+	query := `
+        SELECT id, created_at, username, password_hash, admin, version
+        FROM users
+        WHERE id = $1`
+
+	var user User
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.Username,
+		&user.Password.hash,
+		&user.Admin,
 		&user.Version,
 	)
 
@@ -153,15 +182,14 @@ func (m UserModel) GetByUsername(username string) (*User, error) {
 func (m UserModel) Update(user *User) error {
 	query := `
         UPDATE users 
-        SET username = $1, password_hash = $2, admin = $3, activated = $4, version = version + 1
-        WHERE id = $5 AND version = $6
+        SET username = $1, password_hash = $2, admin = $3, version = version + 1
+        WHERE id = $4 AND version = $5
         RETURNING version`
 
 	args := []interface{}{
 		user.Username,
 		user.Password.hash,
 		user.Admin,
-		user.Activated,
 		user.ID,
 		user.Version,
 	}
@@ -182,46 +210,6 @@ func (m UserModel) Update(user *User) error {
 	}
 
 	return nil
-}
-
-func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
-	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
-
-	query := `
-        SELECT users.id, users.created_at, users.username, users.password_hash, users.admin, users.activated, users.version
-        FROM users
-        INNER JOIN tokens
-        ON users.id = tokens.user_id
-        WHERE tokens.hash = $1
-        AND tokens.scope = $2 
-        AND tokens.expiry > $3`
-
-	args := []interface{}{tokenHash[:], tokenScope, time.Now()}
-
-	var user User
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(
-		&user.ID,
-		&user.CreatedAt,
-		&user.Username,
-		&user.Password.hash,
-		&user.Admin,
-		&user.Activated,
-		&user.Version,
-	)
-	if err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrRecordNotFound
-		default:
-			return nil, err
-		}
-	}
-
-	return &user, nil
 }
 
 func (m UserModel) GetAll(username string, filters Filters) ([]*User, Metadata, error) {
@@ -272,4 +260,33 @@ func (m UserModel) GetAll(username string, filters Filters) ([]*User, Metadata, 
 	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
 
 	return users, metadata, nil
+}
+
+func (m UserModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+
+	query := `
+			DELETE FROM users
+			WHERE id = $1`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := m.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
+	return nil
 }

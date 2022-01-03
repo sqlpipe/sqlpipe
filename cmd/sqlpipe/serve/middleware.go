@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"errors"
 	"expvar"
 	"fmt"
 	"net/http"
@@ -8,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/calmitchell617/sqlpipe/internal/validator"
 	"github.com/felixge/httpsnoop"
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
@@ -110,6 +113,68 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 			}
 
 			mu.Unlock()
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) basicAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+			app.UnauthorizedResponse(w, r)
+			return
+		}
+
+		v := validator.New()
+		data.ValidateUsername(v, username)
+		data.ValidatePasswordPlaintext(v, password)
+
+		if !v.Valid() {
+			app.failedValidationResponse(w, r, v.Errors)
+			return
+		}
+
+		user, err := app.models.Users.GetByUsername(username)
+		if err != nil {
+			switch {
+			case errors.Is(err, data.ErrRecordNotFound):
+				w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+				app.invalidCredentialsResponse(w, r)
+			default:
+				app.serverErrorResponse(w, r, err)
+			}
+			return
+		}
+
+		match, err := user.Password.Matches(password)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
+
+		if !match {
+			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+			app.invalidCredentialsResponse(w, r)
+			return
+		}
+
+		r = app.contextSetAdmin(r, user.Admin)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		admin := app.contextGetAdmin(r)
+
+		if !admin {
+			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+			app.RequireAdminResponse(w, r)
+			return
 		}
 
 		next.ServeHTTP(w, r)
