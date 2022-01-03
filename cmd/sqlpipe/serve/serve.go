@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golangcollege/sessions"
+
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
 	"github.com/spf13/cobra"
@@ -33,6 +35,8 @@ var (
 	version   string
 
 	displayVersion bool
+
+	secret string
 
 	tlsConfig = &tls.Config{
 		PreferServerCipherSuites: true,
@@ -71,9 +75,10 @@ type config struct {
 type application struct {
 	logger *jsonLog.Logger
 
-	config config
-	models data.Models
-	wg     sync.WaitGroup
+	config  config
+	models  data.Models
+	wg      sync.WaitGroup
+	session *sessions.Session
 
 	tlsConfig *tls.Config
 }
@@ -95,6 +100,8 @@ func init() {
 	Serve.Flags().StringVar(&cfg.adminCredentials.username, "admin-username", "", "Admin username")
 	Serve.Flags().StringVar(&cfg.adminCredentials.password, "admin-password", "", "Admin password")
 
+	Serve.Flags().StringVar(&secret, "secret", "", "Secret key")
+
 	Serve.Flags().BoolVar(&displayVersion, "version", false, "Display SQLpipe version")
 }
 
@@ -112,10 +119,21 @@ func serve(cmd *cobra.Command, args []string) {
 
 	publishMetrics(db)
 
+	if secret == "" {
+		secret = randomCharacters(32)
+	}
+
+	fmt.Println(secret)
+
+	session := sessions.New([]byte(secret))
+	session.Lifetime = 12 * time.Hour
+	session.Secure = true
+
 	app := &application{
 		logger:    logger,
 		config:    cfg,
 		tlsConfig: tlsConfig,
+		session:   session,
 		models:    data.NewModels(db),
 	}
 
