@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"errors"
 	"expvar"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 	"github.com/felixge/httpsnoop"
+	"github.com/justinas/nosurf"
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
 )
@@ -119,7 +121,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) basicAuth(next http.Handler) http.Handler {
+func (app *application) requireAuthApi(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username, password, ok := r.BasicAuth()
 		if !ok {
@@ -161,7 +163,7 @@ func (app *application) basicAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		r = app.contextSetAdmin(r, user.Admin)
+		r = app.contextSetUser(r, user)
 
 		next.ServeHTTP(w, r)
 	})
@@ -169,14 +171,56 @@ func (app *application) basicAuth(next http.Handler) http.Handler {
 
 func (app *application) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		admin := app.contextGetAdmin(r)
+		user := app.contextGetUser(r)
 
-		if !admin {
+		if !user.Admin {
 			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
 			app.RequireAdminResponse(w, r)
 			return
 		}
 
 		next.ServeHTTP(w, r)
+	})
+}
+
+func secureHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("X-Frame-Options", "deny")
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func noSurf(next http.Handler) http.Handler {
+	csrfHandler := nosurf.New(next)
+	csrfHandler.SetBaseCookie(http.Cookie{
+		HttpOnly: true,
+		Path:     "/",
+		Secure:   true,
+	})
+
+	return csrfHandler
+}
+
+func (app *application) authenticateUi(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userId := app.session.GetInt(r, "authenticatedUserID")
+		if userId == 0 {
+			ctx := context.WithValue(r.Context(), userContextKey, data.AnonymousUser)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		user, err := app.models.Users.GetById(int64(userId))
+		if err == nil {
+			ctx := context.WithValue(r.Context(), userContextKey, user)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		} else if errors.Is(err, data.ErrRecordNotFound) {
+			ctx := context.WithValue(r.Context(), userContextKey, data.AnonymousUser)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
 	})
 }

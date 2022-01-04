@@ -8,6 +8,7 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"os/signal"
@@ -76,10 +77,11 @@ type config struct {
 type application struct {
 	logger *jsonLog.Logger
 
-	config  config
-	models  data.Models
-	wg      sync.WaitGroup
-	session *sessions.Session
+	config        config
+	models        data.Models
+	wg            sync.WaitGroup
+	session       *sessions.Session
+	templateCache map[string]*template.Template
 
 	tlsConfig *tls.Config
 }
@@ -120,16 +122,22 @@ func serve(cmd *cobra.Command, args []string) {
 
 	publishMetrics(db)
 
+	templateCache, err := newTemplateCache()
+	if err != nil {
+		logger.PrintFatal(err, nil)
+	}
+
 	session := sessions.New([]byte(secret))
 	session.Lifetime = 12 * time.Hour
 	session.Secure = true
 
 	app := &application{
-		logger:    logger,
-		config:    cfg,
-		tlsConfig: tlsConfig,
-		session:   session,
-		models:    data.NewModels(db),
+		logger:        logger,
+		config:        cfg,
+		tlsConfig:     tlsConfig,
+		session:       session,
+		models:        data.NewModels(db),
+		templateCache: templateCache,
 	}
 
 	if cfg.createAdmin {

@@ -11,8 +11,11 @@ import (
 func (app *application) routes() http.Handler {
 
 	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.logRequest, app.rateLimit)
-	apiRequireAuth := alice.New(app.basicAuth)
-	apiRequireAdmin := apiRequireAuth.Append(app.requireAdmin)
+
+	apiStandardMiddleware := alice.New(app.requireAuthApi)
+	apiRequireAdmin := apiStandardMiddleware.Append(app.requireAdmin)
+
+	uiStandardMiddleware := alice.New(secureHeaders, app.session.Enable, noSurf, app.authenticateUi)
 
 	router := httprouter.New()
 
@@ -21,6 +24,8 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/api/v1/users/:id", apiRequireAdmin.ThenFunc(app.showUserApiHandler))
 	router.Handler(http.MethodPut, "/api/v1/users", apiRequireAdmin.ThenFunc(app.updateUserApiHandler))
 	router.Handler(http.MethodDelete, "/api/v1/users/:id", apiRequireAdmin.ThenFunc(app.deleteUserApiHandler))
+
+	router.Handler(http.MethodGet, "/ui/users", uiStandardMiddleware.ThenFunc(app.listUsersUiHandler))
 
 	router.NotFound = http.HandlerFunc(app.notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)

@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/calmitchell617/sqlpipe/internal/validator"
+	"github.com/justinas/nosurf"
 )
 
 type envelope map[string]interface{}
@@ -113,22 +115,30 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst int
 	return nil
 }
 
-// func (app *application) badRequestResponse(w http.ResponseWriter, r *http.Request, err error) {
-// 	app.errorResponse(w, r, http.StatusBadRequest, err.Error())
-// }
+func (app *application) render(w http.ResponseWriter, r *http.Request, name string, td *templateData) {
+	ts, ok := app.templateCache[name]
+	if !ok {
+		app.logger.PrintError(fmt.Errorf("the template %s does not exist", name), map[string]string{})
+		return
+	}
 
-// func (app *application) background(fn func()) {
-// 	app.wg.Add(1)
+	buf := new(bytes.Buffer)
 
-// 	go func() {
-// 		defer app.wg.Done()
+	err := ts.Execute(buf, app.addDefaultData(td, r))
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
 
-// 		defer func() {
-// 			if err := recover(); err != nil {
-// 				app.logger.PrintError(fmt.Errorf("%s", err), nil)
-// 			}
-// 		}()
+	buf.WriteTo(w)
+}
 
-// 		fn()
-// 	}()
-// }
+func (app *application) addDefaultData(td *templateData, r *http.Request) *templateData {
+	if td == nil {
+		td = &templateData{}
+	}
+	td.CSRFToken = nosurf.Token(r)
+	td.User = app.contextGetUser(r)
+
+	return td
+}

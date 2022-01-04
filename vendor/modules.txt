@@ -13,6 +13,9 @@ github.com/julienschmidt/httprouter
 # github.com/justinas/alice v1.2.0
 ## explicit; go 1.12
 github.com/justinas/alice
+# github.com/justinas/nosurf v1.1.1
+## explicit; go 1.12
+github.com/justinas/nosurf
 # github.com/lib/pq v1.10.4
 ## explicit; go 1.13
 github.com/lib/pq

@@ -3,6 +3,7 @@ package serve
 import (
 	"errors"
 	"net/http"
+	"reflect"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/validator"
@@ -121,7 +122,7 @@ func (app *application) getListUsersInput(r *http.Request) (input listUsersInput
 
 func (app *application) listUsersApiHandler(w http.ResponseWriter, r *http.Request) {
 	input, validationErrors := app.getListUsersInput(r)
-	if validationErrors != nil {
+	if !reflect.DeepEqual(validationErrors, map[string]string{}) {
 		app.failedValidationResponse(w, r, validationErrors)
 	}
 
@@ -249,4 +250,20 @@ func (app *application) deleteUserApiHandler(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func (app *application) listUsersUiHandler(w http.ResponseWriter, r *http.Request) {
+	input, validationErrors := app.getListUsersInput(r)
+	if !reflect.DeepEqual(validationErrors, map[string]string{}) {
+		app.failedValidationResponse(w, r, validationErrors)
+		return
+	}
+
+	users, metadata, err := app.models.Users.GetAll(input.Username, input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.render(w, r, "users.page.tmpl", &templateData{Users: users, Metadata: metadata})
 }

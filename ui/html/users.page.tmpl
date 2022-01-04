@@ -1,0 +1,23 @@
+{{ template "base" . }}
+{{ define "title" -}} Users {{- end }}
+{{ define "main" }}
+
+<table class="table table-hover text-center">
+
+    <!-- Table head -->
+    <thead class="table-dark">
+        <th scope="col" class="py-3">Username</th>
+        <th scope="col" class="py-3">Admin</th>
+        <th scope="col" class="py-3">Created at</th>
+    </thead>
+    <tbody>
+        {{range .Users}}
+        <tr class="align-middle" style="cursor: pointer;">
+            <td class="py-3">{{.Username}}</td>
+            <td class="py-3">{{.Admin}}</td>
+            <td class="py-3">{{.CreatedAt}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{ end }}

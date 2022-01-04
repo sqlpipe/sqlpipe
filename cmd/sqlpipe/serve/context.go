@@ -3,22 +3,24 @@ package serve
 import (
 	"context"
 	"net/http"
+
+	"github.com/calmitchell617/sqlpipe/internal/data"
 )
 
 type contextKey string
 
-const adminContextKey = contextKey("admin")
+const userContextKey = contextKey("user")
 
-func (app *application) contextSetAdmin(r *http.Request, admin bool) *http.Request {
-	ctx := context.WithValue(r.Context(), adminContextKey, admin)
+func (app *application) contextSetUser(r *http.Request, user *data.User) *http.Request {
+	ctx := context.WithValue(r.Context(), userContextKey, user)
 	return r.WithContext(ctx)
 }
 
-func (app *application) contextGetAdmin(r *http.Request) bool {
-	admin, ok := r.Context().Value(adminContextKey).(bool)
+func (app *application) contextGetUser(r *http.Request) *data.User {
+	user, ok := r.Context().Value(userContextKey).(*data.User)
 	if !ok {
-		panic("missing admin value in request context")
+		panic("missing user value in request context")
 	}
 
-	return admin
+	return user
 }

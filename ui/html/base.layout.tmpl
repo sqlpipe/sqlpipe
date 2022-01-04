@@ -1,1 +1,26 @@
-<h1>HI</h1>
+{{ define "base" }}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>{{ template "title" . }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="/static/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+  {{ template "navbar" . }}
+  <main>
+    <div class="container">
+      {{ template "main" . }}
+    </div>
+  </main>
+
+  <script src="/static/popper/popper.min.js"></script>
+  <script src="/static/bootstrap/js/bootstrap.min.js"></script>
+  <script src="/static/js/enableStuff.js"></script>
+</body>
+
+</html>
+{{ end }}
