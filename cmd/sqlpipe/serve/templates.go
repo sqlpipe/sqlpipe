@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"io/fs"
 	"path/filepath"
+	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/ui"
@@ -50,4 +51,13 @@ func newTemplateCache() (map[string]*template.Template, error) {
 	return cache, nil
 }
 
-var functions = template.FuncMap{}
+func humanDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2 Jan 2006 15:04 UTC")
+}
+
+var functions = template.FuncMap{
+	"humanDate": humanDate,
+}

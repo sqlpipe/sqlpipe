@@ -2,10 +2,13 @@
 {{ define "title" -}} Users {{- end }}
 {{ define "main" }}
 
+{{ template "title-and-buttons" . }}
+
 <table class="table table-hover text-center">
 
     <!-- Table head -->
     <thead class="table-dark">
+        <th scope="col" class="py-3">ID</th>
         <th scope="col" class="py-3">Username</th>
         <th scope="col" class="py-3">Admin</th>
         <th scope="col" class="py-3">Created at</th>
@@ -13,9 +16,10 @@
     <tbody>
         {{range .Users}}
         <tr class="align-middle" style="cursor: pointer;">
+            <td class="py-3">{{.ID}}</td>
             <td class="py-3">{{.Username}}</td>
             <td class="py-3">{{.Admin}}</td>
-            <td class="py-3">{{.CreatedAt}}</td>
+            <td class="py-3">{{humanDate .CreatedAt}}</td>
         </tr>
         {{end}}
     </tbody>
