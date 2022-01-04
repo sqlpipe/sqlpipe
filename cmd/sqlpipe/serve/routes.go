@@ -4,6 +4,7 @@ import (
 	"expvar"
 	"net/http"
 
+	"github.com/calmitchell617/sqlpipe/ui"
 	"github.com/julienschmidt/httprouter"
 	"github.com/justinas/alice"
 )
@@ -27,11 +28,16 @@ func (app *application) routes() http.Handler {
 
 	router.Handler(http.MethodGet, "/ui/users", uiStandardMiddleware.ThenFunc(app.listUsersUiHandler))
 
-	router.NotFound = http.HandlerFunc(app.notFoundResponse)
-	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
-
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())
+
+	// router.Handler(http.MethodGet, "/static/", http.FileServer(http.FS(ui.Files)))
+
+	// router.ServeFiles("/static/*filepath", http.FS(ui.Files))
+
+	// router.NotFound = http.HandlerFunc(app.notFoundResponse)
+	router.NotFound = http.FileServer(http.FS(ui.Files))
+	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 
 	return commonMiddleware.Then(router)
 }
