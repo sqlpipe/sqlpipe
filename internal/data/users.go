@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	ErrDuplicateUsername = errors.New("duplicate username")
-	AnonymousUser        = &User{}
+	ErrDuplicateUsername  = errors.New("duplicate username")
+	ErrInvalidCredentials = errors.New("models: invalid credentials")
+	AnonymousUser         = &User{}
 )
 
 type User struct {
@@ -62,19 +63,19 @@ func (p *password) Matches(plaintextPassword string) (bool, error) {
 
 func ValidateUsername(v *validator.Validator, username string) {
 	if username != "" {
-		v.Check(validator.Matches(username, validator.UsernameRX), "username", "must be 5-30 characters, contain alphanumeric characters or underscores, and first letter must be a letter")
+		v.Check(validator.Matches(username, validator.UsernameRX), "username", "Username must be 5-30 characters, contain alphanumeric characters or underscores, and first letter must be a letter")
 	}
 }
 
 func ValidatePasswordPlaintext(v *validator.Validator, password string) {
-	v.Check(password != "", "password", "must be provided")
-	v.Check(len(password) >= 8, "password", "must be at least 8 bytes long")
-	v.Check(len(password) <= 72, "password", "must not be more than 72 bytes long")
+	v.Check(password != "", "password", "A Password is required")
+	v.Check(len(password) >= 8, "password", "Password must be at least 8 bytes long")
+	v.Check(len(password) <= 72, "password", "Password must not be more than 72 bytes long")
 }
 
 func ValidateUser(v *validator.Validator, user *User) {
-	v.Check(user.Username != "", "username", "must be provided")
-	v.Check(len(user.Username) <= 500, "username", "must not be more than 500 bytes long")
+	v.Check(user.Username != "", "username", "A username is required")
+	v.Check(len(user.Username) <= 500, "username", "Username must not be more than 500 bytes long")
 
 	ValidateUsername(v, user.Username)
 
@@ -289,4 +290,31 @@ func (m UserModel) Delete(id int64) error {
 	}
 
 	return nil
+}
+
+func (m *UserModel) Authenticate(username, password string) (int, error) {
+	var id int
+	var hashedPassword []byte
+
+	stmt := "SELECT id, password_hash FROM users WHERE username = $1"
+	row := m.DB.QueryRow(stmt, username)
+	err := row.Scan(&id, &hashedPassword)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrInvalidCredentials
+		} else {
+			return 0, err
+		}
+	}
+
+	err = bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
+	if err != nil {
+		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			return 0, ErrInvalidCredentials
+		} else {
+			return 0, err
+		}
+	}
+
+	return id, nil
 }

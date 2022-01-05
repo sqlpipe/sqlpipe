@@ -13,12 +13,16 @@ func (app *application) routes() http.Handler {
 
 	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.logRequest, app.rateLimit)
 
-	apiStandardMiddleware := alice.New(app.requireAuthApi)
-	apiRequireAdmin := apiStandardMiddleware.Append(app.requireAdmin)
+	apiRequireAuthenticatedUser := alice.New(app.authenticateApi, app.requireAuthApi)
+	apiRequireAdmin := apiRequireAuthenticatedUser.Append(app.requireAdminApi)
 
 	uiStandardMiddleware := alice.New(secureHeaders, app.session.Enable, noSurf, app.authenticateUi)
+	uiRequireLoggedInUser := uiStandardMiddleware.Append(app.requireAuthentication)
+	uiRequireAdmin := uiRequireLoggedInUser.Append(app.requireAdminUi)
 
 	router := httprouter.New()
+
+	router.Handler(http.MethodGet, "/", uiRequireLoggedInUser.ThenFunc(app.listUsersUiHandler))
 
 	router.Handler(http.MethodPost, "/api/v1/users", apiRequireAdmin.ThenFunc(app.createUserApiHandler))
 	router.Handler(http.MethodGet, "/api/v1/users", apiRequireAdmin.ThenFunc(app.listUsersApiHandler))
@@ -26,7 +30,13 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPut, "/api/v1/users", apiRequireAdmin.ThenFunc(app.updateUserApiHandler))
 	router.Handler(http.MethodDelete, "/api/v1/users/:id", apiRequireAdmin.ThenFunc(app.deleteUserApiHandler))
 
-	router.Handler(http.MethodGet, "/ui/users", uiStandardMiddleware.ThenFunc(app.listUsersUiHandler))
+	router.Handler(http.MethodGet, "/ui/users", uiRequireLoggedInUser.ThenFunc(app.listUsersUiHandler))
+	router.Handler(http.MethodGet, "/ui/users/create", uiRequireAdmin.ThenFunc(app.createUserFormUiHandler))
+	router.Handler(http.MethodPost, "/ui/users", uiRequireAdmin.ThenFunc(app.createUserUiHandler))
+
+	router.Handler(http.MethodGet, "/ui/login", uiStandardMiddleware.ThenFunc(app.loginUserFormUiHandler))
+	router.Handler(http.MethodPost, "/ui/login", uiStandardMiddleware.ThenFunc(app.loginUserUiHandler))
+	router.Handler(http.MethodGet, "/ui/logout", uiRequireLoggedInUser.ThenFunc(app.logoutUserUiHandler))
 
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())

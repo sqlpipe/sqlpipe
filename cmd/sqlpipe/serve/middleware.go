@@ -121,12 +121,12 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) requireAuthApi(next http.Handler) http.Handler {
+func (app *application) authenticateApi(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username, password, ok := r.BasicAuth()
 		if !ok {
-			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
-			app.UnauthorizedResponse(w, r)
+			ctx := context.WithValue(r.Context(), userContextKey, data.AnonymousUser)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
@@ -143,7 +143,6 @@ func (app *application) requireAuthApi(next http.Handler) http.Handler {
 		if err != nil {
 			switch {
 			case errors.Is(err, data.ErrRecordNotFound):
-				w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
 				app.invalidCredentialsResponse(w, r)
 			default:
 				app.serverErrorResponse(w, r, err)
@@ -158,7 +157,6 @@ func (app *application) requireAuthApi(next http.Handler) http.Handler {
 		}
 
 		if !match {
-			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
 			app.invalidCredentialsResponse(w, r)
 			return
 		}
@@ -169,7 +167,20 @@ func (app *application) requireAuthApi(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) requireAdmin(next http.Handler) http.Handler {
+func (app *application) requireAuthApi(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := app.contextGetUser(r)
+
+		if user.IsAnonymous() {
+			app.authenticationRequiredResponse(w, r)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) requireAdminApi(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := app.contextGetUser(r)
 
@@ -221,6 +232,34 @@ func (app *application) authenticateUi(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
 			app.serverErrorResponse(w, r, err)
+		}
+	})
+}
+
+func (app *application) isAuthenticated(r *http.Request) bool {
+	user := app.contextGetUser(r)
+	return !user.IsAnonymous()
+}
+
+func (app *application) requireAuthentication(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !app.isAuthenticated(r) {
+			http.Redirect(w, r, "/ui/login", http.StatusSeeOther)
+			return
+		}
+
+		w.Header().Add("Cache-Control", "no-store")
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) requireAdminUi(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := app.contextGetUser(r)
+
+		if !user.Admin {
+			fmt.Fprint(w, "You must be logged in as an admin to access this resource")
 		}
 	})
 }

@@ -7,15 +7,17 @@ import (
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/calmitchell617/sqlpipe/internal/forms.go"
 	"github.com/calmitchell617/sqlpipe/ui"
 )
 
 type templateData struct {
-	CSRFToken string
-	User      *data.User
-	Users     []*data.User
-	Metadata  data.Metadata
-	// Form            *forms.Form
+	CSRFToken       string
+	User            *data.User
+	Users           []*data.User
+	Metadata        data.Metadata
+	Form            *forms.Form
+	IsAuthenticated bool
 	// Snippet         *models.Snippet
 	// Snippets        []*models.Snippet
 }
@@ -23,7 +25,7 @@ type templateData struct {
 func newTemplateCache() (map[string]*template.Template, error) {
 	cache := map[string]*template.Template{}
 
-	pages, err := fs.Glob(ui.Files, "html/*.page.tmpl")
+	pages, err := fs.Glob(ui.Files, "html/*/*.page.tmpl")
 	if err != nil {
 		return nil, err
 	}
@@ -40,10 +42,10 @@ func newTemplateCache() (map[string]*template.Template, error) {
 			return nil, err
 		}
 
-		ts, err = ts.ParseFS(ui.Files, "html/*.partial.tmpl")
-		if err != nil {
-			return nil, err
-		}
+		// ts, err = ts.ParseFS(ui.Files, "html/*.partial.tmpl")
+		// if err != nil {
+		// 	return nil, err
+		// }
 
 		cache[name] = ts
 	}

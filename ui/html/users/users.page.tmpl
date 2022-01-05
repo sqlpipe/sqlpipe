@@ -1,6 +1,6 @@
-{{ template "main" . }}
-
-{{ define "title-and-buttons" }}
+{{ template "base" . }}
+{{ define "title" -}} Users {{- end }}
+{{ define "main" }}
 
 <!-- Title and buttons -->
 <div class="my-5 d-flex justify-content-between align-items-center">
@@ -12,7 +12,7 @@
     <div class="btn-group" role="group">
 
         <!-- Info button -->
-        <button class="btn btn-outline-info" data-bs-toggle="tooltip" data-bs-placement="top" title="Readme">
+        <button class="btn btn-outline-info" data-bs-toggle="tooltip" data-bs-placement="top" title="View readme">
             <span data-bs-toggle="modal" data-bs-target="#readmeModal">
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor"
                     class="bi bi-question" viewBox="0 0 16 16">
@@ -34,17 +34,36 @@
         </button>
 
         <!-- New button -->
-        <button class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Create">
-            <span data-bs-toggle="modal" data-bs-target="#createModal">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-plus"
-                    viewBox="0 0 16 16">
-                    <path
-                        d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z" />
-                </svg>
-            </span>
-        </button>
+        <a href="/ui/users/create" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Create user">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-plus"
+                viewBox="0 0 16 16">
+                <path
+                    d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z" />
+            </svg>
+        </a>
 
     </div>
 
 </div>
+
+<table class="table table-hover text-center">
+
+    <!-- Table head -->
+    <thead class="table-dark">
+        <th scope="col" class="py-3">ID</th>
+        <th scope="col" class="py-3">Username</th>
+        <th scope="col" class="py-3">Admin</th>
+        <th scope="col" class="py-3">Created at</th>
+    </thead>
+    <tbody>
+        {{range .Users}}
+        <tr class="align-middle" style="cursor: pointer;">
+            <td class="py-3">{{.ID}}</td>
+            <td class="py-3">{{.Username}}</td>
+            <td class="py-3">{{.Admin}}</td>
+            <td class="py-3">{{humanDate .CreatedAt}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
 {{ end }}

@@ -54,3 +54,13 @@ func Unique(values []string) bool {
 
 	return len(values) == len(uniqueValues)
 }
+
+// Implement a Get() method to retrieve the first error message for a given
+// field from the map.
+func (v Validator) Get(field string) string {
+	err, ok := v.Errors[field]
+	if ok {
+		return err
+	}
+	return ""
+}

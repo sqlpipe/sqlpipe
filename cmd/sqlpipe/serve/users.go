@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/calmitchell617/sqlpipe/internal/forms.go"
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 )
 
@@ -36,10 +37,18 @@ func (app *application) createAdminUser(username string, password string) {
 
 	err = app.models.Users.Insert(user)
 	if err != nil {
-		app.logger.PrintFatal(
-			errors.New("failed to insert admin user"),
-			map[string]string{"error": err.Error()},
-		)
+		switch {
+		case errors.Is(err, data.ErrDuplicateUsername):
+			app.logger.PrintFatal(
+				errors.New("there is already a user with this username"),
+				map[string]string{"error": err.Error()},
+			)
+		default:
+			app.logger.PrintFatal(
+				errors.New("failed to insert admin user"),
+				map[string]string{"error": err.Error()},
+			)
+		}
 	}
 
 	app.logger.PrintInfo(
@@ -266,4 +275,86 @@ func (app *application) listUsersUiHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	app.render(w, r, "users.page.tmpl", &templateData{Users: users, Metadata: metadata})
+}
+
+func (app *application) createUserFormUiHandler(w http.ResponseWriter, r *http.Request) {
+	app.render(w, r, "create-user.page.tmpl", &templateData{Form: forms.New(nil)})
+}
+
+func (app *application) createUserUiHandler(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse create user form")
+		return
+	}
+
+	user := &data.User{
+		Username: r.PostForm.Get("username"),
+		Admin:    r.PostForm.Get("admin") == "on",
+	}
+
+	err = user.Password.Set(r.PostForm.Get("password"))
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	form := forms.New(r.PostForm)
+
+	if data.ValidateUser(form.Validator, user); !form.Validator.Valid() {
+		app.render(w, r, "create-user.page.tmpl", &templateData{Form: form})
+		return
+	}
+
+	err = app.models.Users.Insert(user)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrDuplicateUsername):
+			form.Validator.AddError("username", "a user with this username already exists")
+			app.render(w, r, "create-user.page.tmpl", &templateData{Form: form})
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusAccepted, envelope{"user": user}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) loginUserFormUiHandler(w http.ResponseWriter, r *http.Request) {
+	app.render(w, r, "login.page.tmpl", &templateData{
+		Form: forms.New(nil),
+	})
+}
+
+func (app *application) loginUserUiHandler(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse login form")
+		return
+	}
+
+	form := forms.New(r.PostForm)
+	id, err := app.models.Users.Authenticate(form.Get("username"), form.Get("password"))
+	if err != nil {
+		if errors.Is(err, data.ErrInvalidCredentials) {
+			form.Validator.AddError("generic", "Email or Password is incorrect")
+			app.render(w, r, "login.page.tmpl", &templateData{Form: form})
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.session.Put(r, "authenticatedUserID", id)
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (app *application) logoutUserUiHandler(w http.ResponseWriter, r *http.Request) {
+	app.session.Remove(r, "authenticatedUserID")
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

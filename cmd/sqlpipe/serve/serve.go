@@ -269,7 +269,7 @@ func randomCharacters(length int) string {
 		bytes := make([]byte, 1)
 		_, err := rand.Read(bytes)
 		if err != nil {
-			fmt.Println("unable to generate random characters for session security, please enter a 32 character string with the --secret flag")
+			fmt.Print("unable to generate random characters for session security, please enter a 32 character string with the --secret flag")
 			os.Exit(1)
 		}
 

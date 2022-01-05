@@ -118,7 +118,7 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst int
 func (app *application) render(w http.ResponseWriter, r *http.Request, name string, td *templateData) {
 	ts, ok := app.templateCache[name]
 	if !ok {
-		app.logger.PrintError(fmt.Errorf("the template %s does not exist", name), map[string]string{})
+		app.serverErrorResponse(w, r, fmt.Errorf("the template %s does not exist", name))
 		return
 	}
 
@@ -139,6 +139,7 @@ func (app *application) addDefaultData(td *templateData, r *http.Request) *templ
 	}
 	td.CSRFToken = nosurf.Token(r)
 	td.User = app.contextGetUser(r)
+	td.IsAuthenticated = app.isAuthenticated(r)
 
 	return td
 }
