@@ -2,8 +2,11 @@ package serve
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
+	"strconv"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/forms.go"
@@ -35,7 +38,7 @@ func (app *application) createAdminUser(username string, password string) {
 		)
 	}
 
-	err = app.models.Users.Insert(user)
+	_, err = app.models.Users.Insert(user)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrDuplicateUsername):
@@ -88,7 +91,7 @@ func (app *application) createUserApiHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	err = app.models.Users.Insert(user)
+	user, err = app.models.Users.Insert(user)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrDuplicateUsername):
@@ -306,7 +309,7 @@ func (app *application) createUserUiHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err = app.models.Users.Insert(user)
+	user, err = app.models.Users.Insert(user)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrDuplicateUsername):
@@ -318,16 +321,12 @@ func (app *application) createUserUiHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusAccepted, envelope{"user": user}, nil)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-	}
+	app.session.Put(r, "flash", fmt.Sprintf("User %d created", user.ID))
+	http.Redirect(w, r, fmt.Sprintf("/ui/users/%d", user.ID), http.StatusSeeOther)
 }
 
 func (app *application) loginUserFormUiHandler(w http.ResponseWriter, r *http.Request) {
-	app.render(w, r, "login.page.tmpl", &templateData{
-		Form: forms.New(nil),
-	})
+	app.render(w, r, "login.page.tmpl", &templateData{Form: forms.New(nil)})
 }
 
 func (app *application) loginUserUiHandler(w http.ResponseWriter, r *http.Request) {
@@ -357,4 +356,122 @@ func (app *application) loginUserUiHandler(w http.ResponseWriter, r *http.Reques
 func (app *application) logoutUserUiHandler(w http.ResponseWriter, r *http.Request) {
 	app.session.Remove(r, "authenticatedUserID")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (app *application) showUserUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil || id < 1 {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	user, err := app.models.Users.GetById(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.render(w, r, "user-detail.page.tmpl", &templateData{User: user})
+}
+
+func (app *application) deleteUserUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	err = app.models.Users.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.session.Put(r, "flash", fmt.Sprintf("User %d deleted", id))
+	http.Redirect(w, r, "/ui/users", http.StatusSeeOther)
+}
+
+func (app *application) updateUserFormUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil || id < 1 {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	user, err := app.models.Users.GetById(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	form := forms.New(url.Values{"username": []string{user.Username}, "admin": []string{fmt.Sprint(user.Admin)}})
+
+	app.render(w, r, "update-user.page.tmpl", &templateData{User: user, Form: form})
+}
+
+func (app *application) updateUserUiHandler(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse update user form")
+		return
+	}
+
+	id, err := strconv.ParseInt(r.PostForm.Get("id"), 10, 64)
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse user id from update form")
+		return
+	}
+
+	version, err := strconv.Atoi(r.PostForm.Get("version"))
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse user version from update form")
+		return
+	}
+
+	user := &data.User{
+		ID:       id,
+		Username: r.PostForm.Get("username"),
+		Admin:    r.PostForm.Get("admin") == "on",
+		Version:  version,
+	}
+
+	err = user.Password.Set(r.PostForm.Get("password"))
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	form := forms.New(r.PostForm)
+
+	if data.ValidateUser(form.Validator, user); !form.Validator.Valid() {
+		app.render(w, r, "update-user.page.tmpl", &templateData{User: user, Form: form})
+		return
+	}
+
+	err = app.models.Users.Update(user)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrDuplicateUsername):
+			form.Validator.AddError("username", "a user with this username already exists")
+			app.render(w, r, "update-user.page.tmpl", &templateData{User: user, Form: form})
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+	app.session.Put(r, "flash", fmt.Sprintf("User %d updated", id))
+	http.Redirect(w, r, fmt.Sprintf("/ui/users/%d", id), http.StatusSeeOther)
 }

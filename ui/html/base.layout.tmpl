@@ -56,7 +56,7 @@
                         <a class="nav-link" href="/ui/users">Users</a>
                     </li>
                 </ul>
-                {{if ne .User.ID 0}}
+                {{if .IsAuthenticated}}
                 <ul class="navbar-nav">
                     <li class="nav-item">
                         <a class="nav-link" href="/ui/logout">Logout</a>
@@ -68,6 +68,24 @@
     </nav>
     <main>
         <div class="container">
+            {{with .Flash}}
+            <div class="modal fade" id="flashModal" tabindex="-1">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="flashModal">Info</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        {{.}}
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {{end}}
             {{ template "main" . }}
         </div>
     </main>
@@ -75,6 +93,9 @@
     <script src="/static/popper/popper.min.js"></script>
     <script src="/static/bootstrap/js/bootstrap.min.js"></script>
     <script src="/static/js/enableStuff.js"></script>
+    {{with .Flash}}
+    <script src="/static/js/flash.js"></script>
+    {{end}}
 </body>
 
 </html>

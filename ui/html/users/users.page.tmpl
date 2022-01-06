@@ -34,7 +34,8 @@
         </button>
 
         <!-- New button -->
-        <a href="/ui/users/create" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Create user">
+        <a href="/ui/create-user" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top"
+            title="Create user">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-plus"
                 viewBox="0 0 16 16">
                 <path
@@ -58,12 +59,43 @@
     <tbody>
         {{range .Users}}
         <tr class="align-middle" style="cursor: pointer;">
-            <td class="py-3">{{.ID}}</td>
-            <td class="py-3">{{.Username}}</td>
-            <td class="py-3">{{.Admin}}</td>
-            <td class="py-3">{{humanDate .CreatedAt}}</td>
+            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
+                    href="/ui/users/{{ .ID }}">{{.ID}}</a></td>
+            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
+                    href="/ui/users/{{ .ID }}">{{.Username}}</a></td>
+            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
+                    href="/ui/users/{{ .ID }}">{{.Admin}}</a></td>
+            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
+                    href="/ui/users/{{ .ID }}">{{humanDate .CreatedAt}}</a></td>
         </tr>
         {{end}}
     </tbody>
 </table>
+
+<!-- Readme Modal -->
+<div class="modal fade" id="readmeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <!-- Modal header -->
+            <div class="modal-header">
+                <h5 class="modal-title">Users page readme</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <!-- Modal body -->
+            <div class="modal-body container">
+                <p>You must authenticate all requests to a SQLpipe server, with the exception of login requests.</p>
+
+
+                <p>There are two types of users: normal users, and admins.</p>
+
+                <p>Admins can create, view, update, and delete users. Normal users can only run transfers.</p>
+
+                <p>To view or modify a user's details, click on its cell.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{ end }}

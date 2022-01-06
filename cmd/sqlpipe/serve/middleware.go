@@ -241,7 +241,7 @@ func (app *application) isAuthenticated(r *http.Request) bool {
 	return !user.IsAnonymous()
 }
 
-func (app *application) requireAuthentication(next http.Handler) http.Handler {
+func (app *application) requireAuthUi(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !app.isAuthenticated(r) {
 			http.Redirect(w, r, "/ui/login", http.StatusSeeOther)
@@ -261,5 +261,7 @@ func (app *application) requireAdminUi(next http.Handler) http.Handler {
 		if !user.Admin {
 			fmt.Fprint(w, "You must be logged in as an admin to access this resource")
 		}
+
+		next.ServeHTTP(w, r)
 	})
 }

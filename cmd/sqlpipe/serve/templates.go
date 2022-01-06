@@ -18,6 +18,7 @@ type templateData struct {
 	Metadata        data.Metadata
 	Form            *forms.Form
 	IsAuthenticated bool
+	Flash           string
 	// Snippet         *models.Snippet
 	// Snippets        []*models.Snippet
 }

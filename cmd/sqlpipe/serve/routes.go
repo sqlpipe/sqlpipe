@@ -17,22 +17,29 @@ func (app *application) routes() http.Handler {
 	apiRequireAdmin := apiRequireAuthenticatedUser.Append(app.requireAdminApi)
 
 	uiStandardMiddleware := alice.New(secureHeaders, app.session.Enable, noSurf, app.authenticateUi)
-	uiRequireLoggedInUser := uiStandardMiddleware.Append(app.requireAuthentication)
+	uiRequireLoggedInUser := uiStandardMiddleware.Append(app.requireAuthUi)
 	uiRequireAdmin := uiRequireLoggedInUser.Append(app.requireAdminUi)
 
 	router := httprouter.New()
 
+	// Home page ui redirects
 	router.Handler(http.MethodGet, "/", uiRequireLoggedInUser.ThenFunc(app.listUsersUiHandler))
+	router.Handler(http.MethodGet, "/ui", uiRequireLoggedInUser.ThenFunc(app.listUsersUiHandler))
 
+	// Users API
 	router.Handler(http.MethodPost, "/api/v1/users", apiRequireAdmin.ThenFunc(app.createUserApiHandler))
 	router.Handler(http.MethodGet, "/api/v1/users", apiRequireAdmin.ThenFunc(app.listUsersApiHandler))
 	router.Handler(http.MethodGet, "/api/v1/users/:id", apiRequireAdmin.ThenFunc(app.showUserApiHandler))
 	router.Handler(http.MethodPut, "/api/v1/users", apiRequireAdmin.ThenFunc(app.updateUserApiHandler))
 	router.Handler(http.MethodDelete, "/api/v1/users/:id", apiRequireAdmin.ThenFunc(app.deleteUserApiHandler))
-
-	router.Handler(http.MethodGet, "/ui/users", uiRequireLoggedInUser.ThenFunc(app.listUsersUiHandler))
-	router.Handler(http.MethodGet, "/ui/users/create", uiRequireAdmin.ThenFunc(app.createUserFormUiHandler))
-	router.Handler(http.MethodPost, "/ui/users", uiRequireAdmin.ThenFunc(app.createUserUiHandler))
+	// Users UI
+	router.Handler(http.MethodGet, "/ui/create-user", uiRequireAdmin.ThenFunc(app.createUserFormUiHandler))
+	router.Handler(http.MethodPost, "/ui/create-user", uiRequireAdmin.ThenFunc(app.createUserUiHandler))
+	router.Handler(http.MethodGet, "/ui/users", uiRequireAdmin.ThenFunc(app.listUsersUiHandler))
+	router.Handler(http.MethodGet, "/ui/users/:id", uiRequireAdmin.ThenFunc(app.showUserUiHandler))
+	router.Handler(http.MethodGet, "/ui/update-user/:id", uiRequireAdmin.ThenFunc(app.updateUserFormUiHandler))
+	router.Handler(http.MethodPost, "/ui/update-user/:id", uiRequireAdmin.ThenFunc(app.updateUserUiHandler))
+	router.Handler(http.MethodPost, "/ui/delete-user/:id", uiRequireAdmin.ThenFunc(app.deleteUserUiHandler))
 
 	router.Handler(http.MethodGet, "/ui/login", uiStandardMiddleware.ThenFunc(app.loginUserFormUiHandler))
 	router.Handler(http.MethodPost, "/ui/login", uiStandardMiddleware.ThenFunc(app.loginUserUiHandler))

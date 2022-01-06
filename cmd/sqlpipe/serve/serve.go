@@ -105,7 +105,7 @@ func init() {
 
 	Serve.Flags().BoolVar(&displayVersion, "version", false, "Display SQLpipe version")
 
-	Serve.Flags().StringVar(&secret, "secret", randomCharacters(32), "Secret key")
+	Serve.Flags().StringVar(&secret, "secret", "", "Secret key")
 }
 
 func serve(cmd *cobra.Command, args []string) {
@@ -127,6 +127,9 @@ func serve(cmd *cobra.Command, args []string) {
 		logger.PrintFatal(err, nil)
 	}
 
+	if secret == "" {
+		randomCharacters(32)
+	}
 	session := sessions.New([]byte(secret))
 	session.Lifetime = 12 * time.Hour
 	session.Secure = true
@@ -279,5 +282,6 @@ func randomCharacters(length int) string {
 		b[i] = letters[randomIndex]
 	}
 
+	fmt.Println(string(b))
 	return string(b)
 }

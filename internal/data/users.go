@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 	"golang.org/x/crypto/bcrypt"
@@ -69,13 +70,13 @@ func ValidateUsername(v *validator.Validator, username string) {
 
 func ValidatePasswordPlaintext(v *validator.Validator, password string) {
 	v.Check(password != "", "password", "A Password is required")
-	v.Check(len(password) >= 8, "password", "Password must be at least 8 bytes long")
-	v.Check(len(password) <= 72, "password", "Password must not be more than 72 bytes long")
+	v.Check(utf8.RuneCountInString(password) >= 8, "password", "Password must be at least 8 characters long")
+	v.Check(utf8.RuneCountInString(password) <= 72, "password", "Password must not be more than 72 characters long")
 }
 
 func ValidateUser(v *validator.Validator, user *User) {
 	v.Check(user.Username != "", "username", "A username is required")
-	v.Check(len(user.Username) <= 500, "username", "Username must not be more than 500 bytes long")
+	v.Check(user.Version >= 0, "username", "User version must be greater than or equal to 0")
 
 	ValidateUsername(v, user.Username)
 
@@ -92,7 +93,7 @@ type UserModel struct {
 	DB *sql.DB
 }
 
-func (m UserModel) Insert(user *User) error {
+func (m UserModel) Insert(user *User) (*User, error) {
 	query := `
         INSERT INTO users (username, password_hash, admin) 
         VALUES ($1, $2, $3)
@@ -107,13 +108,13 @@ func (m UserModel) Insert(user *User) error {
 	if err != nil {
 		switch {
 		case err.Error() == `pq: duplicate key value violates unique constraint "users_username_key"`:
-			return ErrDuplicateUsername
+			return user, ErrDuplicateUsername
 		default:
-			return err
+			return user, err
 		}
 	}
 
-	return nil
+	return user, nil
 }
 
 func (m UserModel) GetByUsername(username string) (*User, error) {
@@ -186,6 +187,9 @@ func (m UserModel) Update(user *User) error {
         SET username = $1, password_hash = $2, admin = $3, version = version + 1
         WHERE id = $4 AND version = $5
         RETURNING version`
+
+	fmt.Println(user.ID)
+	fmt.Println(user.Version)
 
 	args := []interface{}{
 		user.Username,
