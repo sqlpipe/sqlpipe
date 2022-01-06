@@ -260,6 +260,7 @@ func (app *application) requireAdminUi(next http.Handler) http.Handler {
 
 		if !user.Admin {
 			fmt.Fprint(w, "You must be logged in as an admin to access this resource")
+			return
 		}
 
 		next.ServeHTTP(w, r)

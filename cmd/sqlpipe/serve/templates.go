@@ -19,6 +19,7 @@ type templateData struct {
 	Form            *forms.Form
 	IsAuthenticated bool
 	Flash           string
+	ErrorMessage    string
 	// Snippet         *models.Snippet
 	// Snippets        []*models.Snippet
 }
@@ -42,11 +43,6 @@ func newTemplateCache() (map[string]*template.Template, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		// ts, err = ts.ParseFS(ui.Files, "html/*.partial.tmpl")
-		// if err != nil {
-		// 	return nil, err
-		// }
 
 		cache[name] = ts
 	}

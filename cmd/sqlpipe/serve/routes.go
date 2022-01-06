@@ -23,8 +23,8 @@ func (app *application) routes() http.Handler {
 	router := httprouter.New()
 
 	// Home page ui redirects
-	router.Handler(http.MethodGet, "/", uiRequireLoggedInUser.ThenFunc(app.listUsersUiHandler))
-	router.Handler(http.MethodGet, "/ui", uiRequireLoggedInUser.ThenFunc(app.listUsersUiHandler))
+	router.Handler(http.MethodGet, "/", uiRequireAdmin.ThenFunc(app.listUsersUiHandler))
+	router.Handler(http.MethodGet, "/ui", uiRequireAdmin.ThenFunc(app.listUsersUiHandler))
 
 	// Users API
 	router.Handler(http.MethodPost, "/api/v1/users", apiRequireAdmin.ThenFunc(app.createUserApiHandler))
@@ -41,9 +41,13 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPost, "/ui/update-user/:id", uiRequireAdmin.ThenFunc(app.updateUserUiHandler))
 	router.Handler(http.MethodPost, "/ui/delete-user/:id", uiRequireAdmin.ThenFunc(app.deleteUserUiHandler))
 
+	// Auth stuff
 	router.Handler(http.MethodGet, "/ui/login", uiStandardMiddleware.ThenFunc(app.loginUserFormUiHandler))
 	router.Handler(http.MethodPost, "/ui/login", uiStandardMiddleware.ThenFunc(app.loginUserUiHandler))
 	router.Handler(http.MethodGet, "/ui/logout", uiRequireLoggedInUser.ThenFunc(app.logoutUserUiHandler))
+
+	// Connections UI
+	router.Handler(http.MethodGet, "/ui/connections", uiRequireLoggedInUser.ThenFunc(app.listConnectionsUiHandler))
 
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())
