@@ -39,7 +39,7 @@ var (
 	CREATE TABLE connections (
 		id bigserial PRIMARY KEY,
 		created_at timestamp(0) NOT NULL DEFAULT NOW(),
-		name text NOT NULL,
+		name text UNIQUE NOT NULL,
 		ds_type text not null,
 		username TEXT NOT NULL,
 		password TEXT NOT NULL,

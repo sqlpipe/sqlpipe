@@ -15,6 +15,8 @@ type templateData struct {
 	CSRFToken       string
 	User            *data.User
 	Users           []*data.User
+	Connection      *data.Connection
+	Connections     []*data.Connection
 	Metadata        data.Metadata
 	Form            *forms.Form
 	IsAuthenticated bool

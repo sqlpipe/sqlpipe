@@ -282,6 +282,5 @@ func randomCharacters(length int) string {
 		b[i] = letters[randomIndex]
 	}
 
-	fmt.Println(string(b))
 	return string(b)
 }

@@ -188,9 +188,6 @@ func (m UserModel) Update(user *User) error {
         WHERE id = $4 AND version = $5
         RETURNING version`
 
-	fmt.Println(user.ID)
-	fmt.Println(user.Version)
-
 	args := []interface{}{
 		user.Username,
 		user.Password.hash,

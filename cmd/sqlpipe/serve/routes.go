@@ -47,7 +47,13 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/ui/logout", uiRequireLoggedInUser.ThenFunc(app.logoutUserUiHandler))
 
 	// Connections UI
-	router.Handler(http.MethodGet, "/ui/connections", uiRequireLoggedInUser.ThenFunc(app.listConnectionsUiHandler))
+	router.Handler(http.MethodGet, "/ui/create-connection", uiRequireAdmin.ThenFunc(app.createConnectionFormUiHandler))
+	router.Handler(http.MethodPost, "/ui/create-connection", uiRequireAdmin.ThenFunc(app.createConnectionUiHandler))
+	router.Handler(http.MethodGet, "/ui/connections", uiRequireAdmin.ThenFunc(app.listConnectionsUiHandler))
+	router.Handler(http.MethodGet, "/ui/connections/:id", uiRequireAdmin.ThenFunc(app.showConnectionUiHandler))
+	router.Handler(http.MethodGet, "/ui/update-connection/:id", uiRequireAdmin.ThenFunc(app.updateConnectionFormUiHandler))
+	router.Handler(http.MethodPost, "/ui/update-connection/:id", uiRequireAdmin.ThenFunc(app.updateConnectionUiHandler))
+	router.Handler(http.MethodPost, "/ui/delete-connection/:id", uiRequireAdmin.ThenFunc(app.deleteConnectionUiHandler))
 
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())
