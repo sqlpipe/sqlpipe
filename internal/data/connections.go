@@ -233,14 +233,14 @@ func ValidateConnection(v *validator.Validator, connection *Connection) {
 
 	switch connection.DsType {
 	case "snowflake":
-		v.Check(connection.Hostname == "", "hostname", "Do not enter a Hostname if you are registering a Snowflake connection")
-		v.Check(connection.Port == 0, "port", "Do not enter a port if you are registering a Snowflake connection")
-		v.Check(connection.AccountId != "", "accountId", "You must enter an account ID if registering a snowflake connection")
+		v.Check(connection.Hostname == "", "hostname", "Do not enter a Hostname if you are configuring a Snowflake connection")
+		v.Check(connection.Port == 0, "port", "Do not enter a port if you are configuring a Snowflake connection")
+		v.Check(connection.AccountId != "", "accountId", "You must enter an account ID if configuring a snowflake connection")
 	case "":
 		v.Check(connection.DsType != "", "dsType", "You must select a data system type")
 	default:
 		v.Check(connection.Hostname != "", "hostname", "You must enter a Hostname")
 		v.Check(connection.Port != 0, "port", "You must enter a port number")
-		v.Check(connection.AccountId == "", "accountId", "Do not enter an account ID unless you are registering a snowflake connection")
+		v.Check(connection.AccountId == "", "accountId", "Do not enter an account ID unless you are configuring a snowflake connection")
 	}
 }

@@ -267,6 +267,224 @@ func (app *application) deleteConnectionUiHandler(w http.ResponseWriter, r *http
 	http.Redirect(w, r, "/ui/connections", http.StatusSeeOther)
 }
 
+func (app *application) createConnectionApiHandler(w http.ResponseWriter, r *http.Request) {
+
+	var input struct {
+		Name      string `json:"name"`
+		DsType    string `json:"dsType"`
+		Hostname  string `json:"hostname"`
+		Port      int    `json:"port"`
+		AccountId string `json:"accountId"`
+		DbName    string `json:"dbName"`
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		SkipTest  bool   `json:"skipTest"`
+	}
+
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	connection := &data.Connection{
+		Name:      input.Name,
+		DsType:    input.DsType,
+		Hostname:  input.Hostname,
+		Port:      input.Port,
+		AccountId: input.AccountId,
+		DbName:    input.DbName,
+		Username:  input.Username,
+		Password:  input.Password,
+	}
+
+	v := validator.New()
+
+	if data.ValidateConnection(v, connection); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	canConnect := true
+	if !input.SkipTest {
+		canConnect = testConnection(*connection)
+	}
+
+	if !canConnect {
+		v.AddError("canConnect", "Unable to connect with given credentials")
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	connection, err = app.models.Connections.Insert(connection)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrDuplicateConnectionName):
+			v.AddError("name", "a connection with this name already exists")
+			app.failedValidationResponse(w, r, v.Errors)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusAccepted, envelope{"connection": connection}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) listConnectionsApiHandler(w http.ResponseWriter, r *http.Request) {
+	input, validationErrors := app.getListConnectionsInput(r)
+	if !reflect.DeepEqual(validationErrors, map[string]string{}) {
+		app.failedValidationResponse(w, r, validationErrors)
+	}
+
+	connections, metadata, err := app.models.Connections.GetAll(input.Name, input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"connections": connections, "metadata": metadata}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) showConnectionApiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	connection, err := app.models.Connections.GetById(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"connection": connection}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) updateConnectionApiHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID        *int64
+		Name      *string
+		DsType    *string
+		Hostname  *string
+		Port      *int
+		AccountId *string
+		DbName    *string
+		Username  *string
+		Password  *string
+	}
+
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	if input.ID == nil {
+		err = errors.New("updating a connection requires providing an existing connection's ID")
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	v := validator.New()
+	connection, err := app.models.Connections.GetById(*input.ID)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			v.AddError("id", "not found")
+			app.failedValidationResponse(w, r, v.Errors)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	if input.Name != nil {
+		connection.Name = *input.Name
+	}
+	if input.DsType != nil {
+		connection.DsType = *input.DsType
+	}
+	if input.Hostname != nil {
+		connection.Hostname = *input.Hostname
+	}
+	if input.Port != nil {
+		connection.Port = *input.Port
+	}
+	if input.AccountId != nil {
+		connection.AccountId = *input.AccountId
+	}
+	if input.DbName != nil {
+		connection.DbName = *input.DbName
+	}
+	if input.Username != nil {
+		connection.Username = *input.Username
+	}
+	if input.Password != nil {
+		connection.Password = *input.Password
+	}
+
+	if data.ValidateConnection(v, connection); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	app.models.Connections.Update(connection)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"connection": connection}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) deleteConnectionApiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	err = app.models.Connections.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "connection successfully deleted"}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
 func testConnection(connection data.Connection) bool {
 	return false
 }

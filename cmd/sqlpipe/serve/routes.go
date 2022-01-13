@@ -32,6 +32,7 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/api/v1/users/:id", apiRequireAdmin.ThenFunc(app.showUserApiHandler))
 	router.Handler(http.MethodPut, "/api/v1/users", apiRequireAdmin.ThenFunc(app.updateUserApiHandler))
 	router.Handler(http.MethodDelete, "/api/v1/users/:id", apiRequireAdmin.ThenFunc(app.deleteUserApiHandler))
+
 	// Users UI
 	router.Handler(http.MethodGet, "/ui/create-user", uiRequireAdmin.ThenFunc(app.createUserFormUiHandler))
 	router.Handler(http.MethodPost, "/ui/create-user", uiRequireAdmin.ThenFunc(app.createUserUiHandler))
@@ -45,6 +46,13 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/ui/login", uiStandardMiddleware.ThenFunc(app.loginUserFormUiHandler))
 	router.Handler(http.MethodPost, "/ui/login", uiStandardMiddleware.ThenFunc(app.loginUserUiHandler))
 	router.Handler(http.MethodGet, "/ui/logout", uiRequireLoggedInUser.ThenFunc(app.logoutUserUiHandler))
+
+	// Connections API
+	router.Handler(http.MethodPost, "/api/v1/connections", apiRequireAdmin.ThenFunc(app.createConnectionApiHandler))
+	router.Handler(http.MethodGet, "/api/v1/connections", apiRequireAdmin.ThenFunc(app.listConnectionsApiHandler))
+	router.Handler(http.MethodGet, "/api/v1/connections/:id", apiRequireAdmin.ThenFunc(app.showConnectionApiHandler))
+	router.Handler(http.MethodPut, "/api/v1/connections", apiRequireAdmin.ThenFunc(app.updateConnectionApiHandler))
+	router.Handler(http.MethodDelete, "/api/v1/connections/:id", apiRequireAdmin.ThenFunc(app.deleteConnectionApiHandler))
 
 	// Connections UI
 	router.Handler(http.MethodGet, "/ui/create-connection", uiRequireAdmin.ThenFunc(app.createConnectionFormUiHandler))

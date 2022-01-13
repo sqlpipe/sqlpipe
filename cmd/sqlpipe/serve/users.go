@@ -150,29 +150,27 @@ func (app *application) listUsersApiHandler(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-type updateUserInput struct {
-	ID       *int64
-	Username *string
-	Password *string
-	Admin    *bool
-	data.Filters
-}
-
 func (app *application) updateUserApiHandler(w http.ResponseWriter, r *http.Request) {
-	input := updateUserInput{}
-	v := validator.New()
+	var input struct {
+		ID       *int64
+		Username *string
+		Password *string
+		Admin    *bool
+	}
 
 	err := app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
-	if input.ID == nil || input.Username == nil || input.Password == nil || input.Admin == nil {
-		err = errors.New("updating a user requires providing an existing user's ID, along with a username, password, and admin status")
+
+	if input.ID == nil {
+		err = errors.New("updating a user requires providing an existing user's ID")
 		app.badRequestResponse(w, r, err)
 		return
 	}
 
+	v := validator.New()
 	user, err := app.models.Users.GetById(*input.ID)
 	if err != nil {
 		switch {
@@ -185,13 +183,18 @@ func (app *application) updateUserApiHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	user.Username = *input.Username
-	user.Admin = *input.Admin
-
-	err = user.Password.Set(*input.Password)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
+	if input.Username != nil {
+		user.Username = *input.Username
+	}
+	if input.Admin != nil {
+		user.Admin = *input.Admin
+	}
+	if input.Password != nil {
+		err = user.Password.Set(*input.Password)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
 	}
 
 	if data.ValidateUser(v, user); !v.Valid() {
