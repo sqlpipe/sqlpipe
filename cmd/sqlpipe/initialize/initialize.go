@@ -36,20 +36,39 @@ var (
 	`
 
 	createConnections = `
-	CREATE TABLE connections (
-		id bigserial PRIMARY KEY,
-		created_at timestamp(0) NOT NULL DEFAULT NOW(),
-		name text UNIQUE NOT NULL,
-		ds_type text not null,
-		username TEXT NOT NULL,
-		password TEXT NOT NULL,
-		account_id TEXT NOT NULL DEFAULT '',
-		hostname TEXT NOT NULL DEFAULT '',
-		port INT NOT NULL DEFAULT 0,
-		db_name TEXT NOT NULL,
-		version INT NOT NULL DEFAULT 1
-	);
-`
+		CREATE TABLE connections (
+			id bigserial PRIMARY KEY,
+			created_at timestamp(0) NOT NULL DEFAULT NOW(),
+			name text UNIQUE NOT NULL,
+			ds_type text not null,
+			username TEXT NOT NULL,
+			password TEXT NOT NULL,
+			account_id TEXT NOT NULL DEFAULT '',
+			hostname TEXT NOT NULL DEFAULT '',
+			port INT NOT NULL DEFAULT 0,
+			db_name TEXT NOT NULL,
+			version INT NOT NULL DEFAULT 1
+		);
+	`
+
+	createTransfers = `
+		CREATE TABLE transfers (
+			id bigserial PRIMARY KEY,
+			created_at timestamp(0) NOT NULL DEFAULT NOW(),
+			source_id bigint not null,
+			target_id bigint not null,
+			query text not null,
+			target_schema text not null,
+			target_table text not null,
+			overwrite bool not null,
+			status text not null default 'queued',
+			error text not null default '',
+			stopped_at timestamp(0) not null,
+			Version int not null default 1,
+			FOREIGN KEY (source_id) REFERENCES connections(id),
+			FOREIGN KEY (target_id) REFERENCES connections(id)
+		);
+	`
 )
 
 func init() {
@@ -133,6 +152,13 @@ func runMigrations(db *sql.DB) error {
 	_, err = db.Exec(createConnections)
 	if err != nil {
 		fmt.Println("Error running migrations on connections table:")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	_, err = db.Exec(createTransfers)
+	if err != nil {
+		fmt.Println("Error running migrations on transfers table:")
 		fmt.Println(err)
 		os.Exit(1)
 	}

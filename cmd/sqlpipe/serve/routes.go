@@ -63,6 +63,15 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPost, "/ui/update-connection/:id", uiRequireAdmin.ThenFunc(app.updateConnectionUiHandler))
 	router.Handler(http.MethodPost, "/ui/delete-connection/:id", uiRequireAdmin.ThenFunc(app.deleteConnectionUiHandler))
 
+	// Transfers API
+	router.Handler(http.MethodGet, "/api/v1/transfers", apiRequireAdmin.ThenFunc(app.listTransfersApiHandler))
+	router.Handler(http.MethodPost, "/api/v1/transfers", apiRequireAdmin.ThenFunc(app.createTransferApiHandler))
+	router.Handler(http.MethodGet, "/api/v1/transfers/:id", apiRequireAdmin.ThenFunc(app.showTransferApiHandler))
+
+	// Need to think about if / how to incorporate update and delete functionality
+	// router.Handler(http.MethodPut, "/api/v1/transfers", apiRequireAdmin.ThenFunc(app.updateTransferApiHandler))
+	// router.Handler(http.MethodDelete, "/api/v1/transfers/:id", apiRequireAdmin.ThenFunc(app.deleteTransferApiHandler))
+
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())
 
