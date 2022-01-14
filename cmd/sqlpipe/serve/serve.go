@@ -115,7 +115,7 @@ func serve(cmd *cobra.Command, args []string) {
 
 	db, err := openDB(cfg)
 	if err != nil {
-		logger.PrintFatal(err, nil)
+		logger.PrintFatal(fmt.Errorf("unable to connect to PostgreSQL, error: %v", err.Error()), nil)
 	}
 	defer db.Close()
 	logger.PrintInfo("database connection pool established", nil)

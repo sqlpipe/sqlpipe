@@ -2,6 +2,7 @@ package serve
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"reflect"
 
@@ -111,6 +112,75 @@ func (app *application) showTransferApiHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"transfer": transfer}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) cancelTransferApiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	v := validator.New()
+	transfer, err := app.models.Transfers.GetById(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			v.AddError("id", "not found")
+			app.failedValidationResponse(w, r, v.Errors)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	if transfer.Status == "error" || transfer.Status == "finished" {
+		v.AddError("status", fmt.Sprintf("cannot cancel a transfer with status of %s", transfer.Status))
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	transfer.Status = "cancelled"
+
+	app.models.Transfers.Update(transfer)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"transfer": transfer}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) deleteTransferApiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	err = app.models.Transfers.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "transfer successfully deleted"}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

@@ -161,17 +161,11 @@ func (m TransferModel) GetById(id int64) (*Transfer, error) {
 func (m TransferModel) Update(transfer *Transfer) error {
 	query := `
         UPDATE transfers 
-        SET source_id = $1, target_id = $2, query = $3, target_schema = $4, target_table = $5, overwrite = $6, status = $7, error = $8, stopped_at = $9, version = version + 1
+        status = $7, error = $8, stopped_at = $9, version = version + 1
         WHERE id = $10 AND version = $11
         RETURNING version`
 
 	args := []interface{}{
-		&transfer.SourceID,
-		&transfer.TargetID,
-		&transfer.Query,
-		&transfer.TargetSchema,
-		&transfer.TargetTable,
-		&transfer.Overwrite,
 		&transfer.Status,
 		&transfer.Error,
 		&transfer.StoppedAt,

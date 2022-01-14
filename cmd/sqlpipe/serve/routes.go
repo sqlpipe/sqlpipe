@@ -13,8 +13,8 @@ func (app *application) routes() http.Handler {
 
 	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.logRequest, app.rateLimit)
 
-	apiRequireAuthenticatedUser := alice.New(app.authenticateApi, app.requireAuthApi)
-	apiRequireAdmin := apiRequireAuthenticatedUser.Append(app.requireAdminApi)
+	apiRequireLoggedInUser := alice.New(app.authenticateApi, app.requireAuthApi)
+	apiRequireAdmin := apiRequireLoggedInUser.Append(app.requireAdminApi)
 
 	uiStandardMiddleware := alice.New(secureHeaders, app.session.Enable, noSurf, app.authenticateUi)
 	uiRequireLoggedInUser := uiStandardMiddleware.Append(app.requireAuthUi)
@@ -65,12 +65,10 @@ func (app *application) routes() http.Handler {
 
 	// Transfers API
 	router.Handler(http.MethodGet, "/api/v1/transfers", apiRequireAdmin.ThenFunc(app.listTransfersApiHandler))
-	router.Handler(http.MethodPost, "/api/v1/transfers", apiRequireAdmin.ThenFunc(app.createTransferApiHandler))
-	router.Handler(http.MethodGet, "/api/v1/transfers/:id", apiRequireAdmin.ThenFunc(app.showTransferApiHandler))
-
-	// Need to think about if / how to incorporate update and delete functionality
-	// router.Handler(http.MethodPut, "/api/v1/transfers", apiRequireAdmin.ThenFunc(app.updateTransferApiHandler))
-	// router.Handler(http.MethodDelete, "/api/v1/transfers/:id", apiRequireAdmin.ThenFunc(app.deleteTransferApiHandler))
+	router.Handler(http.MethodPost, "/api/v1/transfers", apiRequireLoggedInUser.ThenFunc(app.createTransferApiHandler))
+	router.Handler(http.MethodGet, "/api/v1/transfers/:id", apiRequireLoggedInUser.ThenFunc(app.showTransferApiHandler))
+	router.Handler(http.MethodPatch, "/api/v1/cancel-transfer/:id", apiRequireLoggedInUser.ThenFunc(app.cancelTransferApiHandler))
+	router.Handler(http.MethodDelete, "/api/v1/transfers/:id", apiRequireAdmin.ThenFunc(app.deleteTransferApiHandler))
 
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())
