@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
@@ -67,7 +68,7 @@ func (app *application) createTransferApiHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	overwrite := true
+	overwrite := false
 	if input.Overwrite != nil {
 		overwrite = *input.Overwrite
 	}
@@ -224,4 +225,140 @@ func (app *application) createTransferFormUiHandler(w http.ResponseWriter, r *ht
 	}
 
 	app.render(w, r, "create-transfer.page.tmpl", &templateData{Connections: connections, Form: forms.New(nil)})
+}
+func (app *application) cancelTransferUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	v := validator.New()
+	transfer, err := app.models.Transfers.GetById(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			v.AddError("id", "not found")
+			app.failedValidationResponse(w, r, v.Errors)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	if transfer.Status != "queued" && transfer.Status != "active" {
+		v.AddError("status", fmt.Sprintf("cannot cancel a transfer with status of %s", transfer.Status))
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	transfer.Status = "cancelled"
+	transfer.StoppedAt = time.Now()
+
+	app.models.Transfers.Update(transfer)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.session.Put(r, "flash", "Transfer cancelled")
+	http.Redirect(w, r, fmt.Sprintf("/ui/transfers/%d", id), http.StatusSeeOther)
+}
+
+func (app *application) showTransferUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil || id < 1 {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	transfer, err := app.models.Transfers.GetById(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.render(w, r, "transfer-detail.page.tmpl", &templateData{Transfer: transfer})
+}
+
+func (app *application) createTransferUiHandler(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse create transfer form")
+		return
+	}
+
+	var sourceId int64 = 0
+	if r.PostForm.Get("sourceId") != "" {
+		sourceId, err = strconv.ParseInt(r.PostForm.Get("sourceId"), 10, 64)
+		if err != nil {
+			app.errorResponse(w, r, http.StatusBadRequest, "non int value given to sourceId")
+			return
+		}
+	}
+
+	var targetId int64 = 0
+	if r.PostForm.Get("targetId") != "" {
+		targetId, err = strconv.ParseInt(r.PostForm.Get("targetId"), 10, 64)
+		if err != nil {
+			app.errorResponse(w, r, http.StatusBadRequest, "non int value given to targetId")
+			return
+		}
+	}
+
+	transfer := &data.Transfer{
+		SourceID:     sourceId,
+		TargetID:     targetId,
+		Query:        r.PostForm.Get("query"),
+		TargetSchema: r.PostForm.Get("targetSchema"),
+		TargetTable:  r.PostForm.Get("targetTable"),
+		Overwrite:    r.PostForm.Get("overwrite") == "on",
+	}
+
+	form := forms.New(r.PostForm)
+
+	if data.ValidateTransfer(form.Validator, transfer); !form.Validator.Valid() {
+		app.render(w, r, "create-transfer.page.tmpl", &templateData{Form: form})
+		return
+	}
+
+	transfer, err = app.models.Transfers.Insert(transfer)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.session.Put(r, "flash", fmt.Sprintf("Transfer %d created", transfer.ID))
+	http.Redirect(w, r, fmt.Sprintf("/ui/transfers/%d", transfer.ID), http.StatusSeeOther)
+}
+
+func (app *application) deleteTransferUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	err = app.models.Transfers.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.session.Put(r, "flash", fmt.Sprintf("Transfer %d deleted", id))
+	http.Redirect(w, r, "/ui/transfers", http.StatusSeeOther)
 }

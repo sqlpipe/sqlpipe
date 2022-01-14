@@ -76,9 +76,9 @@
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
                     href="/ui/transfers/{{ .ID }}">{{humanDate .CreatedAt}}</a></td>
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
-                    href="/ui/connections/{{ .ID }}">{{.SourceName}}</a></td>
+                    href="/ui/connections/{{ .ID }}">{{.Source.Name}}</a></td>
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
-                    href="/ui/connections/{{ .ID }}">{{.TargetName}}</a></td>
+                    href="/ui/connections/{{ .ID }}">{{.Target.Name}}</a></td>
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
                     href="/ui/connections/{{ .ID }}">{{if .TargetSchema}}{{.TargetSchema}}.{{end}}{{.TargetTable}}</a></td>
         </tr>

@@ -11,20 +11,20 @@ import (
 )
 
 type Transfer struct {
-	ID           int64     `json:"id"`
-	CreatedAt    time.Time `json:"createdAt"`
-	SourceID     int64     `json:"sourceID"`
-	SourceName   string    `json:"sourceName"`
-	TargetID     int64     `json:"targetID"`
-	TargetName   string    `json:"targetName"`
-	Query        string    `json:"query"`
-	TargetSchema string    `json:"targetSchema"`
-	TargetTable  string    `json:"targetTable"`
-	Overwrite    bool      `json:"overwrite"`
-	Status       string    `json:"status"`
-	Error        string    `json:"error"`
-	StoppedAt    time.Time `json:"stoppedAt"`
-	Version      int       `json:"version"`
+	ID           int64      `json:"id"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	SourceID     int64      `json:"sourceID"`
+	Source       Connection `json:"-"`
+	TargetID     int64      `json:"targetID"`
+	Target       Connection `json:"-"`
+	Query        string     `json:"query"`
+	TargetSchema string     `json:"targetSchema"`
+	TargetTable  string     `json:"targetTable"`
+	Overwrite    bool       `json:"overwrite"`
+	Status       string     `json:"status"`
+	Error        string     `json:"error"`
+	StoppedAt    time.Time  `json:"stoppedAt"`
+	Version      int        `json:"version"`
 }
 
 type TransferModel struct {
@@ -73,8 +73,16 @@ func (m TransferModel) GetAll(filters Filters) ([]*Transfer, Metadata, error) {
 	transfers.created_at,
 	transfers.source_id,
 	source.name,
+	source.ds_type,
+	source.hostname,
+	source.account_id,
+	source.db_name,
 	transfers.target_id,
 	target.name,
+	target.ds_type,
+	target.hostname,
+	target.account_id,
+	target.db_name,
 	transfers.query,
 	transfers.target_schema,
 	transfers.target_table,
@@ -125,9 +133,17 @@ offset
 			&transfer.ID,
 			&transfer.CreatedAt,
 			&transfer.SourceID,
-			&transfer.SourceName,
+			&transfer.Source.Name,
+			&transfer.Source.DsType,
+			&transfer.Source.Hostname,
+			&transfer.Source.AccountId,
+			&transfer.Source.DbName,
 			&transfer.TargetID,
-			&transfer.TargetName,
+			&transfer.Target.Name,
+			&transfer.Target.DsType,
+			&transfer.Target.Hostname,
+			&transfer.Target.AccountId,
+			&transfer.Target.DbName,
 			&transfer.Query,
 			&transfer.TargetSchema,
 			&transfer.TargetTable,
@@ -155,9 +171,41 @@ offset
 
 func (m TransferModel) GetById(id int64) (*Transfer, error) {
 	query := `
-        SELECT id, created_at, source_id, target_id, query, target_schema, target_table, overwrite, status, error, stopped_at, version
-        FROM transfers
-        WHERE id = $1`
+	SELECT
+	transfers.id,
+	transfers.created_at,
+	transfers.source_id,
+	source.name,
+	source.ds_type,
+	source.hostname,
+	source.account_id,
+	source.db_name,
+	transfers.target_id,
+	target.name,
+	target.ds_type,
+	target.hostname,
+	target.account_id,
+	target.db_name,
+	transfers.query,
+	transfers.target_schema,
+	transfers.target_table,
+	transfers.overwrite,
+	transfers.status,
+	transfers.error,
+	transfers.stopped_at,
+	transfers.version
+FROM
+	transfers
+left join
+	connections source
+on
+	transfers.source_id = source.id
+left join
+	connections target
+on
+	transfers.source_id = target.id
+where transfers.id = $1
+`
 
 	var transfer Transfer
 
@@ -168,7 +216,17 @@ func (m TransferModel) GetById(id int64) (*Transfer, error) {
 		&transfer.ID,
 		&transfer.CreatedAt,
 		&transfer.SourceID,
+		&transfer.Source.Name,
+		&transfer.Source.DsType,
+		&transfer.Source.Hostname,
+		&transfer.Source.AccountId,
+		&transfer.Source.DbName,
 		&transfer.TargetID,
+		&transfer.Target.Name,
+		&transfer.Target.DsType,
+		&transfer.Target.Hostname,
+		&transfer.Target.AccountId,
+		&transfer.Target.DbName,
 		&transfer.Query,
 		&transfer.TargetSchema,
 		&transfer.TargetTable,

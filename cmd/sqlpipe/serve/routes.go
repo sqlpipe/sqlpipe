@@ -64,15 +64,19 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPost, "/ui/delete-connection/:id", uiRequireAdmin.ThenFunc(app.deleteConnectionUiHandler))
 
 	// Transfers API
-	router.Handler(http.MethodGet, "/api/v1/transfers", apiRequireAdmin.ThenFunc(app.listTransfersApiHandler))
 	router.Handler(http.MethodPost, "/api/v1/transfers", apiRequireLoggedInUser.ThenFunc(app.createTransferApiHandler))
+	router.Handler(http.MethodGet, "/api/v1/transfers", apiRequireAdmin.ThenFunc(app.listTransfersApiHandler))
 	router.Handler(http.MethodGet, "/api/v1/transfers/:id", apiRequireLoggedInUser.ThenFunc(app.showTransferApiHandler))
 	router.Handler(http.MethodPatch, "/api/v1/cancel-transfer/:id", apiRequireLoggedInUser.ThenFunc(app.cancelTransferApiHandler))
 	router.Handler(http.MethodDelete, "/api/v1/transfers/:id", apiRequireAdmin.ThenFunc(app.deleteTransferApiHandler))
 
 	// Transfers UI
-	router.Handler(http.MethodGet, "/ui/create-transfer", uiRequireAdmin.ThenFunc(app.createTransferFormUiHandler))
-	router.Handler(http.MethodGet, "/ui/transfers", uiRequireAdmin.ThenFunc(app.listTransfersUiHandler))
+	router.Handler(http.MethodGet, "/ui/create-transfer", uiRequireLoggedInUser.ThenFunc(app.createTransferFormUiHandler))
+	router.Handler(http.MethodPost, "/ui/create-transfer", uiRequireAdmin.ThenFunc(app.createTransferUiHandler))
+	router.Handler(http.MethodGet, "/ui/transfers", uiRequireLoggedInUser.ThenFunc(app.listTransfersUiHandler))
+	router.Handler(http.MethodGet, "/ui/transfers/:id", uiRequireLoggedInUser.ThenFunc(app.showTransferUiHandler))
+	router.Handler(http.MethodPost, "/ui/cancel-transfer/:id", uiRequireLoggedInUser.ThenFunc(app.cancelTransferUiHandler))
+	router.Handler(http.MethodPost, "/ui/delete-transfer/:id", uiRequireAdmin.ThenFunc(app.deleteTransferUiHandler))
 
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())
