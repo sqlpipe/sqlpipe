@@ -65,18 +65,17 @@ func (m ConnectionModel) Insert(connection *Connection) (*Connection, error) {
 	return connection, nil
 }
 
-func (m ConnectionModel) GetAll(connectionName string, filters Filters) ([]*Connection, Metadata, error) {
+func (m ConnectionModel) GetAll(filters Filters) ([]*Connection, Metadata, error) {
 	query := fmt.Sprintf(`
         SELECT count(*) OVER(), id, created_at, name, ds_type, username, password, account_id, hostname, port, db_name, version
         FROM connections
-        WHERE (to_tsvector('simple', name) @@ plainto_tsquery('simple', $1) OR $1 = '')
         ORDER BY %s %s, id ASC
-        LIMIT $2 OFFSET $3`, filters.sortColumn(), filters.sortDirection())
+        LIMIT $1 OFFSET $2`, filters.sortColumn(), filters.sortDirection())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	args := []interface{}{connectionName, filters.limit(), filters.offset()}
+	args := []interface{}{filters.limit(), filters.offset()}
 
 	rows, err := m.DB.QueryContext(ctx, query, args...)
 	if err != nil {

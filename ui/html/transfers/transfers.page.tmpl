@@ -1,0 +1,139 @@
+{{ template "base" . }}
+{{ define "title" -}} Transfers {{- end }}
+{{ define "main" }}
+
+<!-- Title and buttons -->
+<div class="my-5 d-flex justify-content-between align-items-center">
+
+    <!-- Title -->
+    <h5 class="display-5 m-0">{{ template "title" . }}</h5>
+
+    <!-- Buttons -->
+    <div class="btn-group" role="group">
+
+        <!-- Info button -->
+        <button class="btn btn-outline-info" data-bs-toggle="tooltip" data-bs-placement="top" title="View readme">
+            <span data-bs-toggle="modal" data-bs-target="#readmeModal">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor"
+                    class="bi bi-question" viewBox="0 0 16 16">
+                    <path
+                        d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z" />
+                </svg>
+            </span>
+        </button>
+
+        <!-- Refresh button -->
+        <button class="btn btn-outline-secondary" data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh"
+            onclick="location.reload();">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor"
+                class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" />
+                <path
+                    d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" />
+            </svg>
+        </button>
+
+        <!-- New button -->
+        <a href="/ui/create-transfer" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top"
+            title="Create transfer">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-plus"
+                viewBox="0 0 16 16">
+                <path
+                    d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z" />
+            </svg>
+        </a>
+
+    </div>
+
+</div>
+
+<table class="table table-hover text-center">
+
+    <!-- Table head -->
+    <thead class="table-dark">
+        <th scope="col" class="py-3">Created At</th>
+        <th scope="col" class="py-3">Source</th>
+        <th scope="col" class="py-3">Target</th>
+        <th scope="col" class="py-3">Target Table</th>
+    </thead>
+    <tbody>
+        {{range .Transfers}}
+        {{ if eq .Status "complete" }}
+        <tr class="align-middle" style="cursor: pointer;">
+        {{ end }}
+        {{ if eq .Status "active" }}
+        <tr class="align-middle table-primary" style="cursor: pointer;">
+        {{ end }}
+        {{ if eq .Status "queued" }}
+        <tr class="align-middle table-secondary" style="cursor: pointer;">
+        {{ end }}
+        {{ if eq .Status "error" }}
+        <tr class="align-middle table-danger" style="cursor: pointer;">
+        {{ end }}
+        {{ if eq .Status "cancelled" }}
+        <tr class="align-middle table-danger" style="cursor: pointer;">
+        {{ end }}
+            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
+                    href="/ui/transfers/{{ .ID }}">{{humanDate .CreatedAt}}</a></td>
+            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
+                    href="/ui/connections/{{ .ID }}">{{.SourceName}}</a></td>
+            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
+                    href="/ui/connections/{{ .ID }}">{{.TargetName}}</a></td>
+            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
+                    href="/ui/connections/{{ .ID }}">{{if .TargetSchema}}{{.TargetSchema}}.{{end}}{{.TargetTable}}</a></td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+
+<!-- Modal -->
+<div class="modal fade" id="readmeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <!-- Modal header -->
+            <div class="modal-header">
+                <h5 class="modal-title">Transfers page readme</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <!-- Modal body -->
+            <div class="modal-body container">
+                <p>Transfers query a source system, and inserts the result into a target system. Use this page to create
+                    and monitor transfers.</p>
+
+                <p>To view a transfer's details, click on that specific transfer's cell.</p>
+
+                <h5>Color guide</h5>
+                <table class="table">
+                    <thead class="">
+                        <tr>
+                            <th scope="col">Background Color</th>
+                            <th scope="col">Meaning</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="table-secondary">
+                            <td>Blue</th>
+                            <td>Transfer queued</td>
+                        </tr>
+                        <tr class="table-primary">
+                            <td>Blue</th>
+                            <td>Transfer in progress</td>
+                        </tr>
+                        <tr>
+                            <td>White</th>
+                            <td>Transfer completed</td>
+                        </tr>
+                        <tr class="table-danger">
+                            <td>Red</th>
+                            <td>Transfer failed</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ end }}

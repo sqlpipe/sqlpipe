@@ -119,13 +119,11 @@ func (app *application) getListUsersInput(r *http.Request) (input listUsersInput
 
 	qs := r.URL.Query()
 
-	input.Username = app.readString(qs, "username", "")
-
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
 	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
-	input.Filters.SortSafelist = []string{"id", "created_at", "username", "admin", "-id", "-created_at", "-username", "-admin"}
+	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
 
 	data.ValidateFilters(v, input.Filters)
 
@@ -138,7 +136,7 @@ func (app *application) listUsersApiHandler(w http.ResponseWriter, r *http.Reque
 		app.failedValidationResponse(w, r, validationErrors)
 	}
 
-	users, metadata, err := app.models.Users.GetAll(input.Username, input.Filters)
+	users, metadata, err := app.models.Users.GetAll(input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -274,7 +272,7 @@ func (app *application) listUsersUiHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	users, metadata, err := app.models.Users.GetAll(input.Username, input.Filters)
+	users, metadata, err := app.models.Users.GetAll(input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

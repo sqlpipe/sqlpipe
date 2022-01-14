@@ -24,14 +24,11 @@ func (app *application) getListConnectionsInput(r *http.Request) (input listConn
 
 	qs := r.URL.Query()
 
-	input.Name = app.readString(qs, "name", "")
-	input.DsType = app.readString(qs, "dsType", "")
-
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
 	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
-	input.Filters.SortSafelist = []string{"id", "created_at", "name", "dsType", "-id", "-created_at", "-name", "-dsType"}
+	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
 
 	data.ValidateFilters(v, input.Filters)
 
@@ -45,7 +42,7 @@ func (app *application) listConnectionsUiHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	connections, metadata, err := app.models.Connections.GetAll(input.Name, input.Filters)
+	connections, metadata, err := app.models.Connections.GetAll(input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -340,7 +337,7 @@ func (app *application) listConnectionsApiHandler(w http.ResponseWriter, r *http
 		app.failedValidationResponse(w, r, validationErrors)
 	}
 
-	connections, metadata, err := app.models.Connections.GetAll(input.Name, input.Filters)
+	connections, metadata, err := app.models.Connections.GetAll(input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

@@ -17,6 +17,8 @@ type templateData struct {
 	Users           []*data.User
 	Connection      *data.Connection
 	Connections     []*data.Connection
+	Transfer        *data.Transfer
+	Transfers       []*data.Transfer
 	Metadata        data.Metadata
 	Form            *forms.Form
 	IsAuthenticated bool

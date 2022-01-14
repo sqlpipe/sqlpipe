@@ -70,6 +70,10 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPatch, "/api/v1/cancel-transfer/:id", apiRequireLoggedInUser.ThenFunc(app.cancelTransferApiHandler))
 	router.Handler(http.MethodDelete, "/api/v1/transfers/:id", apiRequireAdmin.ThenFunc(app.deleteTransferApiHandler))
 
+	// Transfers UI
+	router.Handler(http.MethodGet, "/ui/create-transfer", uiRequireAdmin.ThenFunc(app.createTransferFormUiHandler))
+	router.Handler(http.MethodGet, "/ui/transfers", uiRequireAdmin.ThenFunc(app.listTransfersUiHandler))
+
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())
 

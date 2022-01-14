@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/calmitchell617/sqlpipe/internal/forms.go"
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 )
 
@@ -56,7 +58,7 @@ func (app *application) createTransferApiHandler(w http.ResponseWriter, r *http.
 		Query        string `json:"query"`
 		TargetSchema string `json:"targetSchema"`
 		TargetTable  string `json:"targetTable"`
-		Overwrite    bool   `json:"overwrite"`
+		Overwrite    *bool  `json:"overwrite"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -65,13 +67,18 @@ func (app *application) createTransferApiHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	overwrite := true
+	if input.Overwrite != nil {
+		overwrite = *input.Overwrite
+	}
+
 	transfer := &data.Transfer{
 		SourceID:     input.SourceID,
 		TargetID:     input.TargetID,
 		Query:        input.Query,
 		TargetSchema: input.TargetSchema,
 		TargetTable:  input.TargetTable,
-		Overwrite:    input.Overwrite,
+		Overwrite:    overwrite,
 	}
 
 	v := validator.New()
@@ -137,13 +144,14 @@ func (app *application) cancelTransferApiHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if transfer.Status == "error" || transfer.Status == "finished" {
+	if transfer.Status != "queued" && transfer.Status != "active" {
 		v.AddError("status", fmt.Sprintf("cannot cancel a transfer with status of %s", transfer.Status))
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
 	transfer.Status = "cancelled"
+	transfer.StoppedAt = time.Now()
 
 	app.models.Transfers.Update(transfer)
 	if err != nil {
@@ -184,4 +192,36 @@ func (app *application) deleteTransferApiHandler(w http.ResponseWriter, r *http.
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func (app *application) listTransfersUiHandler(w http.ResponseWriter, r *http.Request) {
+	input, validationErrors := app.getListTransfersInput(r)
+	if !reflect.DeepEqual(validationErrors, map[string]string{}) {
+		app.failedValidationResponse(w, r, validationErrors)
+		return
+	}
+
+	transfers, metadata, err := app.models.Transfers.GetAll(input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.render(w, r, "transfers.page.tmpl", &templateData{Transfers: transfers, Metadata: metadata})
+}
+
+func (app *application) createTransferFormUiHandler(w http.ResponseWriter, r *http.Request) {
+	input, validationErrors := app.getListConnectionsInput(r)
+	if !reflect.DeepEqual(validationErrors, map[string]string{}) {
+		app.failedValidationResponse(w, r, validationErrors)
+		return
+	}
+
+	connections, _, err := app.models.Connections.GetAll(input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.render(w, r, "create-transfer.page.tmpl", &templateData{Connections: connections, Form: forms.New(nil)})
 }

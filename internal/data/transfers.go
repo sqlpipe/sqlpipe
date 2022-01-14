@@ -14,7 +14,9 @@ type Transfer struct {
 	ID           int64     `json:"id"`
 	CreatedAt    time.Time `json:"createdAt"`
 	SourceID     int64     `json:"sourceID"`
+	SourceName   string    `json:"sourceName"`
 	TargetID     int64     `json:"targetID"`
+	TargetName   string    `json:"targetName"`
 	Query        string    `json:"query"`
 	TargetSchema string    `json:"targetSchema"`
 	TargetTable  string    `json:"targetTable"`
@@ -61,15 +63,44 @@ func ValidateTransfer(v *validator.Validator, transfer *Transfer) {
 	v.Check(transfer.TargetID != 0, "targetId", "A Target ID is required")
 	v.Check(transfer.Query != "", "query", "A query is required")
 	v.Check(transfer.TargetTable != "", "targetTable", "A target table is required")
-	v.Check(transfer.TargetTable != "", "targetTable", "A target table is required")
 }
 
 func (m TransferModel) GetAll(filters Filters) ([]*Transfer, Metadata, error) {
 	query := fmt.Sprintf(`
-        SELECT count(*) OVER(), id, created_at, source_id, target_id, query, target_schema, target_table, overwrite, status, error, stopped_at, version
-        FROM transfers
-        ORDER BY %s %s, id ASC
-        LIMIT $1 OFFSET $2`, filters.sortColumn(), filters.sortDirection())
+	SELECT
+	count(*) OVER(),
+	transfers.id,
+	transfers.created_at,
+	transfers.source_id,
+	source.name,
+	transfers.target_id,
+	target.name,
+	transfers.query,
+	transfers.target_schema,
+	transfers.target_table,
+	transfers.overwrite,
+	transfers.status,
+	transfers.error,
+	transfers.stopped_at,
+	transfers.version
+FROM
+	transfers
+left join
+	connections source
+on
+	transfers.source_id = source.id
+left join
+	connections target
+on
+	transfers.source_id = target.id
+order by
+	%s %s,
+	id asc
+limit
+	$1
+offset
+	$2
+`, filters.sortColumn(), filters.sortDirection())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -94,7 +125,9 @@ func (m TransferModel) GetAll(filters Filters) ([]*Transfer, Metadata, error) {
 			&transfer.ID,
 			&transfer.CreatedAt,
 			&transfer.SourceID,
+			&transfer.SourceName,
 			&transfer.TargetID,
+			&transfer.TargetName,
 			&transfer.Query,
 			&transfer.TargetSchema,
 			&transfer.TargetTable,
@@ -161,8 +194,8 @@ func (m TransferModel) GetById(id int64) (*Transfer, error) {
 func (m TransferModel) Update(transfer *Transfer) error {
 	query := `
         UPDATE transfers 
-        status = $7, error = $8, stopped_at = $9, version = version + 1
-        WHERE id = $10 AND version = $11
+        SET status = $1, error = $2, stopped_at = $3, version = version + 1
+        WHERE id = $4 AND version = $5
         RETURNING version`
 
 	args := []interface{}{

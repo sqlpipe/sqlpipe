@@ -214,18 +214,17 @@ func (m UserModel) Update(user *User) error {
 	return nil
 }
 
-func (m UserModel) GetAll(username string, filters Filters) ([]*User, Metadata, error) {
+func (m UserModel) GetAll(filters Filters) ([]*User, Metadata, error) {
 	query := fmt.Sprintf(`
         SELECT count(*) OVER(), id, created_at, username, admin, version
         FROM users
-        WHERE (to_tsvector('simple', username) @@ plainto_tsquery('simple', $1) OR $1 = '')
         ORDER BY %s %s, id ASC
-        LIMIT $2 OFFSET $3`, filters.sortColumn(), filters.sortDirection())
+        LIMIT $1 OFFSET $2`, filters.sortColumn(), filters.sortDirection())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	args := []interface{}{username, filters.limit(), filters.offset()}
+	args := []interface{}{filters.limit(), filters.offset()}
 
 	rows, err := m.DB.QueryContext(ctx, query, args...)
 	if err != nil {
