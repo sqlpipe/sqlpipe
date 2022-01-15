@@ -69,6 +69,20 @@ var (
 			FOREIGN KEY (target_id) REFERENCES connections(id)
 		);
 	`
+
+	createQueries = `
+	CREATE TABLE queries (
+		id bigserial PRIMARY KEY,
+		created_at timestamp(0) NOT NULL DEFAULT NOW(),
+		connection_id bigint not null,
+		query text not null,
+		status text not null default 'queued',
+		error text not null default '',
+		stopped_at timestamp(0) not null,
+		Version int not null default 1,
+		FOREIGN KEY (connection_id) REFERENCES connections(id)
+	);
+`
 )
 
 func init() {
@@ -159,6 +173,13 @@ func runMigrations(db *sql.DB) error {
 	_, err = db.Exec(createTransfers)
 	if err != nil {
 		fmt.Println("Error running migrations on transfers table:")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	_, err = db.Exec(createQueries)
+	if err != nil {
+		fmt.Println("Error running migrations on queries table:")
 		fmt.Println(err)
 		os.Exit(1)
 	}

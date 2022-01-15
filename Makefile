@@ -64,6 +64,8 @@ env/insert:
 	curl -u sqlpipe:Mypass123 -k -i -d '{"name": "prod", "dsType": "postgresql", "hostname": "localhost", "port": 5432, "dbName": "sqlpipe", "username": "sqlpipe", "password": "Mypass123", "skipTest": true}' https://localhost:9000/api/v1/connections
 	# insert a transfer
 	curl -u sqlpipe:Mypass123 -k -i -d '{"sourceId": 1, "targetId": 1, "query": "select * from connections", "targetSchema": "public", "targetTable": "mytarget"}' https://localhost:9000/api/v1/transfers
+	# insert a query
+	curl -u sqlpipe:Mypass123 -k -i -d '{"connectionId": 1, "query": "select * from mytable"}' https://localhost:9000/api/v1/queries
 
 # ==================================================================================== #
 # QUALITY CONTROL

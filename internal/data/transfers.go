@@ -35,7 +35,7 @@ func (m TransferModel) Insert(transfer *Transfer) (*Transfer, error) {
 	query := `
         INSERT INTO transfers (source_id, target_id, query, target_schema, target_table, overwrite, stopped_at) 
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, created_at, version`
+        RETURNING id, created_at, status, version`
 
 	args := []interface{}{
 		transfer.SourceID,
@@ -50,7 +50,7 @@ func (m TransferModel) Insert(transfer *Transfer) (*Transfer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&transfer.ID, &transfer.CreatedAt, &transfer.Version)
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&transfer.ID, &transfer.CreatedAt, &transfer.Status, &transfer.Version)
 	if err != nil {
 		return transfer, err
 	}

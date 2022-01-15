@@ -78,6 +78,13 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPost, "/ui/cancel-transfer/:id", uiRequireLoggedInUser.ThenFunc(app.cancelTransferUiHandler))
 	router.Handler(http.MethodPost, "/ui/delete-transfer/:id", uiRequireAdmin.ThenFunc(app.deleteTransferUiHandler))
 
+	// Queries API
+	router.Handler(http.MethodPost, "/api/v1/queries", apiRequireLoggedInUser.ThenFunc(app.createQueryApiHandler))
+	router.Handler(http.MethodGet, "/api/v1/queries", apiRequireAdmin.ThenFunc(app.listQueriesApiHandler))
+	router.Handler(http.MethodGet, "/api/v1/queries/:id", apiRequireLoggedInUser.ThenFunc(app.showQueryApiHandler))
+	router.Handler(http.MethodPatch, "/api/v1/cancel-query/:id", apiRequireLoggedInUser.ThenFunc(app.cancelQueryApiHandler))
+	router.Handler(http.MethodDelete, "/api/v1/queries/:id", apiRequireAdmin.ThenFunc(app.deleteQueryApiHandler))
+
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())
 

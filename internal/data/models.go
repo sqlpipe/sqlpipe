@@ -14,6 +14,7 @@ type Models struct {
 	Users       UserModel
 	Connections ConnectionModel
 	Transfers   TransferModel
+	Queries     QueryModel
 }
 
 func NewModels(db *sql.DB) Models {
@@ -21,5 +22,6 @@ func NewModels(db *sql.DB) Models {
 		Users:       UserModel{DB: db},
 		Connections: ConnectionModel{DB: db},
 		Transfers:   TransferModel{DB: db},
+		Queries:     QueryModel{DB: db},
 	}
 }
