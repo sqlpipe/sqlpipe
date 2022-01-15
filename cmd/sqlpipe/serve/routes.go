@@ -23,7 +23,7 @@ func (app *application) routes() http.Handler {
 	router := httprouter.New()
 
 	// Home page ui redirects
-	router.Handler(http.MethodGet, "/", uiRequireAdmin.ThenFunc(app.listUsersUiHandler))
+	router.Handler(http.MethodGet, "/", uiRequireAdmin.ThenFunc(app.listTransfersUiHandler))
 	router.Handler(http.MethodGet, "/ui", uiRequireAdmin.ThenFunc(app.listUsersUiHandler))
 
 	// Users API
@@ -84,6 +84,14 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodGet, "/api/v1/queries/:id", apiRequireLoggedInUser.ThenFunc(app.showQueryApiHandler))
 	router.Handler(http.MethodPatch, "/api/v1/cancel-query/:id", apiRequireLoggedInUser.ThenFunc(app.cancelQueryApiHandler))
 	router.Handler(http.MethodDelete, "/api/v1/queries/:id", apiRequireAdmin.ThenFunc(app.deleteQueryApiHandler))
+
+	// Queries UI
+	router.Handler(http.MethodGet, "/ui/create-query", uiRequireLoggedInUser.ThenFunc(app.createQueryFormUiHandler))
+	router.Handler(http.MethodPost, "/ui/create-query", uiRequireAdmin.ThenFunc(app.createQueryUiHandler))
+	router.Handler(http.MethodGet, "/ui/queries", uiRequireLoggedInUser.ThenFunc(app.listQueriesUiHandler))
+	router.Handler(http.MethodGet, "/ui/queries/:id", uiRequireLoggedInUser.ThenFunc(app.showQueryUiHandler))
+	router.Handler(http.MethodPost, "/ui/cancel-query/:id", uiRequireLoggedInUser.ThenFunc(app.cancelQueryUiHandler))
+	router.Handler(http.MethodPost, "/ui/delete-query/:id", uiRequireAdmin.ThenFunc(app.deleteQueryUiHandler))
 
 	router.HandlerFunc(http.MethodGet, "/api/v1/healthcheck", app.healthcheckHandler)
 	router.Handler(http.MethodGet, "/api/v1/debug/vars", expvar.Handler())

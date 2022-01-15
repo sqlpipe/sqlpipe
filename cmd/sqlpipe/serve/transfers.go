@@ -226,6 +226,7 @@ func (app *application) createTransferFormUiHandler(w http.ResponseWriter, r *ht
 
 	app.render(w, r, "create-transfer.page.tmpl", &templateData{Connections: connections, Form: forms.New(nil)})
 }
+
 func (app *application) cancelTransferUiHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
@@ -326,8 +327,15 @@ func (app *application) createTransferUiHandler(w http.ResponseWriter, r *http.R
 
 	form := forms.New(r.PostForm)
 
+	input, _ := app.getListTransfersInput(r)
+	connections, _, err := app.models.Connections.GetAll(input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
 	if data.ValidateTransfer(form.Validator, transfer); !form.Validator.Valid() {
-		app.render(w, r, "create-transfer.page.tmpl", &templateData{Form: form})
+		app.render(w, r, "create-transfer.page.tmpl", &templateData{Connections: connections, Form: form})
 		return
 	}
 

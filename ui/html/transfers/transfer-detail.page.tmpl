@@ -37,7 +37,7 @@
 {{ with .Transfer }}
 <p class="mt-5 mb-1"><strong>Status:</strong> {{ .Status }}</p>
 <p class="mb-1"><strong>Created at:</strong> {{ humanDate .CreatedAt }}</p>
-{{ if ne .Status "In progress" }}
+{{ if ne (humanDate .StoppedAt) "" }}
 <p class="mb-1"><strong>Stopped at:</strong> {{ humanDate .StoppedAt }}</p>
 {{ end }}
 <p class="mb-1"><strong>Overwrite on insert:</strong> {{ .Overwrite }}</p>
@@ -194,7 +194,7 @@
             <!-- Modal body -->
             <div class="modal-body container">
                 <p><b class="text-danger">WARNING</b>: Deleting a transfer does not stop the transfer, it only removes the record of it in the databse.</p>
-                <p>If you want the transfer to stop, you must delete it first.</p>
+                <p>If you want the transfer to stop, you must cancel it first.</p>
                 <div class="d-flex justify-content-end mt-4">
                     <button class="btn me-2 btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                     <form action="/ui/delete-transfer/{{ .Transfer.ID }}" method="post">

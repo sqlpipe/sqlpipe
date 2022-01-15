@@ -19,6 +19,8 @@ type templateData struct {
 	Connections     []*data.Connection
 	Transfer        *data.Transfer
 	Transfers       []*data.Transfer
+	Query           *data.Query
+	Queries         []*data.Query
 	Metadata        data.Metadata
 	Form            *forms.Form
 	IsAuthenticated bool

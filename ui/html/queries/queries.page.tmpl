@@ -1,5 +1,5 @@
 {{ template "base" . }}
-{{ define "title" -}} Transfers {{- end }}
+{{ define "title" -}} Queries {{- end }}
 {{ define "main" }}
 
 <!-- Title and buttons -->
@@ -34,8 +34,8 @@
         </button>
 
         <!-- New button -->
-        <a href="/ui/create-transfer" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top"
-            title="Create transfer">
+        <a href="/ui/create-query" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top"
+            title="Create query">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-plus"
                 viewBox="0 0 16 16">
                 <path
@@ -52,12 +52,11 @@
     <!-- Table head -->
     <thead class="table-dark">
         <th scope="col" class="py-3">Created At</th>
-        <th scope="col" class="py-3">Source</th>
-        <th scope="col" class="py-3">Target</th>
-        <th scope="col" class="py-3">Target Table</th>
+        <th scope="col" class="py-3">Connection</th>
+        <th scope="col" class="py-3">Query</th>
     </thead>
     <tbody>
-        {{range .Transfers}}
+        {{range .Queries}}
         {{ if eq .Status "complete" }}
         <tr class="align-middle" style="cursor: pointer;">
         {{ end }}
@@ -74,13 +73,11 @@
         <tr class="align-middle table-danger" style="cursor: pointer;">
         {{ end }}
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
-                    href="/ui/transfers/{{ .ID }}">{{humanDate .CreatedAt}}</a></td>
+                    href="/ui/queries/{{ .ID }}">{{humanDate .CreatedAt}}</a></td>
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
-                    href="/ui/transfers/{{ .ID }}">{{.Source.Name}}</a></td>
+                    href="/ui/queries/{{ .ID }}">{{.Connection.Name}}</a></td>
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
-                    href="/ui/transfers/{{ .ID }}">{{.Target.Name}}</a></td>
-            <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
-                    href="/ui/transfers/{{ .ID }}">{{if .TargetSchema}}{{.TargetSchema}}.{{end}}{{.TargetTable}}</a></td>
+                    href="/ui/queries/{{ .ID }}">{{ .Query }}</a></td>
         </tr>
         {{end}}
     </tbody>
@@ -93,16 +90,16 @@
 
             <!-- Modal header -->
             <div class="modal-header">
-                <h5 class="modal-title">Transfers page readme</h5>
+                <h5 class="modal-title">Queries page readme</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
 
             <!-- Modal body -->
             <div class="modal-body container">
-                <p>Transfers query a source system, and inserts the result into a target system. Use this page to create
-                    and monitor transfers.</p>
+                <p>You can use SQLpipe to run arbitrary queries. Use this page to create
+                    and monitor those queries.</p>
 
-                <p>To view a transfer's details, click on that specific transfer's cell.</p>
+                <p>To view a query's details, click on that specific cell.</p>
 
                 <h5>Color guide</h5>
                 <table class="table">
@@ -114,20 +111,20 @@
                     </thead>
                     <tbody>
                         <tr class="table-secondary">
-                            <td>Blue</th>
-                            <td>Transfer queued</td>
+                            <td>Grey</th>
+                            <td>Query queued</td>
                         </tr>
                         <tr class="table-primary">
                             <td>Blue</th>
-                            <td>Transfer in progress</td>
+                            <td>Query in progress</td>
                         </tr>
                         <tr>
                             <td>White</th>
-                            <td>Transfer completed</td>
+                            <td>Query completed</td>
                         </tr>
                         <tr class="table-danger">
                             <td>Red</th>
-                            <td>Transfer failed</td>
+                            <td>Query failed</td>
                         </tr>
                     </tbody>
                 </table>

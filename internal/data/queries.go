@@ -50,7 +50,7 @@ func (m QueryModel) Insert(query *Query) (*Query, error) {
 }
 
 func ValidateQuery(v *validator.Validator, query *Query) {
-	v.Check(query.ConnectionID != 0, "connectionId", "A Connection ID is required")
+	v.Check(query.ConnectionID != 0, "connectionId", "A connection ID is required")
 	v.Check(query.Query != "", "query", "A query is required")
 }
 

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/calmitchell617/sqlpipe/internal/forms.go"
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 )
 
@@ -178,4 +180,167 @@ func (app *application) deleteQueryApiHandler(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func (app *application) createQueryFormUiHandler(w http.ResponseWriter, r *http.Request) {
+	input, validationErrors := app.getListQueriesInput(r)
+	if !reflect.DeepEqual(validationErrors, map[string]string{}) {
+		app.failedValidationResponse(w, r, validationErrors)
+		return
+	}
+
+	connections, _, err := app.models.Connections.GetAll(input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.render(w, r, "create-query.page.tmpl", &templateData{Connections: connections, Form: forms.New(nil)})
+}
+
+func (app *application) listQueriesUiHandler(w http.ResponseWriter, r *http.Request) {
+	input, validationErrors := app.getListQueriesInput(r)
+	if !reflect.DeepEqual(validationErrors, map[string]string{}) {
+		app.failedValidationResponse(w, r, validationErrors)
+		return
+	}
+
+	queries, metadata, err := app.models.Queries.GetAll(input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.render(w, r, "queries.page.tmpl", &templateData{Queries: queries, Metadata: metadata})
+}
+
+func (app *application) createQueryUiHandler(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse run query form")
+		return
+	}
+
+	var connectionId int64 = 0
+	if r.PostForm.Get("connectionId") != "" {
+		connectionId, err = strconv.ParseInt(r.PostForm.Get("connectionId"), 10, 64)
+		if err != nil {
+			app.errorResponse(w, r, http.StatusBadRequest, "non int value given to connectionId")
+			return
+		}
+	}
+
+	query := &data.Query{
+		ConnectionID: connectionId,
+		Query:        r.PostForm.Get("query"),
+	}
+
+	form := forms.New(r.PostForm)
+
+	input, _ := app.getListTransfersInput(r)
+	connections, _, err := app.models.Connections.GetAll(input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	if data.ValidateQuery(form.Validator, query); !form.Validator.Valid() {
+		app.render(w, r, "create-query.page.tmpl", &templateData{Connections: connections, Form: form})
+		return
+	}
+
+	query, err = app.models.Queries.Insert(query)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.session.Put(r, "flash", fmt.Sprintf("Query %d created", query.ID))
+	http.Redirect(w, r, fmt.Sprintf("/ui/queries/%d", query.ID), http.StatusSeeOther)
+}
+
+func (app *application) showQueryUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil || id < 1 {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	query, err := app.models.Queries.GetById(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.render(w, r, "query-detail.page.tmpl", &templateData{Query: query})
+}
+
+func (app *application) cancelQueryUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	v := validator.New()
+	query, err := app.models.Queries.GetById(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			v.AddError("id", "not found")
+			app.failedValidationResponse(w, r, v.Errors)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	if query.Status != "queued" && query.Status != "active" {
+		v.AddError("status", fmt.Sprintf("cannot cancel a query with status of %s", query.Status))
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	query.Status = "cancelled"
+	query.StoppedAt = time.Now()
+
+	app.models.Queries.Update(query)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.session.Put(r, "flash", "Query cancelled")
+	http.Redirect(w, r, fmt.Sprintf("/ui/queries/%d", id), http.StatusSeeOther)
+}
+
+func (app *application) deleteQueryUiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	err = app.models.Queries.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	app.session.Put(r, "flash", fmt.Sprintf("Query %d deleted", id))
+	http.Redirect(w, r, "/ui/queries", http.StatusSeeOther)
 }
