@@ -15,17 +15,18 @@
                     {{ range .Connections }}
                     <option value="{{ .ID }}">{{ .Name }}</option>
                     {{ end }}
+                    {{with .Form}}
                 </select>
-                {{with .Form.Validator.Get "connectionId"}}
+                {{with .Validator.Get "connectionId"}}
                 <div class="invalid-feedback">{{.}}</div>
                 {{end}}
             </div>
 
             <div class="mb-3">
                 <label for="query" class="form-label">Query</label>
-                <textarea rows=5 class="form-control {{with .Form.Validator.Get "query"}}is-invalid{{end}}" id="query"
-                    name="query" value='{{.Form.Get "query"}}'></textarea>
-                {{with .Form.Validator.Get "query"}}
+                <textarea rows=5 class="form-control {{with .Validator.Get "query"}}is-invalid{{end}}" id="query"
+                    name="query">{{.Get "query"}}</textarea>
+                {{with .Validator.Get "query"}}
                 <div class="invalid-feedback">{{.}}</div>
                 {{end}}
             </div>
@@ -37,4 +38,5 @@
         </form>
     </div>
 </div>
+{{ end }}
 {{ end }}

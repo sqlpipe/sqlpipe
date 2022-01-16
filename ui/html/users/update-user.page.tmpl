@@ -13,7 +13,7 @@
             {{with .Form}}
             <div class="mb-3">
                 <label for="username" class="form-label">Username</label>
-                <input class="form-control {{with .Validator.Get " username"}}is-invalid{{end}}" id="username"
+                <input class="form-control {{with .Validator.Get "username"}}is-invalid{{end}}" id="username"
                     name="username" value='{{.Get "username"}}'>
                 {{with .Validator.Get "username"}}
                 <div class="invalid-feedback">{{.}}</div>
@@ -21,7 +21,7 @@
             </div>
             <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control {{with .Validator.Get " password"}}is-invalid{{end}}"
+                <input type="password" class="form-control {{with .Validator.Get "password"}}is-invalid{{end}}"
                     id="password" name="password">
                 {{with .Validator.Get "password"}}
                 <div class="invalid-feedback">{{.}}</div>

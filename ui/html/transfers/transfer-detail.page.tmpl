@@ -20,6 +20,7 @@
         </button>
     {{ end }}
 
+    {{ if .IsAdmin }}
     <button class="btn btn-outline-danger" data-bs-toggle="tooltip" data-bs-placement="top" title="Delete">
         <span data-bs-toggle="modal" data-bs-target="#deleteModal">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-trash"
@@ -31,6 +32,7 @@
             </svg>
         </span>
     </button>
+    {{ end }}
 </div>
 </div>
 
@@ -73,17 +75,6 @@
                         <th scope="row" class="bg-dark text-light">DsType</th>
                         <td>{{ .Source.DsType }}</td>
                     </tr>
-                    {{ if ne .Source.DsType "snowflake" }}
-                    <tr>
-                        <th scope="row" class="bg-dark text-light">Hostname</th>
-                        <td>{{ .Source.Hostname }}</td>
-                    </tr>
-                    {{ else }}
-                    <tr>
-                        <th scope="row" class="bg-dark text-light">Account Id</th>
-                        <td>{{ .Source.AccountId }}</td>
-                    </tr>
-                    {{ end }}
                     <tr>
                         <th scope="row" class="bg-dark text-light">Db Name</th>
                         <td>{{ .Source.DbName }}</td>
@@ -124,17 +115,6 @@
                         <th class="bg-dark text-light">DsType</th>
                         <td>{{ .Target.DsType }}</td>
                     </tr>
-                    {{ if ne .Target.DsType "snowflake" }}
-                    <tr>
-                        <th class="bg-dark text-light">Hostname</th>
-                        <td>{{ .Target.Hostname }}</td>
-                    </tr>
-                    {{ else }}
-                    <tr>
-                        <th class="bg-dark text-light">Account Id</th>
-                        <td>{{ .Target.AccountId }}</td>
-                    </tr>
-                    {{ end }}
                     <tr>
                         <th class="bg-dark text-light">Db Name</th>
                         <td>{{ .Target.DbName }}</td>

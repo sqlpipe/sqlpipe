@@ -241,6 +241,11 @@ func (app *application) isAuthenticated(r *http.Request) bool {
 	return !user.IsAnonymous()
 }
 
+func (app *application) isAdmin(r *http.Request) bool {
+	user := app.contextGetUser(r)
+	return user.Admin
+}
+
 func (app *application) requireAuthUi(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !app.isAuthenticated(r) {

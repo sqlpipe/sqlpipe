@@ -24,6 +24,7 @@ type templateData struct {
 	Metadata        data.Metadata
 	Form            *forms.Form
 	IsAuthenticated bool
+	IsAdmin         bool
 	Flash           string
 	ErrorMessage    string
 	// Snippet         *models.Snippet

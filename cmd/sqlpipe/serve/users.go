@@ -149,27 +149,26 @@ func (app *application) listUsersApiHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *application) updateUserApiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
 	var input struct {
-		ID       *int64
 		Username *string
 		Password *string
 		Admin    *bool
 	}
 
-	err := app.readJSON(w, r, &input)
+	err = app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
 
-	if input.ID == nil {
-		err = errors.New("updating a user requires providing an existing user's ID")
-		app.badRequestResponse(w, r, err)
-		return
-	}
-
 	v := validator.New()
-	user, err := app.models.Users.GetById(*input.ID)
+	user, err := app.models.Users.GetById(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -458,6 +457,8 @@ func (app *application) updateUserUiHandler(w http.ResponseWriter, r *http.Reque
 	form := forms.New(r.PostForm)
 
 	if data.ValidateUser(form.Validator, user); !form.Validator.Valid() {
+		fmt.Printf("\n\n%v\n\n", form.Validator)
+		fmt.Printf("\n\n%v\n\n", form.Validator.Errors)
 		app.render(w, r, "update-user.page.tmpl", &templateData{User: user, Form: form})
 		return
 	}

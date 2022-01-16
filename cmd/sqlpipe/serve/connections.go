@@ -374,8 +374,13 @@ func (app *application) showConnectionApiHandler(w http.ResponseWriter, r *http.
 }
 
 func (app *application) updateConnectionApiHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
 	var input struct {
-		ID        *int64
 		Name      *string
 		DsType    *string
 		Hostname  *string
@@ -386,20 +391,14 @@ func (app *application) updateConnectionApiHandler(w http.ResponseWriter, r *htt
 		Password  *string
 	}
 
-	err := app.readJSON(w, r, &input)
+	err = app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
 
-	if input.ID == nil {
-		err = errors.New("updating a connection requires providing an existing connection's ID")
-		app.badRequestResponse(w, r, err)
-		return
-	}
-
 	v := validator.New()
-	connection, err := app.models.Connections.GetById(*input.ID)
+	connection, err := app.models.Connections.GetById(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):

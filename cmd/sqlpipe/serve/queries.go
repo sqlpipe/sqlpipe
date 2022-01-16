@@ -237,7 +237,7 @@ func (app *application) createQueryUiHandler(w http.ResponseWriter, r *http.Requ
 
 	form := forms.New(r.PostForm)
 
-	input, _ := app.getListTransfersInput(r)
+	input, _ := app.getListQueriesInput(r)
 	connections, _, err := app.models.Connections.GetAll(input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
