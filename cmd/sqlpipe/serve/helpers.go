@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -155,4 +156,85 @@ func (app *application) readIDParam(r *http.Request) (int64, error) {
 	}
 
 	return id, nil
+}
+
+func Min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func Min64(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func Max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func Max64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+type PaginationData struct {
+	NeedsPagination bool
+	Pages           []Page
+	Offset          int
+	PageName        string
+}
+
+type Page struct {
+	PageNum  int
+	IsActive bool
+	Link     string
+}
+
+func getPaginationData(
+	currentPage int,
+	totalObjects int,
+	pageSize int,
+	currentPageName string,
+) PaginationData {
+	pages := []Page{}
+
+	if totalObjects <= pageSize {
+		return PaginationData{false, pages, 0, currentPageName}
+	}
+
+	numPages := int(math.Ceil(float64(totalObjects) / float64(pageSize)))
+
+	offset := (pageSize * currentPage) - pageSize
+
+	if currentPage <= 3 {
+		for i := 1; i <= Min(5, numPages); i++ {
+			isCurrent := currentPage == i
+			link := fmt.Sprintf("/ui/%s/?page=%v&page_size=%v", currentPageName, i, pageSize)
+			pages = append(pages, Page{i, isCurrent, link})
+		}
+		return PaginationData{true, pages, offset, currentPageName}
+	} else if currentPage >= numPages-2 {
+		for i := Max(1, numPages-4); i <= numPages; i++ {
+			isCurrent := currentPage == i
+			link := fmt.Sprintf("/ui/%s/?page=%v&page_size=%v", currentPageName, i, pageSize)
+			pages = append(pages, Page{i, isCurrent, link})
+		}
+		return PaginationData{true, pages, offset, currentPageName}
+	} else {
+		for i := currentPage - 2; i <= currentPage+2; i++ {
+			isCurrent := currentPage == i
+			link := fmt.Sprintf("/ui/%s/?page=%v&page_size=%v", currentPageName, i, pageSize)
+			pages = append(pages, Page{i, isCurrent, link})
+		}
+		return PaginationData{true, pages, offset, currentPageName}
+	}
 }

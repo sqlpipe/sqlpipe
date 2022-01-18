@@ -25,7 +25,7 @@ func (app *application) getListConnectionsInput(r *http.Request) (input listConn
 	qs := r.URL.Query()
 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 10, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
 	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
@@ -48,7 +48,8 @@ func (app *application) listConnectionsUiHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	app.render(w, r, "connections.page.tmpl", &templateData{Connections: connections, Metadata: metadata})
+	paginationData := getPaginationData(metadata.CurrentPage, int(metadata.TotalRecords), metadata.PageSize, "connections")
+	app.render(w, r, "connections.page.tmpl", &templateData{Connections: connections, Metadata: metadata, PaginationData: &paginationData})
 }
 
 func (app *application) createConnectionFormUiHandler(w http.ResponseWriter, r *http.Request) {

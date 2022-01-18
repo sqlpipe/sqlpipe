@@ -23,6 +23,7 @@ type templateData struct {
 	Queries         []*data.Query
 	Metadata        data.Metadata
 	Form            *forms.Form
+	PaginationData  *PaginationData
 	IsAuthenticated bool
 	IsAdmin         bool
 	Flash           string
@@ -47,6 +48,11 @@ func newTemplateCache() (map[string]*template.Template, error) {
 		}
 
 		ts, err = ts.ParseFS(ui.Files, "html/*.layout.tmpl")
+		if err != nil {
+			return nil, err
+		}
+
+		ts, err = ts.ParseFS(ui.Files, "html/*.partial.tmpl")
 		if err != nil {
 			return nil, err
 		}

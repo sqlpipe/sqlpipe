@@ -23,7 +23,7 @@ func (app *application) getListTransfersInput(r *http.Request) (input listTransf
 	qs := r.URL.Query()
 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 10, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
 	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
@@ -208,7 +208,9 @@ func (app *application) listTransfersUiHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	app.render(w, r, "transfers.page.tmpl", &templateData{Transfers: transfers, Metadata: metadata})
+	paginationData := getPaginationData(metadata.CurrentPage, int(metadata.TotalRecords), metadata.PageSize, "transfers")
+
+	app.render(w, r, "transfers.page.tmpl", &templateData{Transfers: transfers, Metadata: metadata, PaginationData: &paginationData})
 }
 
 func (app *application) createTransferFormUiHandler(w http.ResponseWriter, r *http.Request) {

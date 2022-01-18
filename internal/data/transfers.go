@@ -65,6 +65,22 @@ func ValidateTransfer(v *validator.Validator, transfer *Transfer) {
 	v.Check(transfer.TargetTable != "", "targetTable", "A target table is required")
 }
 
+func (m TransferModel) CountTransfers() (int, error) {
+	query := `select count(*) from transfers`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var numTransfers int
+
+	err := m.DB.QueryRowContext(ctx, query).Scan(&numTransfers)
+	if err != nil {
+		return 0, err
+	}
+
+	return numTransfers, nil
+}
+
 func (m TransferModel) GetAll(filters Filters) ([]*Transfer, Metadata, error) {
 	query := fmt.Sprintf(`
 	SELECT

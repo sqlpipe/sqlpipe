@@ -1,0 +1,30 @@
+{{ template "main" . }}
+
+{{ define "pagination" }}
+
+<div class="row justify-content-end mt-2 mb-3 align-items-start">
+    <div class="col-4 d-flex justify-content-center">
+        <nav>
+            <ul class="pagination">
+                {{ range .PaginationData.Pages }}
+                <li class="page-item {{if .IsActive }}active{{end}}"><a class="page-link" href="{{ .Link }}">{{ .PageNum }}</a></li>
+                {{ end }}
+            </ul>
+        </nav>
+    </div>
+    <div class="col-4 d-flex justify-content-end align-items-center">
+        <p class="me-2 p-0 m-0">Page Size</p>
+        <form action="/ui/{{.PaginationData.PageName}}" method="GET">
+            <select id="pageSize" name="page_size" class="form-select align-self-start" style="max-width: 120px;"
+                onchange="this.form.submit()">
+                <option value=2 {{if eq .Metadata.PageSize 2 }}selected{{end}}>2</option>
+                <option value=10 {{if eq .Metadata.PageSize 10 }}selected{{end}}>10</option>
+                <option value=25 {{if eq .Metadata.PageSize 25 }}selected{{end}}>25</option>
+                <option value=42 {{if eq .Metadata.PageSize 42 }}selected{{end}}>42</option>
+                <option value=50 {{if eq .Metadata.PageSize 50 }}selected{{end}}>50</option>
+                <option value=100 {{if eq .Metadata.PageSize 100 }}selected{{end}}>100</option>
+            </select>
+        </form>
+    </div>
+</div>
+{{ end }}

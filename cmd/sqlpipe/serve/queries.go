@@ -60,7 +60,7 @@ func (app *application) getListQueriesInput(r *http.Request) (input listQueriesI
 	qs := r.URL.Query()
 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 10, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
 	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
@@ -211,7 +211,8 @@ func (app *application) listQueriesUiHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	app.render(w, r, "queries.page.tmpl", &templateData{Queries: queries, Metadata: metadata})
+	paginationData := getPaginationData(metadata.CurrentPage, int(metadata.TotalRecords), metadata.PageSize, "queries")
+	app.render(w, r, "queries.page.tmpl", &templateData{Queries: queries, Metadata: metadata, PaginationData: &paginationData})
 }
 
 func (app *application) createQueryUiHandler(w http.ResponseWriter, r *http.Request) {

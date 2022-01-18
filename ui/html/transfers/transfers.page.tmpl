@@ -60,19 +60,19 @@
         {{range .Transfers}}
         {{ if eq .Status "complete" }}
         <tr class="align-middle" style="cursor: pointer;">
-        {{ end }}
-        {{ if eq .Status "active" }}
+            {{ end }}
+            {{ if eq .Status "active" }}
         <tr class="align-middle table-primary" style="cursor: pointer;">
-        {{ end }}
-        {{ if eq .Status "queued" }}
+            {{ end }}
+            {{ if eq .Status "queued" }}
         <tr class="align-middle table-secondary" style="cursor: pointer;">
-        {{ end }}
-        {{ if eq .Status "error" }}
+            {{ end }}
+            {{ if eq .Status "error" }}
         <tr class="align-middle table-danger" style="cursor: pointer;">
-        {{ end }}
-        {{ if eq .Status "cancelled" }}
+            {{ end }}
+            {{ if eq .Status "cancelled" }}
         <tr class="align-middle table-danger" style="cursor: pointer;">
-        {{ end }}
+            {{ end }}
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
                     href="/ui/transfers/{{ .ID }}">{{humanDate .CreatedAt}}</a></td>
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
@@ -80,11 +80,14 @@
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
                     href="/ui/transfers/{{ .ID }}">{{.Target.Name}}</a></td>
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
-                    href="/ui/transfers/{{ .ID }}">{{if .TargetSchema}}{{.TargetSchema}}.{{end}}{{.TargetTable}}</a></td>
+                    href="/ui/transfers/{{ .ID }}">{{if .TargetSchema}}{{.TargetSchema}}.{{end}}{{.TargetTable}}</a>
+            </td>
         </tr>
         {{end}}
     </tbody>
 </table>
+
+{{template "pagination" .}}
 
 <!-- Modal -->
 <div class="modal fade" id="readmeModal" tabindex="-1">

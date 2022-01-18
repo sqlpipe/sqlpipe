@@ -120,7 +120,7 @@ func (app *application) getListUsersInput(r *http.Request) (input listUsersInput
 	qs := r.URL.Query()
 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 10, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
 	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
@@ -277,7 +277,8 @@ func (app *application) listUsersUiHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	app.render(w, r, "users.page.tmpl", &templateData{Users: users, Metadata: metadata})
+	paginationData := getPaginationData(metadata.CurrentPage, int(metadata.TotalRecords), metadata.PageSize, "users")
+	app.render(w, r, "users.page.tmpl", &templateData{Users: users, Metadata: metadata, PaginationData: &paginationData})
 }
 
 func (app *application) createUserFormUiHandler(w http.ResponseWriter, r *http.Request) {
