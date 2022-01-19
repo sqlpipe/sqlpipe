@@ -59,8 +59,8 @@ func (m TransferModel) Insert(transfer *Transfer) (*Transfer, error) {
 }
 
 func ValidateTransfer(v *validator.Validator, transfer *Transfer) {
-	v.Check(transfer.SourceID != 0, "sourceId", "A Source ID is required")
-	v.Check(transfer.TargetID != 0, "targetId", "A Target ID is required")
+	v.Check(transfer.SourceID > 0, "sourceId", "Source ID is required and must be an integer greater than 0")
+	v.Check(transfer.TargetID > 0, "targetId", "Source ID is required and must be an integer greater than 0")
 	v.Check(transfer.Query != "", "query", "A query is required")
 	v.Check(transfer.TargetTable != "", "targetTable", "A target table is required")
 }
@@ -179,6 +179,100 @@ offset
 	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
 
 	return transfers, metadata, nil
+}
+
+func (m TransferModel) GetQueued() ([]*Transfer, error) {
+	query := `
+	SELECT
+	transfers.id,
+	transfers.created_at,
+	source.ID,
+	source.Ds_Type,
+	source.Hostname,
+	source.Port,
+	source.Account_Id,
+	source.Db_Name,
+	source.Username,
+	source.Password,
+	target.ID,
+	target.Ds_Type,
+	target.Hostname,
+	target.Port,
+	target.Account_Id,
+	target.Db_Name,
+	target.Username,
+	target.Password,
+	transfers.query,
+	transfers.target_schema,
+	transfers.target_table,
+	transfers.overwrite
+FROM
+	transfers
+left join
+	connections source
+on
+	transfers.source_id = source.id
+left join
+	connections target
+on
+	transfers.source_id = target.id
+where 
+	transfers.status = 'queued'
+order by 
+	transfers.id
+`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	transfers := []*Transfer{}
+
+	for rows.Next() {
+		var transfer Transfer
+
+		err := rows.Scan(
+			&transfer.ID,
+			&transfer.CreatedAt,
+			&transfer.Source.ID,
+			&transfer.Source.DsType,
+			&transfer.Source.Hostname,
+			&transfer.Source.Port,
+			&transfer.Source.AccountId,
+			&transfer.Source.DbName,
+			&transfer.Source.Username,
+			&transfer.Source.Password,
+			&transfer.Target.ID,
+			&transfer.Target.DsType,
+			&transfer.Target.Hostname,
+			&transfer.Target.Port,
+			&transfer.Target.AccountId,
+			&transfer.Target.DbName,
+			&transfer.Target.Username,
+			&transfer.Target.Password,
+			&transfer.Query,
+			&transfer.TargetSchema,
+			&transfer.TargetTable,
+			&transfer.Overwrite,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		transfers = append(transfers, &transfer)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return transfers, nil
 }
 
 func (m TransferModel) GetById(id int64) (*Transfer, error) {

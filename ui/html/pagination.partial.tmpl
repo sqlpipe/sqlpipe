@@ -17,7 +17,6 @@
         <form action="/ui/{{.PaginationData.PageName}}" method="GET">
             <select id="pageSize" name="page_size" class="form-select align-self-start" style="max-width: 120px;"
                 onchange="this.form.submit()">
-                <option value=2 {{if eq .Metadata.PageSize 2 }}selected{{end}}>2</option>
                 <option value=10 {{if eq .Metadata.PageSize 10 }}selected{{end}}>10</option>
                 <option value=25 {{if eq .Metadata.PageSize 25 }}selected{{end}}>25</option>
                 <option value=42 {{if eq .Metadata.PageSize 42 }}selected{{end}}>42</option>

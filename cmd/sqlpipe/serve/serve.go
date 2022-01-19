@@ -77,11 +77,12 @@ type config struct {
 type application struct {
 	logger *jsonLog.Logger
 
-	config        config
-	models        data.Models
-	wg            sync.WaitGroup
-	session       *sessions.Session
-	templateCache map[string]*template.Template
+	config                config
+	models                data.Models
+	wg                    sync.WaitGroup
+	session               *sessions.Session
+	templateCache         map[string]*template.Template
+	numLocalActiveQueries int
 
 	tlsConfig *tls.Config
 }
@@ -149,6 +150,8 @@ func serve(cmd *cobra.Command, args []string) {
 			cfg.adminCredentials.password,
 		)
 	}
+
+	go app.toDoScanner()
 
 	err = app.serve()
 	if err != nil {
