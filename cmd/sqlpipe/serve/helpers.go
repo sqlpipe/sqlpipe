@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/calmitchell617/sqlpipe/internal/validator"
+	"github.com/calmitchell617/sqlpipe/pkg"
 	"github.com/julienschmidt/httprouter"
 	"github.com/justinas/nosurf"
 )
@@ -158,34 +159,6 @@ func (app *application) readIDParam(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func Min64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func Max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func Max64(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 type PaginationData struct {
 	NeedsPagination bool
 	Pages           []Page
@@ -216,14 +189,14 @@ func getPaginationData(
 	offset := (pageSize * currentPage) - pageSize
 
 	if currentPage <= 3 {
-		for i := 1; i <= Min(5, numPages); i++ {
+		for i := 1; i <= pkg.Min(5, numPages); i++ {
 			isCurrent := currentPage == i
 			link := fmt.Sprintf("/ui/%s/?page=%v&page_size=%v", currentPageName, i, pageSize)
 			pages = append(pages, Page{i, isCurrent, link})
 		}
 		return PaginationData{true, pages, offset, currentPageName}
 	} else if currentPage >= numPages-2 {
-		for i := Max(1, numPages-4); i <= numPages; i++ {
+		for i := pkg.Max(1, numPages-4); i <= numPages; i++ {
 			isCurrent := currentPage == i
 			link := fmt.Sprintf("/ui/%s/?page=%v&page_size=%v", currentPageName, i, pageSize)
 			pages = append(pages, Page{i, isCurrent, link})

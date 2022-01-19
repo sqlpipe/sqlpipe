@@ -205,7 +205,8 @@ func (m TransferModel) GetQueued() ([]*Transfer, error) {
 	transfers.query,
 	transfers.target_schema,
 	transfers.target_table,
-	transfers.overwrite
+	transfers.overwrite,
+	transfers.version
 FROM
 	transfers
 left join
@@ -260,6 +261,7 @@ order by
 			&transfer.TargetSchema,
 			&transfer.TargetTable,
 			&transfer.Overwrite,
+			&transfer.Version,
 		)
 		if err != nil {
 			return nil, err
