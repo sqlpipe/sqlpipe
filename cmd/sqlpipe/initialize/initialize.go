@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	Initialize = &cobra.Command{
+	InitializeCmd = &cobra.Command{
 		Use:   "initialize",
 		Short: "Initialize PostgreSQL DB.",
 		Run:   initialize,
@@ -86,8 +86,8 @@ var (
 )
 
 func init() {
-	Initialize.Flags().StringVar(&dsn, "dsn", "", "Database backend connection string")
-	Initialize.Flags().BoolVar(&force, "force", false, "Do not ask for confirmation")
+	InitializeCmd.Flags().StringVar(&dsn, "dsn", "", "Database backend connection string")
+	InitializeCmd.Flags().BoolVar(&force, "force", false, "Do not ask for confirmation")
 }
 
 func initialize(cmd *cobra.Command, args []string) {

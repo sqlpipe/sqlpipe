@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	Serve = &cobra.Command{
+	ServeCmd = &cobra.Command{
 		Use:   "serve",
 		Short: "Starts a SQLPipe server.",
 		Run:   serve,
@@ -88,25 +88,25 @@ type application struct {
 }
 
 func init() {
-	Serve.Flags().IntVar(&cfg.port, "port", 9000, "The port SQLPipe will run on. Default 9000")
+	ServeCmd.Flags().IntVar(&cfg.port, "port", 9000, "The port SQLPipe will run on. Default 9000")
 
-	Serve.Flags().StringVar(&cfg.db.dsn, "dsn", "", "Database backend connection string")
+	ServeCmd.Flags().StringVar(&cfg.db.dsn, "dsn", "", "Database backend connection string")
 
-	Serve.Flags().IntVar(&cfg.db.maxOpenConns, "max-connections", 100, "The port SQLPipe will run on. Default 9000")
-	Serve.Flags().IntVar(&cfg.db.maxIdleConns, "max-idle-connections", 5, "The port SQLPipe will run on. Default 9000")
-	Serve.Flags().StringVar(&cfg.db.maxIdleTime, "max-idle-time", "5m", "Database backend connection string")
+	ServeCmd.Flags().IntVar(&cfg.db.maxOpenConns, "max-connections", 100, "The port SQLPipe will run on. Default 9000")
+	ServeCmd.Flags().IntVar(&cfg.db.maxIdleConns, "max-idle-connections", 5, "The port SQLPipe will run on. Default 9000")
+	ServeCmd.Flags().StringVar(&cfg.db.maxIdleTime, "max-idle-time", "5m", "Database backend connection string")
 
-	Serve.Flags().Float64Var(&cfg.limiter.rps, "limiter-rps", 100, "Rate limiter maximum requests per second")
-	Serve.Flags().IntVar(&cfg.limiter.burst, "limiter-burst", 200, "Rate limiter maximum burst")
-	Serve.Flags().BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+	ServeCmd.Flags().Float64Var(&cfg.limiter.rps, "limiter-rps", 100, "Rate limiter maximum requests per second")
+	ServeCmd.Flags().IntVar(&cfg.limiter.burst, "limiter-burst", 200, "Rate limiter maximum burst")
+	ServeCmd.Flags().BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
 
-	Serve.Flags().BoolVar(&cfg.createAdmin, "create-admin", false, "Create admin user")
-	Serve.Flags().StringVar(&cfg.adminCredentials.username, "admin-username", "", "Admin username")
-	Serve.Flags().StringVar(&cfg.adminCredentials.password, "admin-password", "", "Admin password")
+	ServeCmd.Flags().BoolVar(&cfg.createAdmin, "create-admin", false, "Create admin user")
+	ServeCmd.Flags().StringVar(&cfg.adminCredentials.username, "admin-username", "", "Admin username")
+	ServeCmd.Flags().StringVar(&cfg.adminCredentials.password, "admin-password", "", "Admin password")
 
-	Serve.Flags().BoolVar(&displayVersion, "version", false, "Display SQLpipe version")
+	ServeCmd.Flags().BoolVar(&displayVersion, "version", false, "Display SQLpipe version")
 
-	Serve.Flags().StringVar(&secret, "secret", "", "Secret key")
+	ServeCmd.Flags().StringVar(&secret, "secret", "", "Secret key")
 }
 
 func serve(cmd *cobra.Command, args []string) {
