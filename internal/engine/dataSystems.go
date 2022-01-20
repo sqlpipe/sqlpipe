@@ -131,31 +131,14 @@ func RunTransfer(transfer *data.Transfer) error {
 	return nil
 }
 
-// func RunQuery(query data.Query) (resultSet QueryResult, err error) {
-
-// 	db := helpers.GetDb()
-// 	query.Status = "In progress"
-// 	db.Save(&query)
-
-// 	var connection data.Connection
-// 	db.First(&connection, query.ConnectionFk)
-
-// 	dsConn := GetDs(connection)
-// 	resultSet, err = dsConn.getFormattedResults(query.Query)
-
-// 	if err != nil {
-// 		query.Status = "Failed"
-// 		query.StoppedAt = time.Now()
-// 		query.Error = err.Error()
-// 		db.Save(&query)
-// 		return resultSet, err
-// 	}
-
-// 	query.Status = "Complete"
-// 	query.StoppedAt = time.Now()
-// 	db.Save(&query)
-// 	return resultSet, err
-// }
+func RunQuery(query *data.Query) error {
+	dsConn := GetDs(query.Connection)
+	_, err := execute(dsConn, query.Query)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func standardGetRows(
 	dsConn DsConnection,

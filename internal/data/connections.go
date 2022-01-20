@@ -16,16 +16,18 @@ var (
 
 type Connection struct {
 	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"createdAt"`
 	Name      string    `json:"name"`
-	DsType    string    `json:"ds_type"`
+	DsType    string    `json:"dsType"`
 	Username  string    `json:"username"`
 	Password  string    `json:"-"`
-	AccountId string    `json:"account_id"`
+	AccountId string    `json:"accountID"`
 	Hostname  string    `json:"hostname"`
 	Port      int       `json:"port"`
-	DbName    string    `json:"db_name"`
+	DbName    string    `json:"dbName"`
 	Version   int       `json:"-"`
+	// CanConnect does not go in the DB, it is kept in memory to show in the UI / API responses
+	CanConnect bool `json:"canConnect"`
 }
 
 type ConnectionModel struct {

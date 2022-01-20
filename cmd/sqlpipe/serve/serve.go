@@ -77,12 +77,12 @@ type config struct {
 type application struct {
 	logger *jsonLog.Logger
 
-	config                config
-	models                data.Models
-	wg                    sync.WaitGroup
-	session               *sessions.Session
-	templateCache         map[string]*template.Template
-	numLocalActiveQueries int
+	config                  config
+	models                  data.Models
+	wg                      sync.WaitGroup
+	session                 *sessions.Session
+	templateCache           map[string]*template.Template
+	numLocalActiveTransfers int
 
 	tlsConfig *tls.Config
 }

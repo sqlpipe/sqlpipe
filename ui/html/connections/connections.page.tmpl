@@ -58,7 +58,11 @@
     </thead>
     <tbody>
         {{range .Connections}}
+        {{ if .CanConnect }}
         <tr class="align-middle" style="cursor: pointer;">
+            {{else}}
+        <tr class="align-middle table-danger" style="cursor: pointer;">
+            {{end}}
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
                     href="/ui/connections/{{ .ID }}">{{.Name}}</a></td>
             <td class="py-3"><a class="py-3" style="display: block; text-decoration: none; color: inherit;"
@@ -100,13 +104,9 @@
                         href="https://docs.sqlpipe.com/getting-started/">SQLpipe's getting started
                         tutorial</a>.
 
-                <p>To view or modify a connection's details, click on the its cell.</p>
+                <p>To view or modify a connection's details, click on its cell.</p>
 
                 <h5 class="mt-4">Status check color guide</h5>
-                <p>Each SQLpipe server pings each connection every 10 seconds to check reachability, and displays the
-                    results of that check as shown below.</p>
-                <p>If one SQLpipe server cannot reach a connection, that doesn't necessarily mean that another SQLpipe
-                    server cannot reach it.</p>
                 <table class="table">
                     <thead class="">
                         <tr>
@@ -125,6 +125,10 @@
                         </tr>
                     </tbody>
                 </table>
+                <p>Each SQLpipe server pings a connection when retrieving it's information to determine reachability, and displays the
+                    results of that check as shown above.</p>
+                <p>If one SQLpipe server cannot reach a connection, that doesn't necessarily mean that another SQLpipe
+                    server cannot reach it. There could be a firewall, security rule, or <a href="https://wiki.c2.com/?TheKenThompsonHack">Ken Thompson Hack</a> preventing the current server from reaching the promised land.</p>
             </div>
         </div>
     </div>

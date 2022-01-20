@@ -1,16 +1,20 @@
 package serve
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
+	"sync"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/calmitchell617/sqlpipe/internal/engine"
 	"github.com/calmitchell617/sqlpipe/internal/forms.go"
 	"github.com/calmitchell617/sqlpipe/internal/validator"
+	"github.com/calmitchell617/sqlpipe/pkg"
 )
 
 type listConnectionsInput struct {
@@ -47,6 +51,8 @@ func (app *application) listConnectionsUiHandler(w http.ResponseWriter, r *http.
 		app.serverErrorResponse(w, r, err)
 		return
 	}
+
+	connections = testConnections(connections)
 
 	paginationData := getPaginationData(metadata.CurrentPage, int(metadata.TotalRecords), metadata.PageSize, "connections")
 	app.render(w, r, "connections.page.tmpl", &templateData{Connections: connections, Metadata: metadata, PaginationData: &paginationData})
@@ -90,15 +96,13 @@ func (app *application) createConnectionUiHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	canConnect := true
 	if r.PostForm.Get("skipTest") != "on" {
-		canConnect = testConnection(*connection)
-	}
-
-	if !canConnect {
-		form.Validator.AddError("canConnect", "Unable to connect with given credentials")
-		app.render(w, r, "create-connection.page.tmpl", &templateData{Form: form})
-		return
+		connection = testConnection(connection)
+		if !connection.CanConnect {
+			form.Validator.AddError("canConnect", "Unable to connect with given credentials")
+			app.render(w, r, "create-connection.page.tmpl", &templateData{Connection: connection, Form: form})
+			return
+		}
 	}
 
 	connection, err = app.models.Connections.Insert(connection)
@@ -133,6 +137,8 @@ func (app *application) showConnectionUiHandler(w http.ResponseWriter, r *http.R
 		}
 		return
 	}
+
+	connection = testConnection(connection)
 
 	app.render(w, r, "connection-detail.page.tmpl", &templateData{Connection: connection})
 }
@@ -217,15 +223,13 @@ func (app *application) updateConnectionUiHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	canConnect := true
 	if r.PostForm.Get("skipTest") != "on" {
-		canConnect = testConnection(*connection)
-	}
-
-	if !canConnect {
-		form.Validator.AddError("canConnect", "Unable to connect with given credentials")
-		app.render(w, r, "update-connection.page.tmpl", &templateData{Connection: connection, Form: form})
-		return
+		connection = testConnection(connection)
+		if !connection.CanConnect {
+			form.Validator.AddError("canConnect", "Unable to connect with given credentials")
+			app.render(w, r, "update-connection.page.tmpl", &templateData{Connection: connection, Form: form})
+			return
+		}
 	}
 
 	err = app.models.Connections.Update(connection)
@@ -303,15 +307,13 @@ func (app *application) createConnectionApiHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	canConnect := true
 	if !input.SkipTest {
-		canConnect = testConnection(*connection)
-	}
-
-	if !canConnect {
-		v.AddError("canConnect", "Unable to connect with given credentials")
-		app.failedValidationResponse(w, r, v.Errors)
-		return
+		connection = testConnection(connection)
+		if !connection.CanConnect {
+			v.AddError("canConnect", "Unable to connect with given credentials")
+			app.failedValidationResponse(w, r, v.Errors)
+			return
+		}
 	}
 
 	connection, err = app.models.Connections.Insert(connection)
@@ -343,6 +345,8 @@ func (app *application) listConnectionsApiHandler(w http.ResponseWriter, r *http
 		app.serverErrorResponse(w, r, err)
 		return
 	}
+
+	connections = testConnections(connections)
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"connections": connections, "metadata": metadata}, nil)
 	if err != nil {
@@ -482,6 +486,65 @@ func (app *application) deleteConnectionApiHandler(w http.ResponseWriter, r *htt
 	}
 }
 
-func testConnection(connection data.Connection) bool {
-	return false
+// func testConnection(connection data.Connection) bool {
+// 	return false
+// }
+
+// func GetConnections() (connections []models.Connection) {
+// 	db := GetDb()
+// 	db.Find(&connections)
+// 	return connections
+// }
+
+// func CheckConnectionAsync(connection models.Connection, wg *sync.WaitGroup) (canConnect bool) {
+// 	defer wg.Done()
+
+// 	dsConn := engine.GetDs(connection)
+// 	_, driverName, connString := dsConn.GetConnectionInfo()
+// 	db, err := sql.Open(driverName, connString)
+
+// 	if err != nil {
+// 		return false
+// 	}
+
+// 	if err := db.Ping(); err != nil {
+// 		return false
+// 	}
+
+// 	return true
+// }
+
+func testConnection(connection *data.Connection) *data.Connection {
+	dsConn := engine.GetDs(*connection)
+	_, driverName, connString := dsConn.GetConnectionInfo()
+	db, err := sql.Open(driverName, connString)
+
+	if err != nil {
+		return connection
+	}
+
+	if err := db.Ping(); err != nil {
+		return connection
+	}
+
+	connection.CanConnect = true
+
+	return connection
+}
+
+func testConnections(connections []*data.Connection) []*data.Connection {
+
+	var wg sync.WaitGroup
+	numConns := len(connections)
+
+	for i := 0; i < numConns; i++ {
+		connection := connections[i]
+		wg.Add(1)
+		pkg.Background(func() {
+			defer wg.Done()
+			connection = testConnection(connection)
+		})
+	}
+	wg.Wait()
+	return connections
 }

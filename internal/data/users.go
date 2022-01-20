@@ -20,7 +20,7 @@ var (
 
 type User struct {
 	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"createdAt"`
 	Username  string    `json:"username"`
 	Password  password  `json:"-"`
 	Admin     bool      `json:"admin"`

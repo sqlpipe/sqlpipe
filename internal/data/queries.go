@@ -136,6 +136,82 @@ offset
 	return queries, metadata, nil
 }
 
+func (m QueryModel) GetQueued() ([]*Query, error) {
+	queryToRun := `
+	SELECT
+	queries.id,
+	queries.created_at,
+	connections.ID,
+	connections.Ds_Type,
+	connections.Hostname,
+	connections.Port,
+	connections.Account_Id,
+	connections.Db_Name,
+	connections.Username,
+	connections.Password,
+	queries.query,
+	queries.status,
+	queries.error,
+	queries.stopped_at,
+	queries.version
+FROM
+	queries
+left join
+	connections
+on
+	queries.connection_id = connections.id
+where
+	status = 'queued'
+order by
+	queries.id
+`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.QueryContext(ctx, queryToRun)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	queries := []*Query{}
+
+	for rows.Next() {
+		var query Query
+
+		err := rows.Scan(
+			&query.ID,
+			&query.CreatedAt,
+			&query.Connection.ID,
+			&query.Connection.DsType,
+			&query.Connection.Hostname,
+			&query.Connection.Port,
+			&query.Connection.AccountId,
+			&query.Connection.DbName,
+			&query.Connection.Username,
+			&query.Connection.Password,
+			&query.Query,
+			&query.Status,
+			&query.Error,
+			&query.StoppedAt,
+			&query.Version,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		queries = append(queries, &query)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return queries, nil
+}
+
 func (m QueryModel) GetById(id int64) (*Query, error) {
 	queryToRun := `
 	SELECT

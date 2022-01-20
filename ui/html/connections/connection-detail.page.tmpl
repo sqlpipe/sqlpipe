@@ -97,6 +97,10 @@
                     <th scope="row" class="bg-dark text-light">DB Name</th>
                     <td>{{ .Connection.DbName }}</td>
                 </tr>
+                <tr>
+                    <th scope="row" class="bg-dark text-light">Connection test result</th>
+                    <td>{{ .Connection.CanConnect }}</td>
+                </tr>
             </tbody>
         </table>
     </div>
