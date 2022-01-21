@@ -91,7 +91,7 @@ func (dsConn Snowflake) getIntermediateType(colTypeFromDriver string) string {
 	return snowflakeIntermediateTypes[colTypeFromDriver]
 }
 
-func (dsConn Snowflake) GetConnectionInfo() (string, string, string) {
+func (dsConn Snowflake) getConnectionInfo() (string, string, string) {
 	return dsConn.dsType, dsConn.driverName, dsConn.connString
 }
 

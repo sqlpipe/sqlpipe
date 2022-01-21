@@ -102,7 +102,7 @@ func (dsConn Redshift) getIntermediateType(colTypeFromDriver string) string {
 	return redshiftIntermediateTypes[colTypeFromDriver]
 }
 
-func (dsConn Redshift) GetConnectionInfo() (string, string, string) {
+func (dsConn Redshift) getConnectionInfo() (string, string, string) {
 	return dsConn.dsType, dsConn.driverName, dsConn.connString
 }
 

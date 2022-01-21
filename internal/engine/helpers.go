@@ -12,7 +12,7 @@ package engine
 // 	defer wg.Done()
 
 // 	dsConn := GetDs(connection)
-// 	_, driverName, connString := dsConn.GetConnectionInfo()
+// 	_, driverName, connString := dsConn.getConnectionInfo()
 // 	db, err := sql.Open(driverName, connString)
 
 // 	if err != nil {
@@ -28,7 +28,7 @@ package engine
 
 // func CheckConnection(connection models.Connection) (canConnect bool) {
 // 	dsConn := GetDs(connection)
-// 	_, driverName, connString := dsConn.GetConnectionInfo()
+// 	_, driverName, connString := dsConn.getConnectionInfo()
 // 	db, err := sql.Open(driverName, connString)
 
 // 	if err != nil {

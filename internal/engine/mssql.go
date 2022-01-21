@@ -90,7 +90,7 @@ func (dsConn MSSQL) getIntermediateType(colTypeFromDriver string) string {
 	return mssqlIntermediateTypes[colTypeFromDriver]
 }
 
-func (dsConn MSSQL) GetConnectionInfo() (dsType string, driveName string, connString string) {
+func (dsConn MSSQL) getConnectionInfo() (dsType string, driveName string, connString string) {
 	return dsConn.dsType, dsConn.driverName, dsConn.connString
 }
 

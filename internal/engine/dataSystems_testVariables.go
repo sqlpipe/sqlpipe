@@ -1,0 +1,96 @@
+package engine
+
+// postgreSQLWideTableDrop
+var (
+	postgreSQLWideTableDropErrProperties = map[string]string{
+		"dsType": "postgresql",
+		"error":  `ERROR: relation "wide_table" does not exist (SQLSTATE 42P01)`,
+		"query":  "select * from wide_table",
+	}
+)
+
+// postgresqlWideTableCreate
+var (
+	postgresqlWideTableCreateQuery = `
+	create table wide_table(
+		mybigint bigint,
+		mybit bit(5),
+		mybitvarying varbit,
+		myboolean boolean,
+		mybox box,
+		mybytea bytea,
+		mychar char(3),
+		myvarchar varchar(100),
+		mycidr cidr,
+		mycircle circle,
+		mydate date,
+		mydoubleprecision double precision,
+		myinet inet,
+		myinteger integer,
+		myinterval interval,
+		myjson json,
+		myjsonb jsonb,
+		myline line,
+		mylseg lseg,
+		mymacaddr macaddr,
+		mymoney money,
+		mynumeric numeric(10,5),
+		mypath path,
+		mypg_lsn pg_lsn,
+		mypoint point,
+		mypolygon polygon,
+		myreal real,
+		mysmallint smallint,
+		mytext text,
+		mytime time,
+		mytimetz timetz,
+		mytimestamp timestamp,
+		mytimestamptz timestamptz,
+		mytsquery tsquery,
+		mytsvector tsvector,
+		myuuid uuid,
+		myxml xml
+	);
+	`
+	postgresqlWideTableCreateResult = QueryResult{
+		ColumnTypes: map[string]string{"mybigint": "INT8",
+			"mybit":             "BIT",
+			"mybitvarying":      "VARBIT",
+			"myboolean":         "BOOL",
+			"mybox":             "BOX",
+			"mybytea":           "BYTEA",
+			"mychar":            "BPCHAR",
+			"mycidr":            "CIDR",
+			"mycircle":          "CIRCLE",
+			"mydate":            "DATE",
+			"mydoubleprecision": "FLOAT8",
+			"myinet":            "INET",
+			"myinteger":         "INT4",
+			"myinterval":        "INTERVAL",
+			"myjson":            "JSON",
+			"myjsonb":           "JSONB",
+			"myline":            "LINE",
+			"mylseg":            "LSEG",
+			"mymacaddr":         "MACADDR",
+			"mymoney":           "790",
+			"mynumeric":         "NUMERIC",
+			"mypath":            "PATH",
+			"mypg_lsn":          "3220",
+			"mypoint":           "POINT",
+			"mypolygon":         "POLYGON",
+			"myreal":            "FLOAT4",
+			"mysmallint":        "INT2",
+			"mytext":            "TEXT",
+			"mytime":            "TIME",
+			"mytimestamp":       "TIMESTAMP",
+			"mytimestamptz":     "TIMESTAMPTZ",
+			"mytimetz":          "1266",
+			"mytsquery":         "3615",
+			"mytsvector":        "3614",
+			"myuuid":            "UUID",
+			"myvarchar":         "VARCHAR",
+			"myxml":             "142",
+		},
+		Rows: []interface{}{},
+	}
+)

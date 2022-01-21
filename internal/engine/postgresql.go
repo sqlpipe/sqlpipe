@@ -63,8 +63,11 @@ func (dsConn PostgreSQL) turboTransfer(
 	rows *sql.Rows,
 	transfer data.Transfer,
 	resultSetColumnInfo ResultSetColumnInfo,
-) (err error) {
-	return err
+) (
+	err error,
+	errProperties map[string]string,
+) {
+	return err, errProperties
 }
 
 func (dsConn PostgreSQL) getRows(
@@ -73,6 +76,7 @@ func (dsConn PostgreSQL) getRows(
 	rows *sql.Rows,
 	resultSetColumnInfo ResultSetColumnInfo,
 	err error,
+	errProperties map[string]string,
 ) {
 	return standardGetRows(dsConn, transfer)
 }
@@ -82,11 +86,12 @@ func (dsConn PostgreSQL) getFormattedResults(
 ) (
 	queryResult QueryResult,
 	err error,
+	errProperties map[string]string,
 ) {
 	return standardGetFormattedResults(dsConn, query)
 }
 
-func (dsConn PostgreSQL) GetConnectionInfo() (string, string, string) {
+func (dsConn PostgreSQL) getConnectionInfo() (string, string, string) {
 	return dsConn.dsType, dsConn.driverName, dsConn.connString
 }
 
@@ -102,11 +107,13 @@ func (db PostgreSQL) insertChecker(currentLen int, currentRow int) bool {
 	}
 }
 
-func (dsConn PostgreSQL) dropTable(transfer data.Transfer) (err error) {
+func (dsConn PostgreSQL) dropTable(transfer data.Transfer) (err error,
+	errProperties map[string]string) {
 	return dropTableIfExistsWithSchema(dsConn, transfer)
 }
 
-func (dsConn PostgreSQL) deleteFromTable(transfer data.Transfer) (err error) {
+func (dsConn PostgreSQL) deleteFromTable(transfer data.Transfer) (err error,
+	errProperties map[string]string) {
 	return deleteFromTableWithSchema(dsConn, transfer)
 }
 
@@ -115,12 +122,17 @@ func (dsConn PostgreSQL) createTable(
 	columnInfo ResultSetColumnInfo,
 ) (
 	err error,
+	errProperties map[string]string,
 ) {
 	return standardCreateTable(dsConn, transfer, columnInfo)
 }
 
 func (dsConn PostgreSQL) getValToWriteMidRow(valType string, value interface{}) string {
 	return postgresValWriters[valType](value, ",")
+}
+
+func (dsConn PostgreSQL) getValToWriteRaw(valType string, value interface{}) string {
+	return postgresValWriters[valType](value, "")
 }
 
 func (dsConn PostgreSQL) getValToWriteRowEnd(valType string, value interface{}) string {
@@ -133,8 +145,9 @@ func (dsConn PostgreSQL) turboWriteMidVal(
 	builder *strings.Builder,
 ) (
 	err error,
+	errProperties map[string]string,
 ) {
-	return errors.New("postgres hasn't implemented turbo writing yet")
+	return errors.New("postgres hasn't implemented turbo writing yet"), errProperties
 }
 
 func (dsConn PostgreSQL) turboWriteEndVal(
@@ -143,8 +156,9 @@ func (dsConn PostgreSQL) turboWriteEndVal(
 	builder *strings.Builder,
 ) (
 	err error,
+	errProperties map[string]string,
 ) {
-	return errors.New("postgres hasn't implemented turbo writing yet")
+	return errors.New("postgres hasn't implemented turbo writing yet"), errProperties
 }
 
 func (dsConn PostgreSQL) getRowStarter() string {
@@ -200,6 +214,7 @@ func (dsConn PostgreSQL) getIntermediateType(
 ) (
 	intermediateType string,
 	err error,
+	errProperties map[string]string,
 ) {
 
 	switch colTypeFromDriver {
@@ -285,7 +300,7 @@ func (dsConn PostgreSQL) getIntermediateType(
 		err = fmt.Errorf("no PostgreSQL intermediate type for driver type '%v'", colTypeFromDriver)
 	}
 
-	return intermediateType, err
+	return intermediateType, err, errProperties
 }
 
 // var postgresIntermediateTypes = map[string]string{
@@ -333,10 +348,6 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 
 	scanType := resultSetColInfo.ColumnScanTypes[colNum]
 	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
-
-	// fmt.Println(resultSetColInfo.ColumnNames[colNum])
-	// fmt.Println(scanType)
-	// fmt.Println(intermediateType)
 
 	switch scanType.Name() {
 	case "bool":

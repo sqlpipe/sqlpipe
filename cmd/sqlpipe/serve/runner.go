@@ -51,18 +51,26 @@ func (app *application) toDoScanner() {
 							"Status":       transfer.Status,
 						},
 					)
-					err = engine.RunTransfer(transfer)
+					err, errProperties := engine.RunTransfer(transfer)
 					if err != nil {
+						app.logger.PrintError(err, errProperties)
 						transfer.Status = "error"
 						transfer.Error = err.Error()
 						transfer.StoppedAt = time.Now()
+
 						err = app.models.Transfers.Update(transfer)
+						if err != nil {
+							app.logger.PrintError(err, errProperties)
+						}
 						return
 					}
 
 					transfer.Status = "complete"
 					transfer.StoppedAt = time.Now()
 					err = app.models.Transfers.Update(transfer)
+					if err != nil {
+						app.logger.PrintError(err, errProperties)
+					}
 				})
 			}
 		}
@@ -84,18 +92,25 @@ func (app *application) toDoScanner() {
 						"Status":       query.Status,
 					},
 				)
-				err = engine.RunQuery(query)
+				err, errProperties := engine.RunQuery(query)
 				if err != nil {
+					app.logger.PrintError(err, errProperties)
 					query.Status = "error"
 					query.Error = err.Error()
 					query.StoppedAt = time.Now()
 					err = app.models.Queries.Update(query)
+					if err != nil {
+						app.logger.PrintError(err, errProperties)
+					}
 					return
 				}
 
 				query.Status = "complete"
 				query.StoppedAt = time.Now()
 				err = app.models.Queries.Update(query)
+				if err != nil {
+					app.logger.PrintError(err, errProperties)
+				}
 			})
 		}
 	}

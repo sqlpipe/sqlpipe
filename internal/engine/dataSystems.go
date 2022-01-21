@@ -2,41 +2,36 @@ package engine
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	"log"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
-	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
 	"github.com/calmitchell617/sqlpipe/pkg"
 )
-
-var logger = jsonLog.New(os.Stdout, jsonLog.LevelInfo)
 
 type DsConnection interface {
 
 	// Gets information needed to connect to the DB represented by the DsConnection
-	GetConnectionInfo() (dsType string, driverName string, connString string)
+	getConnectionInfo() (dsType string, driverName string, connString string)
 
 	// Returns true if the result set is getting close to the DBs insertion size
 	insertChecker(currentLen int, currentRow int) (limitReached bool)
 
 	// Runs "delete from <transfer.TargetTable>"
-	deleteFromTable(transfer data.Transfer) (err error)
+	deleteFromTable(transfer data.Transfer) (err error, errProperties map[string]string)
 
 	// Drops <transfer.TargetTable>
-	dropTable(transferInfo data.Transfer) (err error)
+	dropTable(transferInfo data.Transfer) (err error, errProperties map[string]string)
 
 	// Creates a table to match the result set of <transfer.Query>
-	createTable(transfer data.Transfer, columnInfo ResultSetColumnInfo) (err error)
+	createTable(transfer data.Transfer, columnInfo ResultSetColumnInfo) (err error, errProperties map[string]string)
 
 	// Translates a single value from the source into an intermediate type,
 	// which will then be translated by one of the writer functions below
-	getIntermediateType(colTypeFromDriver string) (intermediateType string, err error)
+	getIntermediateType(colTypeFromDriver string) (intermediateType string, err error, errProperties map[string]string)
 
 	// Takes a value, converts it into the proper format
 	// for insertion into a specific DB type, and returns the value
@@ -47,12 +42,16 @@ type DsConnection interface {
 	getValToWriteRowEnd(valType string, value interface{}) (valToWrite string)
 
 	// Takes a value, converts it into the proper format
-	// for insertion into a specific DB type, and writes it to a string builder
-	turboWriteMidVal(valType string, value interface{}, builder *strings.Builder) (err error)
+	// for insertion into a specific DB type, and returns the value
+	getValToWriteRaw(valType string, value interface{}) (valToWrite string)
 
 	// Takes a value, converts it into the proper format
 	// for insertion into a specific DB type, and writes it to a string builder
-	turboWriteEndVal(valType string, value interface{}, builder *strings.Builder) (err error)
+	turboWriteMidVal(valType string, value interface{}, builder *strings.Builder) (err error, errProperties map[string]string)
+
+	// Takes a value, converts it into the proper format
+	// for insertion into a specific DB type, and writes it to a string builder
+	turboWriteEndVal(valType string, value interface{}, builder *strings.Builder) (err error, errProperties map[string]string)
 
 	// Generates the first few characters of a row for
 	// a given insertion query for a given data system type
@@ -69,23 +68,52 @@ type DsConnection interface {
 	GetDebugInfo() (dsType string, debugConnString string)
 
 	// Gets the result of a given query, which will later be inserted
-	getRows(transferInfo data.Transfer) (resultSet *sql.Rows, resultSetColumnInfo ResultSetColumnInfo, err error)
+	getRows(transferInfo data.Transfer) (resultSet *sql.Rows, resultSetColumnInfo ResultSetColumnInfo, err error, errProperties map[string]string)
 
 	// Gets the result of a given query, which will not be inserted
-	getFormattedResults(query string) (resultSet QueryResult, err error)
+	getFormattedResults(query string) (resultSet QueryResult, err error, errProperties map[string]string)
 
 	// Takes result set info, and returns a list of types to create a new table in another DB based
 	// on those types.
 	getCreateTableType(resultSetColInfo ResultSetColumnInfo, colNum int) (createTableTypes string)
 
 	// Runs a turbo transfer
-	turboTransfer(rows *sql.Rows, transferInfo data.Transfer, resultSetColumnInfo ResultSetColumnInfo) (err error)
+	turboTransfer(rows *sql.Rows, transferInfo data.Transfer, resultSetColumnInfo ResultSetColumnInfo) (err error, errProperties map[string]string)
 }
 
-type Work struct {
-	Query     data.Query
-	Transfer  data.Transfer
-	CreatedAt time.Time
+func TestConnection(connection *data.Connection) *data.Connection {
+	dsConn := GetDs(*connection)
+	_, driverName, connString := dsConn.getConnectionInfo()
+	db, err := sql.Open(driverName, connString)
+
+	if err != nil {
+		return connection
+	}
+
+	if err := db.Ping(); err != nil {
+		return connection
+	}
+
+	connection.CanConnect = true
+
+	return connection
+}
+
+func TestConnections(connections []*data.Connection) []*data.Connection {
+
+	var wg sync.WaitGroup
+	numConns := len(connections)
+
+	for i := 0; i < numConns; i++ {
+		connection := connections[i]
+		wg.Add(1)
+		pkg.Background(func() {
+			defer wg.Done()
+			connection = TestConnection(connection)
+		})
+	}
+	wg.Wait()
+	return connections
 }
 
 func GetDs(connection data.Connection) (dsConn DsConnection) {
@@ -108,7 +136,12 @@ func GetDs(connection data.Connection) (dsConn DsConnection) {
 	return dsConn
 }
 
-func RunTransfer(transfer *data.Transfer) error {
+func RunTransfer(
+	transfer *data.Transfer,
+) (
+	err error,
+	errProperties map[string]string,
+) {
 
 	sourceConnection := transfer.Source
 
@@ -116,28 +149,22 @@ func RunTransfer(transfer *data.Transfer) error {
 
 	sourceSystem := GetDs(sourceConnection)
 
-	rows, resultSetColumnInfo, err := sourceSystem.getRows(*transfer)
+	rows, resultSetColumnInfo, err, errProperties := sourceSystem.getRows(*transfer)
 	if err != nil {
-		return err
+		return err, errProperties
 	}
 	defer rows.Close()
 
 	targetSystem := GetDs(targetConnection)
-	err = Insert(targetSystem, rows, *transfer, resultSetColumnInfo)
-	if err != nil {
-		return err
-	}
+	err, errProperties = Insert(targetSystem, rows, *transfer, resultSetColumnInfo)
 
-	return nil
+	return err, errProperties
 }
 
-func RunQuery(query *data.Query) error {
+func RunQuery(query *data.Query) (err error, errProperties map[string]string) {
 	dsConn := GetDs(query.Connection)
-	_, err := execute(dsConn, query.Query)
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err, errProperties = execute(dsConn, query.Query)
+	return err, errProperties
 }
 
 func standardGetRows(
@@ -147,30 +174,26 @@ func standardGetRows(
 	rows *sql.Rows,
 	resultSetColumnInfo ResultSetColumnInfo,
 	err error,
+	errProperties map[string]string,
 ) {
 
-	rows, err = execute(dsConn, transferInfo.Query)
+	rows, err, errProperties = execute(dsConn, transferInfo.Query)
 	if err != nil {
-		return rows, resultSetColumnInfo, err
+		return rows, resultSetColumnInfo, err, errProperties
 	}
-	resultSetColumnInfo, err = getResultSetColumnInfo(dsConn, rows)
-	if err != nil {
-		return rows, resultSetColumnInfo, err
-	}
-
-	return rows, resultSetColumnInfo, err
+	resultSetColumnInfo, err, errProperties = getResultSetColumnInfo(dsConn, rows)
+	return rows, resultSetColumnInfo, err, errProperties
 }
-
-// func GetRows(dsConn DsConnection, transferInfo data.Transfer) (*sql.Rows, ResultSetColumnInfo, error) {
-// 	return dsConn.getRows(transferInfo)
-// }
 
 func sqlInsert(
 	dsConn DsConnection,
 	rows *sql.Rows,
 	transfer data.Transfer,
 	resultSetColumnInfo ResultSetColumnInfo,
-) error {
+) (
+	err error,
+	errProperties map[string]string,
+) {
 	numCols := resultSetColumnInfo.NumCols
 	zeroIndexedNumCols := numCols - 1
 	targetTable := transfer.TargetTable
@@ -218,15 +241,13 @@ func sqlInsert(
 			queryString := sqlEndStringNilReplacer.Replace(withQueryEnder)
 			wg.Wait()
 			if insertError != nil {
-				logger.PrintError(insertError, nil)
-				return insertError
+				return insertError, errProperties
 			}
 			wg.Add(1)
 			pkg.Background(func() {
 				defer wg.Done()
-				_, insertError = execute(dsConn, queryString)
+				_, insertError, errProperties = execute(dsConn, queryString)
 			})
-			fmt.Printf("**SQLPipe status update\nNow inserting at row %d of result set from query:\n%s\n\n", i, transfer.Query)
 			isFirst = true
 			queryBuilder.Reset()
 		}
@@ -239,18 +260,17 @@ func sqlInsert(
 		queryString := sqlEndStringNilReplacer.Replace(withQueryEnder)
 		wg.Wait()
 		if insertError != nil {
-			logger.PrintError(insertError, nil)
-			return insertError
+			return insertError, errProperties
 		}
 		wg.Add(1)
 		pkg.Background(func() {
 			defer wg.Done()
-			_, insertError = execute(dsConn, queryString)
+			_, insertError, errProperties = execute(dsConn, queryString)
 		})
 	}
 	wg.Wait()
 
-	return nil
+	return nil, nil
 }
 
 func turboTransfer(
@@ -258,7 +278,7 @@ func turboTransfer(
 	rows *sql.Rows,
 	transferInfo data.Transfer,
 	resultSetColumnInfo ResultSetColumnInfo,
-) error {
+) (err error, errProperties map[string]string) {
 	return dsConn.turboTransfer(rows, transferInfo, resultSetColumnInfo)
 }
 
@@ -269,16 +289,17 @@ func Insert(
 	resultSetColumnInfo ResultSetColumnInfo,
 ) (
 	err error,
+	errProperties map[string]string,
 ) {
 
 	if transfer.Overwrite {
-		err = dsConn.dropTable(transfer)
+		err, errProperties = dsConn.dropTable(transfer)
 		if err != nil {
-			return err
+			return err, errProperties
 		}
-		err = dsConn.createTable(transfer, resultSetColumnInfo)
+		err, errProperties = dsConn.createTable(transfer, resultSetColumnInfo)
 		if err != nil {
-			return err
+			return err, errProperties
 		}
 	}
 
@@ -291,14 +312,15 @@ func standardGetFormattedResults(
 ) (
 	queryResult QueryResult,
 	err error,
+	errProperties map[string]string,
 ) {
 
-	rows, err := execute(dsConn, query)
+	rows, err, errProperties := execute(dsConn, query)
 	if err != nil {
-		return queryResult, err
+		return queryResult, err, errProperties
 	}
 
-	resultSetColumnInfo, err := getResultSetColumnInfo(dsConn, rows)
+	resultSetColumnInfo, err, errProperties := getResultSetColumnInfo(dsConn, rows)
 
 	queryResult.ColumnTypes = map[string]string{}
 	queryResult.Rows = []interface{}{}
@@ -321,142 +343,63 @@ func standardGetFormattedResults(
 		// scan incoming values into valueptrs, which in turn points to values
 
 		rows.Scan(valuePtrs...)
-		queryResult.Rows = append(
-			queryResult.Rows,
-			map[string]interface{}{},
-		)
 
 		for j := 0; j < numCols; j++ {
-			queryResult.Rows = append(queryResult.Rows, dsConn.getValToWriteMidRow(colTypes[j], values[j]))
+			queryResult.Rows = append(queryResult.Rows, dsConn.getValToWriteRaw(colTypes[j], values[j]))
 		}
 	}
 
-	return queryResult, err
+	return queryResult, err, errProperties
 }
 
 // This is the base level function, where queries actually get executed.
 func execute(
 	dsConn DsConnection,
 	query string,
-) (rows *sql.Rows, err error) {
+) (rows *sql.Rows, err error, errProperties map[string]string) {
 
-	_, driverName, connString := dsConn.GetConnectionInfo()
+	_, driverName, connString := dsConn.getConnectionInfo()
 	dsType, debugConnString := dsConn.GetDebugInfo()
 
 	db, err := sql.Open(driverName, connString)
 	if err != nil {
-		prettyError := fmt.Errorf(
-			"sql.Open() threw the following error with connString %v:\n\n%v",
-			debugConnString,
-			err,
-		)
-		log.Println(prettyError)
-		return rows, prettyError
+		msg := errors.New("error while running sql.Open()")
+		errProperties := map[string]string{
+			"debugConnString": debugConnString,
+			"error":           err.Error(),
+		}
+		return rows, msg, errProperties
 	}
 	defer db.Close()
 
 	err = db.Ping()
 	if err != nil {
-		prettyError := fmt.Errorf(
-			"db.Ping() threw the following error with connString %v:\n\n%v",
-			debugConnString,
-			err,
-		)
-		log.Println(prettyError)
-		return rows, prettyError
+		msg := errors.New("error while running db.Ping()")
+		errProperties := map[string]string{
+			"debugConnString": debugConnString,
+			"error":           err.Error(),
+		}
+		return rows, msg, errProperties
 	}
 
 	rows, err = db.Query(query)
 	if err != nil {
-		cutoff := pkg.Min(len(query), 1000)
-
-		var truncatedMessage string
-		if cutoff == 1000 {
-			truncatedMessage = " ... (rest of query truncated)"
+		if len(query) > 1000 {
+			query = fmt.Sprintf("%v ... (Rest of query truncated)", query[:1000])
 		}
 
-		prettyError := fmt.Errorf(
-			"db.Query() threw the following error:\n\n%v\n\nWhile running query on DsType %v:\n\n%v%v",
-			err,
-			dsType,
-			query[:cutoff],
-			truncatedMessage,
-		)
-		log.Println(prettyError)
-		return rows, prettyError
+		msg := errors.New("db.Query() threw an error")
+		errProperties := map[string]string{
+			"error":  err.Error(),
+			"dsType": dsType,
+			"query":  query,
+		}
+
+		return rows, msg, errProperties
 	}
 
-	return rows, err
+	return rows, nil, nil
 }
-
-// Used for async inserts.
-// func executeAsync(
-// 	dsConn DsConnection,
-// 	query string,
-// 	wg *sync.WaitGroup,
-// 	transfer data.Transfer,
-// ) {
-// 	defer wg.Done()
-
-// 	_, driverName, connString := dsConn.GetConnectionInfo()
-// 	dsType, debugConnString := dsConn.GetDebugInfo()
-
-// 	db, err := sql.Open(driverName, connString)
-// 	if err != nil {
-// 		backendDb := helpers.GetDb()
-// 		transfer.Error = err.Error()
-// 		transfer.StoppedAt = time.Now()
-// 		transfer.Status = "Failed"
-// 		backendDb.Save(&transfer)
-
-// 		prettyError := fmt.Errorf(
-// 			"async sql.Open() threw the following error with connString %v:\n\n%v",
-// 			debugConnString,
-// 			err,
-// 		)
-// 		log.Println(prettyError)
-// 	}
-// 	defer db.Close()
-
-// 	err = db.Ping()
-// 	if err != nil {
-// 		backendDb := helpers.GetDb()
-// 		transfer.Error = err.Error()
-// 		transfer.StoppedAt = time.Now()
-// 		transfer.Status = "Failed"
-// 		backendDb.Save(&transfer)
-// 		prettyError := fmt.Errorf(
-// 			"async db.Ping() threw the following error with connString %v:\n\n%v",
-// 			debugConnString,
-// 			err,
-// 		)
-// 		log.Println(prettyError)
-// 	}
-
-// 	_, err = db.Query(query)
-// 	if err != nil {
-// 		backendDb := helpers.GetDb()
-// 		transfer.Error = err.Error()
-// 		transfer.StoppedAt = time.Now()
-// 		transfer.Status = "Failed"
-// 		backendDb.Save(&transfer)
-// 		cutoff := helpers.Min(len(query), 1000)
-
-// 		var truncatedMessage string
-// 		if cutoff == 1000 {
-// 			truncatedMessage = " ... (rest of query truncated)"
-// 		}
-
-// 		prettyError := fmt.Errorf(
-// 			"async db.Query() threw the following error:\n\n%v\n\nWhile running query on DsType %v:\n\n%v%v",
-// 			err,
-// 			dsType,
-// 			query[:cutoff],
-// 			truncatedMessage,
-// 		)
-// 		log.Println(prettyError)
-// 	}
-// }
 
 func getResultSetColumnInfo(
 	dsConn DsConnection,
@@ -464,6 +407,7 @@ func getResultSetColumnInfo(
 ) (
 	resultSetColumnInfo ResultSetColumnInfo,
 	err error,
+	errProperties map[string]string,
 ) {
 
 	var colNames []string
@@ -481,7 +425,7 @@ func getResultSetColumnInfo(
 
 	colTypesFromDriver, err := rows.ColumnTypes()
 	if err != nil {
-		return resultSetColumnInfo, err
+		return resultSetColumnInfo, err, errProperties
 	}
 
 	for _, colType := range colTypesFromDriver {
@@ -489,10 +433,9 @@ func getResultSetColumnInfo(
 		colTypes = append(colTypes, colType.DatabaseTypeName())
 		scanTypes = append(scanTypes, colType.ScanType())
 
-		intermediateType, err := dsConn.getIntermediateType(colType.DatabaseTypeName())
+		intermediateType, err, errProperties := dsConn.getIntermediateType(colType.DatabaseTypeName())
 		if err != nil {
-			log.Println(err)
-			return resultSetColumnInfo, err
+			return resultSetColumnInfo, err, errProperties
 		}
 		intermediateTypes = append(intermediateTypes, intermediateType)
 
@@ -526,7 +469,7 @@ func getResultSetColumnInfo(
 		NumCols:                 len(colNames),
 	}
 
-	return columnInfo, err
+	return columnInfo, err, errProperties
 }
 
 func standardGetRowStarter() string {
@@ -542,6 +485,7 @@ func dropTableIfExistsWithSchema(
 	transferInfo data.Transfer,
 ) (
 	err error,
+	errProperties map[string]string,
 ) {
 	dropQuery := fmt.Sprintf(
 		"DROP TABLE IF EXISTS %v.%v",
@@ -549,19 +493,21 @@ func dropTableIfExistsWithSchema(
 		transferInfo.TargetTable,
 	)
 
-	_, err = execute(dsConn, dropQuery)
+	_, err, errProperties = execute(dsConn, dropQuery)
 
-	return err
+	return err, errProperties
 }
 
-func dropTableIfExistsNoSchema(dsConn DsConnection, transferInfo data.Transfer) {
+func dropTableIfExistsNoSchema(dsConn DsConnection, transferInfo data.Transfer) (err error, errProperties map[string]string) {
 	dropQuery := fmt.Sprintf("DROP TABLE IF EXISTS %v", transferInfo.TargetTable)
-	execute(dsConn, dropQuery)
+	_, err, errProperties = execute(dsConn, dropQuery)
+	return err, errProperties
 }
 
-func dropTableNoSchema(dsConn DsConnection, transferInfo data.Transfer) {
+func dropTableNoSchema(dsConn DsConnection, transferInfo data.Transfer) (err error, errProperties map[string]string) {
 	dropQuery := fmt.Sprintf("DROP TABLE %v", transferInfo.TargetTable)
-	execute(dsConn, dropQuery)
+	_, err, errProperties = execute(dsConn, dropQuery)
+	return err, errProperties
 }
 
 func deleteFromTableWithSchema(
@@ -569,6 +515,7 @@ func deleteFromTableWithSchema(
 	transferInfo data.Transfer,
 ) (
 	err error,
+	errProperties map[string]string,
 ) {
 
 	query := fmt.Sprintf(
@@ -577,17 +524,22 @@ func deleteFromTableWithSchema(
 		transferInfo.TargetTable,
 	)
 
-	_, err = execute(dsConn, query)
+	_, err, errProperties = execute(dsConn, query)
 
-	return err
+	return err, errProperties
 }
 
-func deleteFromTableNoSchema(dsConn DsConnection, transferInfo data.Transfer) {
+func deleteFromTableNoSchema(dsConn DsConnection, transferInfo data.Transfer) (
+	err error,
+	errProperties map[string]string,
+) {
 	query := fmt.Sprintf(
 		"DELETE FROM %v",
 		transferInfo.TargetTable,
 	)
-	execute(dsConn, query)
+	_, err, errProperties = execute(dsConn, query)
+
+	return err, errProperties
 }
 
 func standardCreateTable(
@@ -596,6 +548,7 @@ func standardCreateTable(
 	columnInfo ResultSetColumnInfo,
 ) (
 	err error,
+	errProperties map[string]string,
 ) {
 	var queryBuilder strings.Builder
 
@@ -612,12 +565,8 @@ func standardCreateTable(
 	}
 
 	if err != nil {
-		prettyError := fmt.Errorf(
-			"following error encountered while building a create table string:\n\n%s",
-			err,
-		)
-		log.Println(prettyError)
-		return err
+		errProperties["error"] = err.Error()
+		return errors.New("error building create table query"), errProperties
 	}
 
 	var colNamesAndTypesSlice []string
@@ -630,17 +579,13 @@ func standardCreateTable(
 	fmt.Fprintf(&queryBuilder, "%v)", strings.Join(colNamesAndTypesSlice, ", "))
 
 	if err != nil {
-		prettyError := fmt.Errorf(
-			"following error encountered while building a create table string:\n\n%s",
-			err,
-		)
-		log.Println(prettyError)
-		return err
+		errProperties["error"] = err.Error()
+		return errors.New("error building create table query"), errProperties
 	}
 
 	query := queryBuilder.String()
 
-	_, err = execute(dsConn, query)
+	_, err, errProperties = execute(dsConn, query)
 
-	return err
+	return err, errProperties
 }

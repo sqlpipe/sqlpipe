@@ -94,7 +94,7 @@ func (dsConn MySQL) getRows(transfer models.Transfer) (*sql.Rows, structs.Result
 	return standardGetRows(dsConn, transfer)
 }
 
-func (dsConn MySQL) GetConnectionInfo() (string, string, string) {
+func (dsConn MySQL) getConnectionInfo() (string, string, string) {
 	return dsConn.dsType, dsConn.driverName, dsConn.connString
 }
 

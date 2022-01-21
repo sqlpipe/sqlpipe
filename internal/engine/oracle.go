@@ -250,7 +250,7 @@ func oracleRewriteQuery(
 	return queryBuilder.String()
 }
 
-func (dsConn Oracle) GetConnectionInfo() (string, string, string) {
+func (dsConn Oracle) getConnectionInfo() (string, string, string) {
 	return dsConn.dsType, dsConn.driverName, dsConn.connString
 }
 
