@@ -48,13 +48,20 @@ func TestRunQuery(t *testing.T) {
 			checkQuery: "select * from wide_table",
 			result:     postgresqlWideTableCreateResult,
 		},
+		{
+			name:       "postgresqlWideTableInsert",
+			connection: postgresqlTestConnection,
+			testQuery:  postgresqlWideTableInsertQuery,
+			checkQuery: "select * from wide_table",
+			result:     postgresqlWideTableInsertResult,
+		},
 	}
 
 	// Loop over the test cases.
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.testQuery != "" {
-				err, _ := RunQuery(
+				err, errProperties := RunQuery(
 					&data.Query{
 						Query:      tt.testQuery,
 						Connection: tt.connection,
@@ -62,7 +69,7 @@ func TestRunQuery(t *testing.T) {
 				)
 
 				if err != nil {
-					t.Fatal("unable to run test query")
+					t.Fatalf("unable to run test query. err:\n\n%v\n\nerrProperties:\n%v", err, errProperties)
 				}
 			}
 
@@ -71,15 +78,15 @@ func TestRunQuery(t *testing.T) {
 				queryResult, err, errProperties := standardGetFormattedResults(dsConn, tt.checkQuery)
 
 				if err != nil && err.Error() != tt.expectedErr {
-					t.Errorf("\nwanted error:\n%v\n\ngot:\n%v\n", tt.expectedErr, err)
+					t.Fatalf("\nwanted error:\n%v\n\ngot:\n%v\n", tt.expectedErr, err)
 				}
 
 				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
-					t.Errorf("\nwanted errProperties:\n%v\n\ngot:\n%v", tt.expectedErrProperties, errProperties)
+					t.Fatalf("\nwanted errProperties:\n%v\n\ngot:\n%v", tt.expectedErrProperties, errProperties)
 				}
 
 				if !reflect.DeepEqual(queryResult, tt.result) {
-					t.Errorf("\n\nWanted:\n%v\n\nGot:\n%v", queryResult, tt.result)
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.result, queryResult)
 				}
 			}
 		})
