@@ -43,9 +43,9 @@ db/init:
 	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
 	go run ./cmd/sqlpipe initialize --dsn=postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable --force
 
-## db/shell: connect to the sqlpipe database as postgres user
-.PHONY: db/shell
-db/shell:
+## db/backend: connect to the backend database as postgres user
+.PHONY: db/backend
+db/backend:
 	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable
 
 ## docker/prune: Prune unused docker stuff
@@ -68,6 +68,99 @@ env/insert:
 	curl -u sqlpipe:Mypass123 -k -i -d '{"connectionId": 1, "query": "create table newtable (id int)"}' https://localhost:9000/api/v1/queries
 	curl -u sqlpipe:Mypass123 -k -i -d '{"connectionId": 1, "query": "insert into newtable (id) values (1),(2)"}' https://localhost:9000/api/v1/queries
 
+# env/spinup: Spinup cloud instances
+.PHONY: env/spinup
+env/spinup:
+	aws rds create-db-instance \
+		--db-instance-identifier sqlpipe-test-postgresql \
+		--db-name testing \
+		--backup-retention-period 0 \
+		--db-instance-class db.t3.micro \
+		--engine postgres \
+		--no-multi-az \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--master-username sqlpipe \
+		--master-user-password Mypass123 \
+		--storage-type gp2 \
+		--allocated-storage 20 \
+		--no-enable-performance-insights >/dev/null;
+
+	aws rds create-db-instance \
+		--db-instance-identifier sqlpipe-test-mysql \
+		--db-name testing \
+		--backup-retention-period 0 \
+		--db-instance-class db.t3.micro \
+		--engine mysql \
+		--no-multi-az \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--master-username sqlpipe \
+		--master-user-password Mypass123 \
+		--storage-type gp2 \
+		--allocated-storage 20 \
+		--no-enable-performance-insights >/dev/null;
+
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-oracle \
+	# 	--db-name testing \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.small \
+	# 	--engine oracle-se2 \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password Mypass123 \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--license-model license-included \
+	# 	--no-enable-performance-insights >/dev/null;
+
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-mssql \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.small \
+	# 	--engine sqlserver-ex \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password Mypass123 \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--license-model license-included \
+	# 	--no-enable-performance-insights >/dev/null;
+
+	# aws redshift create-cluster \
+	# 	--node-type dc2.large \
+	# 	--master-username sqlpipe \
+	# 	--db-name sqlpipe-test-redshift \
+	# 	--cluster-type single-node \
+	# 	--master-user-password Mypass123 \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--cluster-identifier sqlpipe-test-redshift >/dev/null;
+
+# env/teardown: Spinup cloud instances
+.PHONY: env/teardown
+env/teardown:
+	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-postgresql --skip-final-snapshot &> /dev/null;
+	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mysql --skip-final-snapshot &> /dev/null;
+	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mssql --skip-final-snapshot &> /dev/null;
+	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-oracle --skip-final-snapshot &> /dev/null;
+	aws redshift delete-cluster --cluster-identifier sqlpipe-test-redshift --skip-final-cluster-snapshot &> /dev/null;
+
+# db/mysql: Open shell to MySQL testing DB
+.PHONY: db/mysql
+db/mysql:
+	mysql -h ${mysqlHost} -u ${mysqlUsername} --password=${mysqlPassword} -D ${mysqlDbName}
+
+# db/postgresql: Open shell to PostgreSQL testing DB
+.PHONY: db/postgresql
+db/postgresql:
+	PGPASSWORD=${postgresqlPassword} psql -h ${postgresqlHost} -U ${postgresqlUsername} -d ${postgresqlDbName}
+
+# test: Test stuff
+.PHONY: test
+test:
+	go test -v -count=1 ./...
+
 # ==================================================================================== #
 # QUALITY CONTROL
 # ==================================================================================== #
@@ -79,7 +172,7 @@ audit: vendor
 	go fmt ./...
 	@echo 'Vetting code...'
 	go vet ./...
-	staticcheck ./...
+	# staticcheck ./...
 	@echo 'Running tests...'
 	go test -v -race -vet=off ./...
 

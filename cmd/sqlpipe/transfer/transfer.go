@@ -40,9 +40,9 @@ func init() {
 }
 
 func runTransfer(cmd *cobra.Command, args []string) {
-	err, errProperties := engine.RunTransfer(&transfer)
+	errProperties, err := engine.RunTransfer(&transfer)
 	if err != nil {
-		fmt.Println(err, errProperties)
+		fmt.Println(errProperties, err)
 		return
 	}
 	fmt.Println("Transfer complete. We make a good team!")

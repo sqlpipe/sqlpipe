@@ -29,9 +29,9 @@ func init() {
 }
 
 func runQuery(cmd *cobra.Command, args []string) {
-	err, errProperties := engine.RunQuery(&query)
+	errProperties, err := engine.RunQuery(&query)
 	if err != nil {
-		fmt.Println(err, errProperties)
+		fmt.Println(errProperties, err)
 		return
 	}
 	fmt.Println("Query complete. We make a good team!")

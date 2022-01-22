@@ -49,7 +49,11 @@ func (app *application) listConnectionsUiHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	connections = engine.TestConnections(connections)
+	connections, _, err = engine.TestConnections(connections)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
 
 	paginationData := getPaginationData(metadata.CurrentPage, int(metadata.TotalRecords), metadata.PageSize, "connections")
 	app.render(w, r, "connections.page.tmpl", &templateData{Connections: connections, Metadata: metadata, PaginationData: &paginationData})
@@ -94,7 +98,11 @@ func (app *application) createConnectionUiHandler(w http.ResponseWriter, r *http
 	}
 
 	if r.PostForm.Get("skipTest") != "on" {
-		connection = engine.TestConnection(connection)
+		connection, _, err = engine.TestConnection(connection)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
 		if !connection.CanConnect {
 			form.Validator.AddError("canConnect", "Unable to connect with given credentials")
 			app.render(w, r, "create-connection.page.tmpl", &templateData{Connection: connection, Form: form})
@@ -135,7 +143,11 @@ func (app *application) showConnectionUiHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	connection = engine.TestConnection(connection)
+	connection, _, err = engine.TestConnection(connection)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
 
 	app.render(w, r, "connection-detail.page.tmpl", &templateData{Connection: connection})
 }
@@ -221,7 +233,11 @@ func (app *application) updateConnectionUiHandler(w http.ResponseWriter, r *http
 	}
 
 	if r.PostForm.Get("skipTest") != "on" {
-		connection = engine.TestConnection(connection)
+		connection, _, err = engine.TestConnection(connection)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
 		if !connection.CanConnect {
 			form.Validator.AddError("canConnect", "Unable to connect with given credentials")
 			app.render(w, r, "update-connection.page.tmpl", &templateData{Connection: connection, Form: form})
@@ -305,7 +321,11 @@ func (app *application) createConnectionApiHandler(w http.ResponseWriter, r *htt
 	}
 
 	if !input.SkipTest {
-		connection = engine.TestConnection(connection)
+		connection, _, err = engine.TestConnection(connection)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
 		if !connection.CanConnect {
 			v.AddError("canConnect", "Unable to connect with given credentials")
 			app.failedValidationResponse(w, r, v.Errors)
@@ -343,7 +363,11 @@ func (app *application) listConnectionsApiHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	connections = engine.TestConnections(connections)
+	connections, _, err = engine.TestConnections(connections)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"connections": connections, "metadata": metadata}, nil)
 	if err != nil {

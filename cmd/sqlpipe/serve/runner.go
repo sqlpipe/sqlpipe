@@ -19,12 +19,12 @@ func (app *application) toDoScanner() {
 
 		queuedTransfers, err := app.models.Transfers.GetQueued()
 		if err != nil {
-			app.logger.PrintError(fmt.Errorf("%s", err), nil)
+			app.logger.PrintError(err, nil)
 		}
 
 		queuedQueries, err := app.models.Queries.GetQueued()
 		if err != nil {
-			app.logger.PrintError(fmt.Errorf("%s", err), nil)
+			app.logger.PrintError(err, nil)
 		}
 
 		for _, transfer := range queuedTransfers {
@@ -51,7 +51,7 @@ func (app *application) toDoScanner() {
 							"Status":       transfer.Status,
 						},
 					)
-					err, errProperties := engine.RunTransfer(transfer)
+					errProperties, err := engine.RunTransfer(transfer)
 					if err != nil {
 						app.logger.PrintError(err, errProperties)
 						transfer.Status = "error"
@@ -92,7 +92,7 @@ func (app *application) toDoScanner() {
 						"Status":       query.Status,
 					},
 				)
-				err, errProperties := engine.RunQuery(query)
+				errProperties, err := engine.RunQuery(query)
 				if err != nil {
 					app.logger.PrintError(err, errProperties)
 					query.Status = "error"
