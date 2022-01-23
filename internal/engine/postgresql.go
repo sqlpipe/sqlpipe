@@ -350,6 +350,8 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 		createType = "VARCHAR"
 	case "PostgreSQL_BOX":
 		createType = "BOX"
+	case "PostgreSQL_BYTEA":
+		createType = "BYTEA"
 	case "PostgreSQL_CIDR":
 		createType = "CIDR"
 	case "PostgreSQL_CIRCLE":
@@ -559,14 +561,16 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 
 var postgresValWriters = map[string]func(value interface{}, terminator string) string{
 
+	// Generics
+	"bool":    writeInsertBool,
+	"float32": writeInsertFloat,
+	"float64": writeInsertFloat,
+	"int16":   writeInsertInt,
+	"int32":   writeInsertInt,
+	"int64":   writeInsertInt,
+	"Time":    postgresqlWriteTimeStampFromTime,
+
 	// PostgreSQL
-	"bool":                     writeInsertBool,
-	"float32":                  writeInsertFloat,
-	"float64":                  writeInsertFloat,
-	"int16":                    writeInsertInt,
-	"int32":                    writeInsertInt,
-	"int64":                    writeInsertInt,
-	"Time":                     postgresqlWriteTimeStampFromTime,
 	"PostgreSQL_BYTEA":         postgresqlWriteByteArray,
 	"PostgreSQL_BIT":           writeInsertStringNoEscape,
 	"PostgreSQL_VARBIT":        writeInsertStringNoEscape,

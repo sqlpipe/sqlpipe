@@ -99,26 +99,26 @@ env/spinup:
 		--allocated-storage 20 \
 		--no-enable-performance-insights >/dev/null;
 
+	aws rds create-db-instance \
+		--db-instance-identifier sqlpipe-test-mssql \
+		--backup-retention-period 0 \
+		--db-instance-class db.t3.small \
+		--engine sqlserver-web \
+		--no-multi-az \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--master-username sqlpipe \
+		--master-user-password Mypass123 \
+		--storage-type gp2 \
+		--allocated-storage 20 \
+		--license-model license-included \
+		--no-enable-performance-insights >/dev/null;
+
 	# aws rds create-db-instance \
 	# 	--db-instance-identifier sqlpipe-test-oracle \
 	# 	--db-name testing \
 	# 	--backup-retention-period 0 \
 	# 	--db-instance-class db.t3.small \
 	# 	--engine oracle-se2 \
-	# 	--no-multi-az \
-	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
-	# 	--master-username sqlpipe \
-	# 	--master-user-password Mypass123 \
-	# 	--storage-type gp2 \
-	# 	--allocated-storage 20 \
-	# 	--license-model license-included \
-	# 	--no-enable-performance-insights >/dev/null;
-
-	# aws rds create-db-instance \
-	# 	--db-instance-identifier sqlpipe-test-mssql \
-	# 	--backup-retention-period 0 \
-	# 	--db-instance-class db.t3.small \
-	# 	--engine sqlserver-ex \
 	# 	--no-multi-az \
 	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
 	# 	--master-username sqlpipe \
@@ -137,24 +137,29 @@ env/spinup:
 	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
 	# 	--cluster-identifier sqlpipe-test-redshift >/dev/null;
 
-# env/teardown: Spinup cloud instances
+# env/teardown: Spin down cloud instances
 .PHONY: env/teardown
 env/teardown:
 	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-postgresql --skip-final-snapshot &> /dev/null;
 	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mysql --skip-final-snapshot &> /dev/null;
 	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mssql --skip-final-snapshot &> /dev/null;
-	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-oracle --skip-final-snapshot &> /dev/null;
-	aws redshift delete-cluster --cluster-identifier sqlpipe-test-redshift --skip-final-cluster-snapshot &> /dev/null;
-
-# db/mysql: Open shell to MySQL testing DB
-.PHONY: db/mysql
-db/mysql:
-	mysql -h ${mysqlHost} -u ${mysqlUsername} --password=${mysqlPassword} -D ${mysqlDbName}
+	# aws rds delete-db-instance --db-instance-identifier sqlpipe-test-oracle --skip-final-snapshot &> /dev/null;
+	# aws redshift delete-cluster --cluster-identifier sqlpipe-test-redshift --skip-final-cluster-snapshot &> /dev/null;
 
 # db/postgresql: Open shell to PostgreSQL testing DB
 .PHONY: db/postgresql
 db/postgresql:
-	PGPASSWORD=${postgresqlPassword} psql -h ${postgresqlHost} -U ${postgresqlUsername} -d ${postgresqlDbName}
+	PGPASSWORD=${postgresqlPassword} psql -h ${postgresqlHostname} -U ${postgresqlUsername} -d ${postgresqlDbName}
+
+# db/mysql: Open shell to MySQL testing DB
+.PHONY: db/mysql
+db/mysql:
+	mysql -h ${mysqlHostname} -u ${mysqlUsername} --password=${mysqlPassword} -D ${mysqlDbName}
+
+# db/mssql: Open shell to MSSQL testing DB
+.PHONY: db/mssql
+db/mssql:
+	sqlcmd -S ${mssqlHostname}
 
 # test: Test stuff
 .PHONY: test

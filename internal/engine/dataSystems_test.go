@@ -7,60 +7,82 @@ import (
 	"github.com/calmitchell617/sqlpipe/internal/data"
 )
 
-type queryTest struct {
-	name                  string
-	connection            data.Connection
-	testQuery             string
-	checkQuery            string
-	checkResult           QueryResult
-	expectedErr           string
-	expectedErrProperties map[string]string
+var queryTests = []queryTest{
+	// PostgreSQL Setup
+	// {
+	// 	name:                  "postgresqlWideTableDrop",
+	// 	connection:            postgresqlTestConnection,
+	// 	testQuery:             "drop table if exists wide_table;",
+	// 	checkQuery:            "select * from wide_table",
+	// 	expectedErr:           "db.Query() threw an error",
+	// 	expectedErrProperties: postgresqlWideTableDropErrProperties,
+	// },
+	// {
+	// 	name:        "postgresqlWideTableCreate",
+	// 	connection:  postgresqlTestConnection,
+	// 	testQuery:   postgresqlWideTableCreateQuery,
+	// 	checkQuery:  "select * from wide_table",
+	// 	checkResult: postgresqlWideTableCreateResult,
+	// },
+	// {
+	// 	name:        "postgresqlWideTableInsert",
+	// 	connection:  postgresqlTestConnection,
+	// 	testQuery:   postgresqlWideTableInsertQuery,
+	// 	checkQuery:  "select * from wide_table",
+	// 	checkResult: postgresqlWideTableInsertResult,
+	// },
+	// // MSSQL setup
+	// {
+	// 	name:       "mssqlTestingDbDrop",
+	// 	connection: mssqlMasterTestConnection,
+	// 	testQuery:  "drop database if exists testing",
+	// },
+	// {
+	// 	name:       "mssqlTestingDbCreate",
+	// 	connection: mssqlMasterTestConnection,
+	// 	testQuery:  "create database testing",
+	// },
 }
 
-type transferTest struct {
-	name                  string
-	source                data.Connection
-	target                data.Connection
-	overwrite             bool
-	targetSchema          string
-	targetTable           string
-	transferQuery         string
-	checkQuery            string
-	checkResult           QueryResult
-	expectedErr           string
-	expectedErrProperties map[string]string
+var transferTests = []transferTest{
+	// PostgreSQL Transfers
+	// {
+	// 	name:          "postgresql2postgresql_wide",
+	// 	source:        postgresqlTestConnection,
+	// 	target:        postgresqlTestConnection,
+	// 	overwrite:     true,
+	// 	targetSchema:  "public",
+	// 	targetTable:   "postgresql_wide_table",
+	// 	transferQuery: "select * from wide_table",
+	// 	checkQuery:    "select * from postgresql_wide_table",
+	// 	checkResult:   postgresql2postgresql_wide_result,
+	// },
+	// {
+	// 	name:          "postgresql2mysql_wide",
+	// 	source:        postgresqlTestConnection,
+	// 	target:        mysqlTestConnection,
+	// 	overwrite:     true,
+	// 	targetTable:   "postgresql_wide_table",
+	// 	transferQuery: "select * from wide_table",
+	// 	checkQuery:    "select * from postgresql_wide_table",
+	// 	checkResult:   postgresql2mysql_wide_result,
+	// },
+	{
+		name:          "postgresql2mssql_wide",
+		source:        postgresqlTestConnection,
+		target:        mssqlTestConnection,
+		overwrite:     true,
+		targetTable:   "postgresql_wide_table",
+		transferQuery: "select * from wide_table",
+		checkQuery:    "select * from postgresql_wide_table",
+		checkResult:   postgresql2mssql_wide_result,
+	},
 }
 
 func TestRunQuery(t *testing.T) {
-	// Define tests here
-	tests := []queryTest{
-		// PostgreSQL Setup
-		{
-			name:                  "postgresqlWideTableDrop",
-			connection:            postgresqlTestConnection,
-			testQuery:             "drop table if exists wide_table;",
-			checkQuery:            "select * from wide_table",
-			expectedErr:           "db.Query() threw an error",
-			expectedErrProperties: postgresqlWideTableDropErrProperties,
-		},
-		{
-			name:        "postgresqlWideTableCreate",
-			connection:  postgresqlTestConnection,
-			testQuery:   postgresqlWideTableCreateQuery,
-			checkQuery:  "select * from wide_table",
-			checkResult: postgresqlWideTableCreateResult,
-		},
-		{
-			name:        "postgresqlWideTableInsert",
-			connection:  postgresqlTestConnection,
-			testQuery:   postgresqlWideTableInsertQuery,
-			checkQuery:  "select * from wide_table",
-			checkResult: postgresqlWideTableInsertResult,
-		},
-	}
 
 	// Loop over the test cases.
-	for _, tt := range tests {
+	for _, tt := range queryTests {
 		t.Run(tt.name, func(t *testing.T) {
 			errProperties, err := RunQuery(
 				&data.Query{
@@ -69,8 +91,9 @@ func TestRunQuery(t *testing.T) {
 				},
 			)
 
-			if err != nil {
-				t.Fatalf("unable to run test query. err:\n\n%v\n\nerrProperties:\n%v", errProperties, err)
+			if err != nil && (err.Error() != tt.expectedErr || !reflect.DeepEqual(errProperties, tt.expectedErrProperties)) {
+
+				t.Fatalf("unable to run test query. err:\n\n%v\n\nerrProperties:\n%#v", err, errProperties)
 			}
 
 			if tt.checkQuery != "" {
@@ -81,7 +104,6 @@ func TestRunQuery(t *testing.T) {
 				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
 
 				if err != nil && err.Error() != tt.expectedErr {
-					// t.Error(errProperties)
 					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
 				}
 
@@ -98,36 +120,24 @@ func TestRunQuery(t *testing.T) {
 }
 
 func TestRunTransfer(t *testing.T) {
-	// Define tests here
-	tests := []transferTest{
-		// PostgreSQL Setup
-		{
-			name:          "postgresql2mysql_wide",
-			source:        postgresqlTestConnection,
-			target:        mysqlTestConnection,
-			overwrite:     true,
-			targetTable:   "postgresql_wide_table",
-			transferQuery: "select * from wide_table",
-			checkQuery:    "select * from postgresql_wide_table",
-			checkResult:   postgresql2mysql_wide_result,
-		},
-	}
 
 	// Loop over the test cases.
-	for _, tt := range tests {
+	for _, tt := range transferTests {
+
 		t.Run(tt.name, func(t *testing.T) {
 			errProperties, err := RunTransfer(
 				&data.Transfer{
-					Query:       tt.transferQuery,
-					Overwrite:   tt.overwrite,
-					TargetTable: tt.targetTable,
-					Source:      tt.source,
-					Target:      tt.target,
+					Query:        tt.transferQuery,
+					Overwrite:    tt.overwrite,
+					TargetSchema: tt.targetSchema,
+					TargetTable:  tt.targetTable,
+					Source:       tt.source,
+					Target:       tt.target,
 				},
 			)
 
 			if err != nil {
-				t.Fatalf("unable to run transfer. err:\n\n%v\n\nerrProperties:\n%v", errProperties, err)
+				t.Fatalf("unable to run transfer. err:\n\n%v\n\nerrProperties:\n%v", err, errProperties)
 			}
 
 			if tt.checkQuery != "" {

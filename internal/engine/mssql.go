@@ -1,16 +1,13 @@
-//go:build allDbs
-// +build allDbs
-
 package engine
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sqlpipe/app/models"
 	"strings"
 	"time"
 
+	"github.com/calmitchell617/sqlpipe/internal/data"
 	_ "github.com/denisenkom/go-mssqldb"
 )
 
@@ -23,11 +20,13 @@ type MSSQL struct {
 	debugConnString string
 }
 
-func (dsConn MSSQL) GetDb() *sql.DB {
-	return mssql
-}
-
-func getNewMSSQL(connection models.Connection) DsConnection {
+func getNewMSSQL(
+	connection data.Connection,
+) (
+	dsConn DsConnection,
+	errProperties map[string]string,
+	err error,
+) {
 
 	connString := fmt.Sprintf(
 		"sqlserver://%s:%s@%s:%v?database=%s",
@@ -38,16 +37,15 @@ func getNewMSSQL(connection models.Connection) DsConnection {
 		connection.DbName,
 	)
 
-	var err error
 	mssql, err = sql.Open("mssql", connString)
 
 	if err != nil {
-		fmt.Printf("\nCouldn't open a connection to MSSQL at host %s\n", connection.Hostname)
+		return dsConn, errProperties, err
 	}
 
 	mssql.SetConnMaxLifetime(time.Minute * 1)
 
-	return MSSQL{
+	dsConn = MSSQL{
 		"mssql",
 		"mssql",
 		fmt.Sprintf(
@@ -65,13 +63,16 @@ func getNewMSSQL(connection models.Connection) DsConnection {
 			connection.DbName,
 		),
 	}
+
+	return dsConn, errProperties, err
 }
 
 func (dsConn MSSQL) getRows(
-	transfer models.Transfer,
+	transfer data.Transfer,
 ) (
 	rows *sql.Rows,
 	resultSetColumnInfo ResultSetColumnInfo,
+	errProperties map[string]string,
 	err error,
 ) {
 	return standardGetRows(dsConn, transfer)
@@ -80,14 +81,77 @@ func (dsConn MSSQL) getRows(
 func (dsConn MSSQL) getFormattedResults(
 	query string,
 ) (
-	queryResults QueryResult,
+	queryResult QueryResult,
+	errProperties map[string]string,
 	err error,
 ) {
 	return standardGetFormattedResults(dsConn, query)
 }
 
-func (dsConn MSSQL) getIntermediateType(colTypeFromDriver string) string {
-	return mssqlIntermediateTypes[colTypeFromDriver]
+func (dsConn MSSQL) getIntermediateType(
+	colTypeFromDriver string,
+) (
+	intermediateType string,
+	errProperties map[string]string,
+	err error,
+) {
+	switch colTypeFromDriver {
+	case "BIGINT":
+		intermediateType = "MSSQL_BIGINT"
+	case "BIT":
+		intermediateType = "MSSQL_BIT"
+	case "DECIMAL":
+		intermediateType = "MSSQL_DECIMAL"
+	case "INT":
+		intermediateType = "MSSQL_INT"
+	case "MONEY":
+		intermediateType = "MSSQL_MONEY"
+	case "SMALLINT":
+		intermediateType = "MSSQL_SMALLINT"
+	case "SMALLMONEY":
+		intermediateType = "MSSQL_SMALLMONEY"
+	case "TINYINT":
+		intermediateType = "MSSQL_TINYINT"
+	case "FLOAT":
+		intermediateType = "MSSQL_FLOAT"
+	case "REAL":
+		intermediateType = "MSSQL_REAL"
+	case "DATE":
+		intermediateType = "MSSQL_DATE"
+	case "DATETIME2":
+		intermediateType = "MSSQL_DATETIME2"
+	case "DATETIME":
+		intermediateType = "MSSQL_DATETIME"
+	case "DATETIMEOFFSET":
+		intermediateType = "MSSQL_DATETIMEOFFSET"
+	case "SMALLDATETIME":
+		intermediateType = "MSSQL_SMALLDATETIME"
+	case "TIME":
+		intermediateType = "MSSQL_TIME"
+	case "CHAR":
+		intermediateType = "MSSQL_CHAR"
+	case "VARCHAR":
+		intermediateType = "MSSQL_VARCHAR"
+	case "TEXT":
+		intermediateType = "MSSQL_TEXT"
+	case "NCHAR":
+		intermediateType = "MSSQL_NCHAR"
+	case "NVARCHAR":
+		intermediateType = "MSSQL_NVARCHAR"
+	case "NTEXT":
+		intermediateType = "MSSQL_NTEXT"
+	case "BINARY":
+		intermediateType = "MSSQL_BINARY"
+	case "VARBINARY":
+		intermediateType = "MSSQL_VARBINARY"
+	case "UNIQUEIDENTIFIER":
+		intermediateType = "MSSQL_UNIQUEIDENTIFIER"
+	case "XML":
+		intermediateType = "MSSQL_XML"
+	default:
+		err = fmt.Errorf("no MSSQL intermediate type for driver type '%v'", colTypeFromDriver)
+	}
+	return intermediateType, errProperties, err
 }
 
 func (dsConn MSSQL) getConnectionInfo() (dsType string, driveName string, connString string) {
@@ -100,10 +164,13 @@ func (dsConn MSSQL) GetDebugInfo() (string, string) {
 
 func (dsConn MSSQL) turboTransfer(
 	rows *sql.Rows,
-	transfer models.Transfer,
+	transfer data.Transfer,
 	resultSetColumnInfo ResultSetColumnInfo,
-) (err error) {
-	return err
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return errProperties, err
 }
 
 func (dsConn MSSQL) turboWriteMidVal(
@@ -111,9 +178,10 @@ func (dsConn MSSQL) turboWriteMidVal(
 	value interface{},
 	builder *strings.Builder,
 ) (
+	errProperties map[string]string,
 	err error,
 ) {
-	return errors.New("We haven't implemented turbo write on MSSQL yet")
+	return errProperties, errors.New("mssql hasn't implemented turbo writing yet")
 }
 
 func (dsConn MSSQL) turboWriteEndVal(
@@ -121,9 +189,10 @@ func (dsConn MSSQL) turboWriteEndVal(
 	value interface{},
 	builder *strings.Builder,
 ) (
+	errProperties map[string]string,
 	err error,
 ) {
-	return errors.New("We haven't implemented turbo write on MSSQL yet")
+	return errProperties, errors.New("mssql hasn't implemented turbo writing yet")
 }
 
 func (db MSSQL) insertChecker(currentLen int, currentRow int) bool {
@@ -135,25 +204,28 @@ func (db MSSQL) insertChecker(currentLen int, currentRow int) bool {
 }
 
 func (dsConn MSSQL) dropTable(
-	transfer models.Transfer,
+	transfer data.Transfer,
 ) (
+	errProperties map[string]string,
 	err error,
 ) {
 	return dropTableIfExistsWithSchema(dsConn, transfer)
 }
 
 func (dsConn MSSQL) deleteFromTable(
-	transfer models.Transfer,
+	transfer data.Transfer,
 ) (
+	errProperties map[string]string,
 	err error,
 ) {
 	return deleteFromTableWithSchema(dsConn, transfer)
 }
 
 func (dsConn MSSQL) createTable(
-	transfer models.Transfer,
+	transfer data.Transfer,
 	columnInfo ResultSetColumnInfo,
 ) (
+	errProperties map[string]string,
 	err error,
 ) {
 	return standardCreateTable(dsConn, transfer, columnInfo)
@@ -161,6 +233,11 @@ func (dsConn MSSQL) createTable(
 
 func (dsConn MSSQL) getValToWriteMidRow(valType string, value interface{}) string {
 	return mssqlValWriters[valType](value, ",")
+}
+
+func (dsConn MSSQL) getValToWriteRaw(valType string, value interface{}) string {
+	fmt.Println(valType)
+	return mssqlValWriters[valType](value, "")
 }
 
 func (dsConn MSSQL) getValToWriteRowEnd(valType string, value interface{}) string {
@@ -267,8 +344,121 @@ func mssqlWriteTime(value interface{}, terminator string) string {
 	return returnVal
 }
 
-func (dsConn MSSQL) getCreateTableType(intermediateType string) string {
-	return mssqlCreateTableTypes[resultSetColInfo.ColumnIntermediateTypes[colNum]](resultSetColInfo, colNum)
+func (dsConn MSSQL) getCreateTableType(
+	resultSetColInfo ResultSetColumnInfo,
+	colNum int,
+) (
+	createType string,
+) {
+	scanType := resultSetColInfo.ColumnScanTypes[colNum]
+	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
+
+	switch scanType.Name() {
+	case "bool":
+		createType = "BIT"
+	case "int", "int8", "int16", "int32", "uint8", "uint16":
+		createType = "INT"
+	case "int64", "uint32", "uint64":
+		createType = "BIGINT"
+	case "float32":
+		createType = "REAL"
+	case "float64":
+		createType = "FLOAT"
+	case "Time":
+		createType = "DATETIME2"
+	}
+
+	if createType != "" {
+		return createType
+	}
+
+	switch intermediateType {
+	case "PostgreSQL_BIGINT":
+		createType = "BIGINT"
+	case "PostgreSQL_BIT":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_VARBIT":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_BOOLEAN":
+		createType = "BIT"
+	case "PostgreSQL_BOX":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_BYTEA":
+		createType = "VARBINARY(8000)"
+	case "PostgreSQL_BPCHAR":
+		createType = "NVARCHAR(4000)"
+	case "PostgreSQL_CIDR":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_CIRCLE":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_DATE":
+		createType = "DATE"
+	case "PostgreSQL_FLOAT8":
+		createType = "FLOAT"
+	case "PostgreSQL_INET":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_INT4":
+		createType = "INT"
+	case "PostgreSQL_INTERVAL":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_JSON":
+		createType = "NVARCHAR(4000)"
+	case "PostgreSQL_JSONB":
+		createType = "NVARCHAR(4000)"
+	case "PostgreSQL_LINE":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_LSEG":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_MACADDR":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_MONEY":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_PATH":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_PG_LSN":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_POINT":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_POLYGON":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_FLOAT4":
+		createType = "REAL"
+	case "PostgreSQL_INT2":
+		createType = "SMALLINT"
+	case "PostgreSQL_TEXT":
+		createType = "NTEXT"
+	case "PostgreSQL_TIME":
+		createType = "TIME"
+	case "PostgreSQL_TIMETZ":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_TIMESTAMP":
+		createType = "DATETIME2"
+	case "PostgreSQL_TIMESTAMPTZ":
+		createType = "DATETIMEOFFSET"
+	case "PostgreSQL_TSQUERY":
+		createType = "NVARCHAR(4000)"
+	case "PostgreSQL_TSVECTOR":
+		createType = "NVARCHAR(4000)"
+	case "PostgreSQL_TXID_SNAPSHOT":
+		createType = "VARCHAR(8000)"
+	case "PostgreSQL_UUID":
+		createType = "UNIQUEIDENTIFIER"
+	case "PostgreSQL_XML":
+		createType = "XML"
+	case "PostgreSQL_VARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "PostgreSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"DECIMAL(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+	}
+
+	return createType
 }
 
 var mssqlIntermediateTypes = map[string]string{
@@ -407,7 +597,7 @@ var mssqlCreateTableTypes = map[string]func(columnInfo ResultSetColumnInfo, colN
 	},
 	"PostgreSQL_DECIMAL_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
-			"FLOAT",
+			"DECIMAL(%d,%d)",
 			columnInfo.ColumnPrecisions[colNum],
 			columnInfo.ColumnScales[colNum],
 		)
@@ -507,46 +697,54 @@ var mssqlCreateTableTypes = map[string]func(columnInfo ResultSetColumnInfo, colN
 
 var mssqlValWriters = map[string]func(value interface{}, terminator string) string{
 
-	// PostgreSQL
+	// Generics
+	"bool":    mssqlWriteBit,
+	"float32": writeInsertFloat,
+	"float64": writeInsertFloat,
+	"int16":   writeInsertInt,
+	"int32":   writeInsertInt,
+	"int64":   writeInsertInt,
+	"Time":    mssqlWriteDateTime,
 
-	"PostgreSQL_BIGINT_int64":          writeInsertInt,
-	"PostgreSQL_BIT_string":            writeInsertStringNoEscape,
-	"PostgreSQL_VARBIT_string":         writeInsertStringNoEscape,
-	"PostgreSQL_BOOLEAN_bool":          mssqlWriteBit,
-	"PostgreSQL_BOX_string":            writeInsertStringNoEscape,
-	"PostgreSQL_BYTEA_[]uint8":         mssqlWriteHexBytes,
-	"PostgreSQL_CIDR_string":           writeInsertStringNoEscape,
-	"PostgreSQL_CIRCLE_string":         writeInsertStringNoEscape,
-	"PostgreSQL_FLOAT8_float64":        writeInsertFloat,
-	"PostgreSQL_INET_string":           writeInsertStringNoEscape,
-	"PostgreSQL_INT4_int32":            writeInsertInt,
-	"PostgreSQL_INTERVAL_string":       writeInsertStringNoEscape,
-	"PostgreSQL_LINE_string":           writeInsertStringNoEscape,
-	"PostgreSQL_LSEG_string":           writeInsertStringNoEscape,
-	"PostgreSQL_MACADDR_string":        writeInsertStringNoEscape,
-	"PostgreSQL_MONEY_string":          writeInsertStringNoEscape,
-	"PostgreSQL_DECIMAL_string":        writeInsertRawStringNoQuotes,
-	"PostgreSQL_PATH_string":           writeInsertStringNoEscape,
-	"PostgreSQL_PG_LSN_string":         writeInsertStringNoEscape,
-	"PostgreSQL_POINT_string":          writeInsertStringNoEscape,
-	"PostgreSQL_POLYGON_string":        writeInsertStringNoEscape,
-	"PostgreSQL_FLOAT4_float32":        writeInsertFloat,
-	"PostgreSQL_INT2_int16":            writeInsertInt,
-	"PostgreSQL_TIME_string":           writeInsertStringNoEscape,
-	"PostgreSQL_TIMETZ_string":         writeInsertStringNoEscape,
-	"PostgreSQL_TXID_SNAPSHOT_string":  writeInsertStringNoEscape,
-	"PostgreSQL_UUID_string":           writeInsertStringNoEscape,
-	"PostgreSQL_VARCHAR_string":        writeInsertEscapedString,
-	"PostgreSQL_BPCHAR_string":         writeInsertEscapedString,
-	"PostgreSQL_DATE_time.Time":        mssqlWriteDateTime,
-	"PostgreSQL_JSON_string":           writeInsertEscapedString,
-	"PostgreSQL_JSONB_string":          writeInsertEscapedString,
-	"PostgreSQL_TEXT_string":           writeInsertEscapedString,
-	"PostgreSQL_TIMESTAMP_time.Time":   mssqlWriteDateTime,
-	"PostgreSQL_TIMESTAMPTZ_time.Time": mssqlWriteDateTimeWithTZ,
-	"PostgreSQL_TSQUERY_string":        writeInsertEscapedString,
-	"PostgreSQL_TSVECTOR_string":       writeInsertEscapedString,
-	"PostgreSQL_XML_string":            writeInsertEscapedString,
+	// PostgreSQL
+	"PostgreSQL_BIGINT":        writeInsertInt,
+	"PostgreSQL_BIT":           writeInsertStringNoEscape,
+	"PostgreSQL_VARBIT":        writeInsertStringNoEscape,
+	"PostgreSQL_BOOLEAN":       mssqlWriteBit,
+	"PostgreSQL_BOX":           writeInsertStringNoEscape,
+	"PostgreSQL_BYTEA":         mssqlWriteHexBytes,
+	"PostgreSQL_CIDR":          writeInsertStringNoEscape,
+	"PostgreSQL_CIRCLE":        writeInsertStringNoEscape,
+	"PostgreSQL_FLOAT8":        writeInsertFloat,
+	"PostgreSQL_INET":          writeInsertStringNoEscape,
+	"PostgreSQL_INT4":          writeInsertInt,
+	"PostgreSQL_INTERVAL":      writeInsertStringNoEscape,
+	"PostgreSQL_LINE":          writeInsertStringNoEscape,
+	"PostgreSQL_LSEG":          writeInsertStringNoEscape,
+	"PostgreSQL_MACADDR":       writeInsertStringNoEscape,
+	"PostgreSQL_MONEY":         writeInsertStringNoEscape,
+	"PostgreSQL_DECIMAL":       writeInsertRawStringNoQuotes,
+	"PostgreSQL_PATH":          writeInsertStringNoEscape,
+	"PostgreSQL_PG_LSN":        writeInsertStringNoEscape,
+	"PostgreSQL_POINT":         writeInsertStringNoEscape,
+	"PostgreSQL_POLYGON":       writeInsertStringNoEscape,
+	"PostgreSQL_FLOAT4":        writeInsertFloat,
+	"PostgreSQL_INT2":          writeInsertInt,
+	"PostgreSQL_TIME":          writeInsertStringNoEscape,
+	"PostgreSQL_TIMETZ":        writeInsertStringNoEscape,
+	"PostgreSQL_TXID_SNAPSHOT": writeInsertStringNoEscape,
+	"PostgreSQL_UUID":          writeInsertStringNoEscape,
+	"PostgreSQL_VARCHAR":       writeInsertEscapedString,
+	"PostgreSQL_BPCHAR":        writeInsertEscapedString,
+	"PostgreSQL_DATE":          mssqlWriteDateTime,
+	"PostgreSQL_JSON":          writeInsertEscapedString,
+	"PostgreSQL_JSONB":         writeInsertEscapedString,
+	"PostgreSQL_TEXT":          writeInsertEscapedString,
+	"PostgreSQL_TIMESTAMP":     mssqlWriteDateTime,
+	"PostgreSQL_TIMESTAMPTZ":   mssqlWriteDateTimeWithTZ,
+	"PostgreSQL_TSQUERY":       writeInsertEscapedString,
+	"PostgreSQL_TSVECTOR":      writeInsertEscapedString,
+	"PostgreSQL_XML":           writeInsertEscapedString,
 
 	// MYSQL
 
@@ -575,32 +773,32 @@ var mssqlValWriters = map[string]func(value interface{}, terminator string) stri
 
 	// MSSQL
 
-	"MSSQL_BIGINT_int64":             writeInsertInt,
-	"MSSQL_BIT_bool":                 mssqlWriteBit,
-	"MSSQL_DECIMAL_[]uint8":          writeInsertRawStringNoQuotes,
-	"MSSQL_INT_int64":                writeInsertInt,
-	"MSSQL_MONEY_[]uint8":            writeInsertStringNoEscape,
-	"MSSQL_SMALLINT_int64":           writeInsertInt,
-	"MSSQL_SMALLMONEY_[]uint8":       writeInsertStringNoEscape,
-	"MSSQL_TINYINT_int64":            writeInsertInt,
-	"MSSQL_FLOAT_float64":            writeInsertFloat,
-	"MSSQL_REAL_float64":             writeInsertFloat,
-	"MSSQL_DATE_time.Time":           mssqlWriteDateTime,
-	"MSSQL_DATETIME2_time.Time":      mssqlWriteDateTime,
-	"MSSQL_DATETIME_time.Time":       mssqlWriteDateTime,
-	"MSSQL_DATETIMEOFFSET_time.Time": mssqlWriteDateTime,
-	"MSSQL_SMALLDATETIME_time.Time":  mssqlWriteDateTime,
-	"MSSQL_TIME_time.Time":           mssqlWriteTime,
-	"MSSQL_CHAR_string":              writeInsertEscapedString,
-	"MSSQL_VARCHAR_string":           writeInsertEscapedString,
-	"MSSQL_TEXT_string":              writeInsertEscapedString,
-	"MSSQL_NCHAR_string":             writeInsertEscapedString,
-	"MSSQL_NVARCHAR_string":          writeInsertEscapedString,
-	"MSSQL_NTEXT_string":             writeInsertEscapedString,
-	"MSSQL_BINARY_[]uint8":           mssqlWriteHexBytes,
-	"MSSQL_VARBINARY_[]uint8":        mssqlWriteHexBytes,
-	"MSSQL_UNIQUEIDENTIFIER_[]uint8": mssqlWriteUniqueIdentifier,
-	"MSSQL_XML_string":               writeInsertEscapedString,
+	"MSSQL_BIGINT":           writeInsertInt,
+	"MSSQL_BIT":              mssqlWriteBit,
+	"MSSQL_DECIMAL":          writeInsertRawStringNoQuotes,
+	"MSSQL_INT":              writeInsertInt,
+	"MSSQL_MONEY":            writeInsertStringNoEscape,
+	"MSSQL_SMALLINT":         writeInsertInt,
+	"MSSQL_SMALLMONEY":       writeInsertStringNoEscape,
+	"MSSQL_TINYINT":          writeInsertInt,
+	"MSSQL_FLOAT":            writeInsertFloat,
+	"MSSQL_REAL":             writeInsertFloat,
+	"MSSQL_DATE":             mssqlWriteDateTime,
+	"MSSQL_DATETIME2":        mssqlWriteDateTime,
+	"MSSQL_DATETIME":         mssqlWriteDateTime,
+	"MSSQL_DATETIMEOFFSET":   mssqlWriteDateTime,
+	"MSSQL_SMALLDATETIME":    mssqlWriteDateTime,
+	"MSSQL_TIME":             mssqlWriteTime,
+	"MSSQL_CHAR":             writeInsertEscapedString,
+	"MSSQL_VARCHAR":          writeInsertEscapedString,
+	"MSSQL_TEXT":             writeInsertEscapedString,
+	"MSSQL_NCHAR":            writeInsertEscapedString,
+	"MSSQL_NVARCHAR":         writeInsertEscapedString,
+	"MSSQL_NTEXT":            writeInsertEscapedString,
+	"MSSQL_BINARY":           mssqlWriteHexBytes,
+	"MSSQL_VARBINARY":        mssqlWriteHexBytes,
+	"MSSQL_UNIQUEIDENTIFIER": mssqlWriteUniqueIdentifier,
+	"MSSQL_XML":              writeInsertEscapedString,
 
 	// Oracle
 

@@ -145,12 +145,12 @@ func GetDs(connection data.Connection) (
 		dsConn, errProperties, err = getNewPostgreSQL(connection)
 	case "mysql":
 		dsConn, errProperties, err = getNewMySQL(connection)
+	case "mssql":
+		dsConn, errProperties, err = getNewMSSQL(connection)
 	// case "redshift":
 	// 	dsConn = getNewRedshift(connection)
 	// case "snowflake":
 	// 	dsConn = getNewSnowflake(connection)
-	// case "mssql":
-	// 	dsConn = getNewMSSQL(connection)
 	// case "oracle":
 	// 	dsConn = getNewOracle(connection)
 	default:
