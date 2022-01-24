@@ -2,7 +2,6 @@ package engine
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -177,22 +176,14 @@ func (dsConn MSSQL) turboWriteMidVal(
 	valType string,
 	value interface{},
 	builder *strings.Builder,
-) (
-	errProperties map[string]string,
-	err error,
 ) {
-	return errProperties, errors.New("mssql hasn't implemented turbo writing yet")
 }
 
 func (dsConn MSSQL) turboWriteEndVal(
 	valType string,
 	value interface{},
 	builder *strings.Builder,
-) (
-	errProperties map[string]string,
-	err error,
 ) {
-	return errProperties, errors.New("mssql hasn't implemented turbo writing yet")
 }
 
 func (db MSSQL) insertChecker(currentLen int, currentRow int) bool {

@@ -47,11 +47,11 @@ type DsConnection interface {
 
 	// Takes a value, converts it into the proper format
 	// for insertion into a specific DB type, and writes it to a string builder
-	turboWriteMidVal(valType string, value interface{}, builder *strings.Builder) (errProperties map[string]string, err error)
+	turboWriteMidVal(valType string, value interface{}, builder *strings.Builder)
 
 	// Takes a value, converts it into the proper format
 	// for insertion into a specific DB type, and writes it to a string builder
-	turboWriteEndVal(valType string, value interface{}, builder *strings.Builder) (errProperties map[string]string, err error)
+	turboWriteEndVal(valType string, value interface{}, builder *strings.Builder)
 
 	// Generates the first few characters of a row for
 	// a given insertion query for a given data system type
@@ -151,8 +151,8 @@ func GetDs(connection data.Connection) (
 		dsConn, errProperties, err = getNewOracle(connection)
 	case "redshift":
 		dsConn, errProperties, err = getNewRedshift(connection)
-	// case "snowflake":
-	// 	dsConn = getNewSnowflake(connection)
+	case "snowflake":
+		dsConn, errProperties, err = getNewSnowflake(connection)
 	default:
 		panic("Unknown DsType")
 	}
@@ -248,6 +248,7 @@ func sqlInsert(
 	}
 
 	var insertError error
+	var insertErrProperties map[string]string
 
 	for i := 1; rows.Next(); i++ {
 
@@ -277,12 +278,12 @@ func sqlInsert(
 			queryString := sqlEndStringNilReplacer.Replace(withQueryEnder)
 			wg.Wait()
 			if insertError != nil {
-				return errProperties, insertError
+				return insertErrProperties, insertError
 			}
 			wg.Add(1)
 			pkg.Background(func() {
 				defer wg.Done()
-				_, errProperties, insertError = execute(dsConn, queryString)
+				_, insertErrProperties, insertError = execute(dsConn, queryString)
 			})
 			isFirst = true
 			queryBuilder.Reset()

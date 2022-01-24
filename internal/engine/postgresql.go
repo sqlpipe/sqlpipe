@@ -2,7 +2,6 @@ package engine
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -159,22 +158,14 @@ func (dsConn PostgreSQL) turboWriteMidVal(
 	valType string,
 	value interface{},
 	builder *strings.Builder,
-) (
-	errProperties map[string]string,
-	err error,
 ) {
-	return errProperties, errors.New("postgres hasn't implemented turbo writing yet")
 }
 
 func (dsConn PostgreSQL) turboWriteEndVal(
 	valType string,
 	value interface{},
 	builder *strings.Builder,
-) (
-	errProperties map[string]string,
-	err error,
 ) {
-	return errProperties, errors.New("postgres hasn't implemented turbo writing yet")
 }
 
 func (dsConn PostgreSQL) getRowStarter() string {
