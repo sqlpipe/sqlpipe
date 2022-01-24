@@ -316,6 +316,7 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
 
 	switch scanType.Name() {
+	// Generics
 	case "bool":
 		createType = "BOOLEAN"
 	case "int", "int8", "int16", "int32", "uint8", "uint16":
@@ -335,6 +336,7 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 	}
 
 	switch intermediateType {
+	// PostgreSQL
 	case "PostgreSQL_BIT", "PostgreSQL_VARBIT":
 		createType = "VARBIT"
 	case "PostgreSQL_MONEY", "PostgreSQL_BPCHAR":
@@ -396,6 +398,52 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 			"VARCHAR(%d)",
 			resultSetColInfo.ColumnLengths[colNum],
 		)
+
+	// MySQL
+	case "MySQL_BIT":
+		createType = "VARBIT"
+	case "MySQL_TINYINT":
+		createType = "SMALLINT"
+	case "MySQL_SMALLINT":
+		createType = "SMALLINT"
+	case "MySQL_MEDIUMINT":
+		createType = "INT"
+	case "MySQL_INT":
+		createType = "INT"
+	case "MySQL_BIGINT":
+		createType = "BIGINT"
+	case "MySQL_FLOAT4":
+		createType = "REAL"
+	case "MySQL_FLOAT8":
+		createType = "DOUBLE PRECISION"
+	case "MySQL_DATE":
+		createType = "DATE"
+	case "MySQL_TIME":
+		createType = "TIME"
+	case "MySQL_DATETIME":
+		createType = "TIMESTAMP"
+	case "MySQL_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "MySQL_YEAR":
+		createType = "INT"
+	case "MySQL_CHAR":
+		createType = "VARCHAR"
+	case "MySQL_VARCHAR":
+		createType = "VARCHAR"
+	case "MySQL_TEXT":
+		createType = "TEXT"
+	case "MySQL_BINARY":
+		createType = "BYTEA"
+	case "MySQL_VARBINARY":
+		createType = "BYTEA"
+	case "MySQL_BLOB":
+		createType = "BYTEA"
+	case "MySQL_GEOMETRY":
+		createType = "BYTEA"
+	case "MySQL_JSON":
+		createType = "JSON"
+	case "MySQL_DECIMAL":
+		createType = fmt.Sprintf("NUMERIC(%d,%d)", resultSetColInfo.ColumnPrecisions[colNum], resultSetColInfo.ColumnScales[colNum])
 	}
 
 	return createType
@@ -405,34 +453,34 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 
 // 	// MySQL
 
-// 	"MySQL_BIT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBIT" },
-// 	"MySQL_TINYINT":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-// 	"MySQL_SMALLINT":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-// 	"MySQL_MEDIUMINT": func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-// 	"MySQL_INT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-// 	"MySQL_BIGINT":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-// 	"MySQL_FLOAT4": func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
-// 	"MySQL_FLOAT8": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-// 	"MySQL_DATE":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-// 	"MySQL_TIME":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
-// 	"MySQL_DATETIME":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-// 	"MySQL_TIMESTAMP": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-// 	"MySQL_YEAR":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-// 	"MySQL_CHAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
-// 	"MySQL_VARCHAR":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
-// 	"MySQL_TEXT":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
-// 	"MySQL_BINARY":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"MySQL_VARBINARY": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"MySQL_BLOB":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"MySQL_GEOMETRY":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"MySQL_JSON":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "JSON" },
-// 	"MySQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
-// 		return fmt.Sprintf(
-// 			"NUMERIC(%d,%d)",
-// 			columnInfo.ColumnPrecisions[colNum],
-// 			columnInfo.ColumnScales[colNum],
-// 		)
-// 	},
+// "MySQL_BIT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBIT" },
+// "MySQL_TINYINT":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+// "MySQL_SMALLINT":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+// "MySQL_MEDIUMINT": func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+// "MySQL_INT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+// "MySQL_BIGINT":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
+// "MySQL_FLOAT4": func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
+// "MySQL_FLOAT8": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+// "MySQL_DATE":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+// "MySQL_TIME":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
+// "MySQL_DATETIME":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+// "MySQL_TIMESTAMP": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+// "MySQL_YEAR":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+// "MySQL_CHAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
+// "MySQL_VARCHAR":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
+// "MySQL_TEXT":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
+// "MySQL_BINARY":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// "MySQL_VARBINARY": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// "MySQL_BLOB":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// "MySQL_GEOMETRY":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// "MySQL_JSON":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "JSON" },
+// "MySQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
+// 	return fmt.Sprintf(
+// 		"NUMERIC(%d,%d)",
+// 		columnInfo.ColumnPrecisions[colNum],
+// 		columnInfo.ColumnScales[colNum],
+// 	)
+// },
 
 // 	// MSSQL
 

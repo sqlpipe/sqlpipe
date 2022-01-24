@@ -456,6 +456,7 @@ func (dsConn Oracle) getCreateTableType(
 	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
 
 	switch scanType.Name() {
+	// Generics
 	case "bool":
 		createType = "NUMBER(1)"
 	case "int", "int8", "int16", "int32", "uint8", "uint16":
@@ -475,6 +476,7 @@ func (dsConn Oracle) getCreateTableType(
 	}
 
 	switch intermediateType {
+	// PostgreSQL
 	case "PostgreSQL_BIGINT":
 		createType = "NUMBER(19, 0)"
 	case "PostgreSQL_BIT":
@@ -553,6 +555,56 @@ func (dsConn Oracle) getCreateTableType(
 			resultSetColInfo.ColumnLengths[colNum],
 		)
 	case "PostgreSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"NUMBER(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+
+	// MySQL
+	case "MySQL_BIT":
+		createType = "BLOB"
+	case "MySQL_TINYINT":
+		createType = "INTEGER"
+	case "MySQL_SMALLINT":
+		createType = "INTEGER"
+	case "MySQL_MEDIUMINT":
+		createType = "INTEGER"
+	case "MySQL_INT":
+		createType = "INTEGER"
+	case "MySQL_FLOAT4":
+		createType = "BINARY_FLOAT"
+	case "MySQL_FLOAT8":
+		createType = "BINARY_DOUBLE"
+	case "MySQL_DATE":
+		createType = "DATE"
+	case "MySQL_TIME":
+		createType = "VARCHAR2(4000)"
+	case "MySQL_DATETIME":
+		createType = "TIMESTAMP"
+	case "MySQL_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "MySQL_YEAR":
+		createType = "INTEGER"
+	case "MySQL_CHAR":
+		createType = "NVARCHAR2(2000)"
+	case "MySQL_VARCHAR":
+		createType = "NVARCHAR2(2000)"
+	case "MySQL_TEXT":
+		createType = "NVARCHAR2(2000)"
+	case "MySQL_BINARY":
+		createType = "BLOB"
+	case "MySQL_VARBINARY":
+		createType = "BLOB"
+	case "MySQL_BLOB":
+		createType = "BLOB"
+	case "MySQL_GEOMETRY":
+		createType = "BLOB"
+	case "MySQL_JSON":
+		createType = "NVARCHAR2(2000)"
+	case "MySQL_BIGINT":
+		createType = "NUMBER(19, 0)"
+	case "MySQL_DECIMAL":
 		createType = fmt.Sprintf(
 			"NUMBER(%d,%d)",
 			resultSetColInfo.ColumnPrecisions[colNum],

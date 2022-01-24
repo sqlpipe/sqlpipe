@@ -286,6 +286,7 @@ func (dsConn MySQL) getCreateTableType(
 	}
 
 	switch intermediateType {
+	// PostgreSQL
 	case "PostgreSQL_BIT", "PostgreSQL_VARBIT":
 		createType = "TEXT"
 	case "PostgreSQL_MONEY", "PostgreSQL_BPCHAR":
@@ -346,6 +347,56 @@ func (dsConn MySQL) getCreateTableType(
 		createType = fmt.Sprintf(
 			"VARCHAR(%d)",
 			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	// MySQL
+	case "MySQL_BIT":
+		createType = "BIT(64)"
+	case "MySQL_TINYINT":
+		createType = "TINYINT"
+	case "MySQL_SMALLINT":
+		createType = "SMALLINT"
+	case "MySQL_MEDIUMINT":
+		createType = "MEDIUMINT"
+	case "MySQL_INT":
+		createType = "INT"
+	case "MySQL_FLOAT4":
+		createType = "FLOAT"
+	case "MySQL_FLOAT8":
+		createType = "DOUBLE"
+	case "MySQL_DATE":
+		createType = "DATE"
+	case "MySQL_TIME":
+		createType = "TIME"
+	case "MySQL_DATETIME":
+		createType = "DATETIME"
+	case "MySQL_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "MySQL_YEAR":
+		createType = "YEAR"
+	case "MySQL_CHAR":
+		createType = "TEXT CHARACTER SET utf8"
+	case "MySQL_VARCHAR":
+		createType = "TEXT CHARACTER SET utf8"
+	case "MySQL_TEXT":
+		createType = "TEXT CHARACTER SET utf8"
+	case "MySQL_BINARY":
+		createType = "LONGBLOB"
+	case "MySQL_VARBINARY":
+		createType = "LONGBLOB"
+	case "MySQL_BLOB":
+		createType = "LONGBLOB"
+	case "MySQL_GEOMETRY":
+		createType = "GEOMETRY"
+	case "MySQL_JSON":
+		createType = "JSON"
+	case "MySQL_BIGINT":
+		createType = "BIGINT"
+	case "MySQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"DECIMAL(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
 		)
 	}
 

@@ -127,7 +127,7 @@ func (dsConn Redshift) getIntermediateType(
 	case "VARCHAR":
 		intermediateType = "Redshift_VARCHAR"
 	case "DATE":
-		intermediateType = "time.Time"
+		intermediateType = "Time"
 	case "FLOAT8":
 		intermediateType = "float64"
 	case "INT4":
@@ -227,6 +227,7 @@ func (dsConn Redshift) getCreateTableType(resultSetColInfo ResultSetColumnInfo, 
 	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
 
 	switch scanType.Name() {
+	// Generics
 	case "bool":
 		createType = "BOOLEAN"
 	case "int", "int8", "int16", "int32", "uint8", "uint16":
@@ -244,7 +245,9 @@ func (dsConn Redshift) getCreateTableType(resultSetColInfo ResultSetColumnInfo, 
 	if createType != "" {
 		return createType
 	}
+
 	switch intermediateType {
+	// PostgreSQL
 	case "PostgreSQL_BIGINT":
 		createType = "BIGINT"
 	case "PostgreSQL_BIT":
@@ -323,6 +326,55 @@ func (dsConn Redshift) getCreateTableType(resultSetColInfo ResultSetColumnInfo, 
 			resultSetColInfo.ColumnLengths[colNum],
 		)
 	case "PostgreSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"NUMERIC(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+
+	case "MySQL_BIT":
+		createType = "VARCHAR(MAX)"
+	case "MySQL_TINYINT":
+		createType = "SMALLINT"
+	case "MySQL_SMALLINT":
+		createType = "SMALLINT"
+	case "MySQL_MEDIUMINT":
+		createType = "INT"
+	case "MySQL_INT":
+		createType = "INT"
+	case "MySQL_BIGINT":
+		createType = "BIGINT"
+	case "MySQL_FLOAT4":
+		createType = "REAL"
+	case "MySQL_FLOAT8":
+		createType = "DOUBLE PRECISION"
+	case "MySQL_DATE":
+		createType = "DATE"
+	case "MySQL_TIME":
+		createType = "TIME"
+	case "MySQL_DATETIME":
+		createType = "TIMESTAMP"
+	case "MySQL_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "MySQL_YEAR":
+		createType = "INT"
+	case "MySQL_CHAR":
+		createType = "NVARCHAR(MAX)"
+	case "MySQL_VARCHAR":
+		createType = "NVARCHAR(MAX)"
+	case "MySQL_TEXT":
+		createType = "NVARCHAR(MAX)"
+	case "MySQL_BINARY":
+		createType = "VARCHAR(MAX)"
+	case "MySQL_VARBINARY":
+		createType = "VARCHAR(MAX)"
+	case "MySQL_BLOB":
+		createType = "VARCHAR(MAX)"
+	case "MySQL_GEOMETRY":
+		createType = "VARCHAR(MAX)"
+	case "MySQL_JSON":
+		createType = "NVARCHAR(MAX)"
+	case "MySQL_DECIMAL":
 		createType = fmt.Sprintf(
 			"NUMERIC(%d,%d)",
 			resultSetColInfo.ColumnPrecisions[colNum],

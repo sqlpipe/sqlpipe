@@ -390,6 +390,7 @@ func (dsConn Snowflake) getCreateTableType(resultSetColInfo ResultSetColumnInfo,
 	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
 
 	switch scanType.Name() {
+	// Generics
 	case "bool":
 		createType = "BOOLEAN"
 	case "int", "int8", "int16", "int32", "uint8", "uint16":
@@ -407,6 +408,7 @@ func (dsConn Snowflake) getCreateTableType(resultSetColInfo ResultSetColumnInfo,
 	}
 
 	switch intermediateType {
+	// Generics
 	case "PostgreSQL_BIGINT":
 		createType = "BIGINT"
 	case "PostgreSQL_BIT":
@@ -485,6 +487,56 @@ func (dsConn Snowflake) getCreateTableType(resultSetColInfo ResultSetColumnInfo,
 			resultSetColInfo.ColumnLengths[colNum],
 		)
 	case "PostgreSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"NUMBER(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+
+	// MySQL
+	case "MySQL_BIT":
+		createType = "BINARY"
+	case "MySQL_TINYINT":
+		createType = "TINYINT"
+	case "MySQL_SMALLINT":
+		createType = "SMALLINT"
+	case "MySQL_MEDIUMINT":
+		createType = "INT"
+	case "MySQL_INT":
+		createType = "INT"
+	case "MySQL_BIGINT":
+		createType = "BIGINT"
+	case "MySQL_FLOAT4":
+		createType = "FLOAT"
+	case "MySQL_FLOAT8":
+		createType = "FLOAT"
+	case "MySQL_DATE":
+		createType = "DATE"
+	case "MySQL_TIME":
+		createType = "TIME"
+	case "MySQL_DATETIME":
+		createType = "TIMESTAMP"
+	case "MySQL_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "MySQL_YEAR":
+		createType = "INT"
+	case "MySQL_CHAR":
+		createType = "TEXT"
+	case "MySQL_VARCHAR":
+		createType = "TEXT"
+	case "MySQL_TEXT":
+		createType = "TEXT"
+	case "MySQL_BINARY":
+		createType = "BINARY"
+	case "MySQL_VARBINARY":
+		createType = "BINARY"
+	case "MySQL_BLOB":
+		createType = "BINARY"
+	case "MySQL_GEOMETRY":
+		createType = "BINARY"
+	case "MySQL_JSON":
+		createType = "VARIANT"
+	case "MySQL_DECIMAL":
 		createType = fmt.Sprintf(
 			"NUMBER(%d,%d)",
 			resultSetColInfo.ColumnPrecisions[colNum],
