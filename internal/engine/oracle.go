@@ -1,110 +1,166 @@
-//go:build allDbs
-// +build allDbs
-
 package engine
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	"runtime"
-	"sqlpipe/app/models"
-	"sqlpipe/global/structs"
 	"strings"
 	"time"
 
+	"github.com/calmitchell617/sqlpipe/internal/data"
 	_ "github.com/sijms/go-ora/v2"
 )
 
 var oracle *sql.DB
-var oracleDsInfo structs.DsInfo
 
 type Oracle struct {
 	dsType          string
 	driverName      string `json:"-"`
 	connString      string `json:"-"`
 	debugConnString string
-	canConnect      bool
 }
 
-func (dsConn Oracle) GetDb() *sql.DB {
-	return oracle
-}
-
-func (dsConn *Oracle) SetCanConnect(canConnect bool) {
-	dsConn.canConnect = canConnect
-}
-
-func (dsConn Oracle) GetDsInfo() structs.DsInfo {
-	return oracleDsInfo
-}
-
-func getNewOracle(dsInfo structs.DsInfo) DsConnection {
-
-	oracleDsInfo = dsInfo
+func getNewOracle(
+	connection data.Connection,
+) (
+	dsConn DsConnection,
+	errProperties map[string]string,
+	err error,
+) {
 
 	connString := fmt.Sprintf(
-		"oracle://%s:%s@%s:%s/%s",
-		dsInfo.Username,
-		dsInfo.Password,
-		dsInfo.Host,
-		dsInfo.Port,
-		dsInfo.DbName,
+		"oracle://%s:%s@%s:%d/%s",
+		connection.Username,
+		connection.Password,
+		connection.Hostname,
+		connection.Port,
+		connection.DbName,
 	)
 
-	var err error
 	oracle, err = sql.Open("oracle", connString)
-	oracle.SetConnMaxLifetime(time.Minute * 1)
 
 	if err != nil {
-		panic(fmt.Sprintf("couldn't open a connection to Oracle at host %s", dsInfo.Host))
+		return dsConn, errProperties, err
 	}
 
-	return Oracle{
+	oracle.SetConnMaxLifetime(time.Minute * 1)
+
+	dsConn = Oracle{
 		"oracle",
 		"oracle",
 		fmt.Sprintf(
-			"oracle://%s:%s@%s:%s/%s",
-			dsInfo.Username,
-			dsInfo.Password,
-			dsInfo.Host,
-			dsInfo.Port,
-			dsInfo.DbName,
+			"oracle://%s:%s@%s:%d/%s",
+			connection.Username,
+			connection.Password,
+			connection.Hostname,
+			connection.Port,
+			connection.DbName,
 		),
 		fmt.Sprintf(
-			"oracle://<USERNAME_MASKED>:<PASSWORD_MASKED>@%s:%s/%s",
-			dsInfo.Host,
-			dsInfo.Port,
-			dsInfo.DbName,
+			"oracle://<USERNAME_MASKED>:<PASSWORD_MASKED>@%s:%d/%s",
+			connection.Hostname,
+			connection.Port,
+			connection.DbName,
 		),
-		false,
 	}
+
+	return dsConn, errProperties, err
 }
 
-func (dsConn Oracle) getIntermediateType(colTypeFromDriver string) string {
-	return oracleIntermediateTypes[colTypeFromDriver]
+func (dsConn Oracle) getIntermediateType(
+	colTypeFromDriver string,
+) (
+	intermediateType string,
+	errProperties map[string]string,
+	err error,
+) {
+	switch colTypeFromDriver {
+	case "CHAR":
+		intermediateType = "Oracle_CHAR"
+	case "NCHAR":
+		intermediateType = "Oracle_NCHAR"
+	case "OCIClobLocator":
+		intermediateType = "Oracle_OCIClobLocator"
+	case "OCIBlobLocator":
+		intermediateType = "Oracle_OCIBlobLocator"
+	case "LONG":
+		intermediateType = "Oracle_LONG"
+	case "NUMBER":
+		intermediateType = "Oracle_NUMBER"
+	case "IBFloat":
+		intermediateType = "Oracle_IBFloat"
+	case "IBDouble":
+		intermediateType = "Oracle_IBDouble"
+	case "DATE":
+		intermediateType = "Oracle_DATE"
+	case "TimeStampDTY":
+		intermediateType = "Oracle_TimeStampDTY"
+	case "TimeStampTZ_DTY":
+		intermediateType = "Oracle_TimeStampTZ_DTY"
+	case "TimeStampLTZ_DTY":
+		intermediateType = "Oracle_TimeStampLTZ_DTY"
+	case "NOT":
+		intermediateType = "Oracle_NOT"
+	case "OracleType(109)":
+		intermediateType = "Oracle_OracleType(109)"
+	default:
+		err = fmt.Errorf("no Oracle intermediate type for driver type '%v'", colTypeFromDriver)
+	}
+
+	return intermediateType, errProperties, err
 }
 
 func (dsConn Oracle) turboTransfer(
 	rows *sql.Rows,
-	transfer models.Transfer,
-	resultSetColumnInfo structs.ResultSetColumnInfo,
-) (err error) {
-	return err
+	transfer data.Transfer,
+	resultSetColumnInfo ResultSetColumnInfo,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return errProperties, err
 }
 
-func (dsConn Oracle) turboWriteMidVal(valType string, value interface{}, builder *strings.Builder) {
-	panic("oracle hasn't implemented turbo write yet")
+func (dsConn Oracle) turboWriteMidVal(
+	valType string,
+	value interface{},
+	builder *strings.Builder,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return errProperties, errors.New("oracle hasn't implemented turbo writing yet")
 }
 
-func (dsConn Oracle) turboWriteEndVal(valType string, value interface{}, builder *strings.Builder) {
-	panic("oracle hasn't implemented turbo write yet")
+func (dsConn Oracle) turboWriteEndVal(
+	valType string,
+	value interface{},
+	builder *strings.Builder,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return errProperties, errors.New("oracle hasn't implemented turbo writing yet")
 }
 
-func (dsConn Oracle) getRows(transfer models.Transfer) (*sql.Rows, structs.ResultSetColumnInfo) {
-	rows := execute(dsConn, transfer.Query)
-	resultSetColumnInfo := getResultSetColumnInfo(dsConn, rows)
+func (dsConn Oracle) getRows(
+	transfer data.Transfer,
+) (
+	rows *sql.Rows,
+	resultSetColumnInfo ResultSetColumnInfo,
+	errProperties map[string]string,
+	err error,
+) {
+	rows, errProperties, err = execute(dsConn, transfer.Query)
+	if err != nil {
+		return rows, resultSetColumnInfo, errProperties, err
+	}
+	resultSetColumnInfo, errProperties, err = getResultSetColumnInfo(dsConn, rows)
+	if err != nil {
+		return rows, resultSetColumnInfo, errProperties, err
+	}
 
-	var formattedResults = structs.QueryResult{}
+	var formattedResults = QueryResult{}
 	formattedResults.ColumnTypes = map[string]string{}
 	formattedResults.Rows = []interface{}{}
 
@@ -123,45 +179,58 @@ func (dsConn Oracle) getRows(transfer models.Transfer) (*sql.Rows, structs.Resul
 		}
 	}
 
-	return rows, resultSetColumnInfo
+	return rows, resultSetColumnInfo, errProperties, err
 }
 
-func (dsConn Oracle) getFormattedResults(query string) structs.QueryResult {
-	defer func() {
-		if raisedValue := recover(); raisedValue != nil {
-			switch val := raisedValue.(type) {
-			case runtime.Error:
-				if strings.Contains(fmt.Sprint(val), "runtime error: integer divide by zero") {
-					return
-				}
-			case structs.ErrorInfo:
-				if strings.Contains(val.ErrorMessage, "TTC error: received code 0 during stmt reading") {
-					panic(`Got error: "TTC error: received code 0 during stmt reading". This usually means you are trying to extract an XML or URIType column from Oracle, which is not currently supported.`)
-				}
-			}
-			panic(raisedValue)
-		}
-	}()
+func (dsConn Oracle) getFormattedResults(
+	query string,
+) (
+	queryResult QueryResult,
+	errProperties map[string]string,
+	err error,
+) {
+	// defer func() {
+	// 	if raisedValue := recover(); raisedValue != nil {
+	// 		switch val := raisedValue.(type) {
+	// 		case runtime.Error:
+	// 			if strings.Contains(fmt.Sprint(val), "runtime error: integer divide by zero") {
+	// 				return
+	// 			}
+	// 		case ErrorInfo:
+	// 			if strings.Contains(val.ErrorMessage, "TTC error: received code 0 during stmt reading") {
+	// 				panic(`Got error: "TTC error: received code 0 during stmt reading". This usually means you are trying to extract an XML or URIType column from Oracle, which is not currently supported.`)
+	// 			}
+	// 		}
+	// 		panic(raisedValue)
+	// 	}
+	// }()
 
-	rows := execute(dsConn, queryInfo.Query)
-	resultSetColumnInfo := getResultSetColumnInfo(dsConn, rows)
-
-	var formattedResults = structs.QueryResult{}
-	formattedResults.ColumnTypes = map[string]string{}
-	formattedResults.Rows = []interface{}{}
-
-	for i, colType := range resultSetColumnInfo.ColumnDbTypes {
-		formattedResults.ColumnTypes[resultSetColumnInfo.ColumnNames[i]] = colType
+	rows, errProperties, err := execute(dsConn, query)
+	if err != nil {
+		return queryResult, errProperties, err
 	}
 
-	columnInfo := formattedResults.ColumnTypes
+	resultSetColumnInfo, errProperties, err := getResultSetColumnInfo(dsConn, rows)
+	if err != nil {
+		return queryResult, errProperties, err
+	}
+
+	queryResult = QueryResult{}
+	queryResult.ColumnTypes = map[string]string{}
+	queryResult.Rows = []interface{}{}
+
+	for i, colType := range resultSetColumnInfo.ColumnDbTypes {
+		queryResult.ColumnTypes[resultSetColumnInfo.ColumnNames[i]] = colType
+	}
+
+	columnInfo := queryResult.ColumnTypes
 
 	// if you need to rewrite the query to avoid certain columntypes
 	for _, rowType := range columnInfo {
 		switch rowType {
 		case "IBFloat", "IBDouble", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "OracleType(109)", "NOT":
-			queryInfo.Query = oracleRewriteQuery(queryInfo.Query, resultSetColumnInfo)
-			return dsConn.getFormattedResults(queryInfo)
+			query = oracleRewriteQuery(query, resultSetColumnInfo)
+			return dsConn.getFormattedResults(query)
 		}
 	}
 
@@ -180,27 +249,17 @@ func (dsConn Oracle) getFormattedResults(query string) structs.QueryResult {
 		// scan incoming values into valueptrs, which in turn points to values
 
 		rows.Scan(valuePtrs...)
-		formattedResults.Rows = append(
-			formattedResults.Rows,
-			map[string]interface{}{},
-		)
-
 		for j := 0; j < numCols; j++ {
-			// colName := resultSetColumnInfo.ColumnNames[j]
-			formattedResults.Rows = append(formattedResults.Rows, dsConn.getValToWriteMidRow(colTypes[j], values[j]))
-		}
-
-		if i > 10 {
-			return formattedResults
+			queryResult.Rows = append(queryResult.Rows, dsConn.getValToWriteRaw(colTypes[j], values[j]))
 		}
 	}
 
-	return formattedResults
+	return queryResult, errProperties, err
 }
 
 func oracleRewriteQuery(
 	query string,
-	resultSetColumnInfo structs.ResultSetColumnInfo,
+	resultSetColumnInfo ResultSetColumnInfo,
 ) string {
 	var queryBuilder strings.Builder
 	columnsRemoved := strings.SplitN(strings.ToLower(query), "from", 2)[1]
@@ -250,7 +309,7 @@ func oracleRewriteQuery(
 	return queryBuilder.String()
 }
 
-func (dsConn Oracle) getConnectionInfo() (string, string, string) {
+func (dsConn Oracle) getConnectionInfo() (dsType string, driveName string, connString string) {
 	return dsConn.dsType, dsConn.driverName, dsConn.connString
 }
 
@@ -266,39 +325,68 @@ func (dsConn Oracle) insertChecker(currentLen int, currentRow int) bool {
 	}
 }
 
-func (dsConn Oracle) dropTable(transfer models.Transfer) {
-	defer func() {
-		if raisedValue := recover(); raisedValue != nil {
-			switch value := raisedValue.(type) {
-			case structs.ErrorInfo:
-				// its OK if the table doesn't exist
-				if strings.Contains(value.ErrorMessage, "ORA-00942") {
-					return
-				}
-			default:
-				panic(raisedValue)
-			}
+func (dsConn Oracle) dropTable(
+	transfer data.Transfer,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	// defer func() {
+	// 	if raisedValue := recover(); raisedValue != nil {
+	// 		switch value := raisedValue.(type) {
+	// 		case ErrorInfo:
+	// 			// its OK if the table doesn't exist
+	// 			if strings.Contains(value.ErrorMessage, "ORA-00942") {
+	// 				return
+	// 			}
+	// 		default:
+	// 			panic(raisedValue)
+	// 		}
+	// 	}
+	// }()
+	errProperties, err = dropTableNoSchema(dsConn, transfer)
+	if err != nil {
+		if strings.HasPrefix(errProperties["error"], "ORA-00942") {
+			errProperties = map[string]string{}
+			err = nil
 		}
-	}()
-	dropTableNoSchema(dsConn, transfer)
+	}
+	return errProperties, err
 }
 
-func (dsConn Oracle) deleteFromTable(transfer models.Transfer) {
-	deleteFromTableNoSchema(dsConn, transfer)
+func (dsConn Oracle) deleteFromTable(
+	transfer data.Transfer,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return deleteFromTableNoSchema(dsConn, transfer)
 }
 
-func (dsConn Oracle) createTable(transfer models.Transfer, columnInfo structs.ResultSetColumnInfo) string {
+func (dsConn Oracle) createTable(
+	transfer data.Transfer,
+	columnInfo ResultSetColumnInfo,
+) (
+	errProperties map[string]string,
+	err error,
+) {
 	// Oracle doesn't really have schemas
 	transfer.TargetSchema = ""
 	return standardCreateTable(dsConn, transfer, columnInfo)
 }
 
 func (dsConn Oracle) getValToWriteMidRow(valType string, value interface{}) string {
+	fmt.Println(valType)
 	return oracleValWriters[valType](value, ",")
 }
 
 func (dsConn Oracle) getValToWriteRowEnd(valType string, value interface{}) string {
 	return oracleValWriters[valType](value, " FROM dual UNION ALL ")
+}
+
+func (dsConn Oracle) getValToWriteRaw(valType string, value interface{}) string {
+	fmt.Println(valType)
+	return oracleValWriters[valType](value, "")
 }
 
 func (dsConn Oracle) getRowStarter() string {
@@ -309,7 +397,7 @@ func (dsConn Oracle) getQueryEnder(targetTable string) string {
 	return fmt.Sprintf(") SELECT * FROM %s_to_insert", targetTable)
 }
 
-func (dsConn Oracle) getQueryStarter(targetTable string, columnInfo structs.ResultSetColumnInfo) string {
+func (dsConn Oracle) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
 	queryStarter := fmt.Sprintf("insert into %s (%s) with %s_to_insert (%s) as ( SELECT ", targetTable, strings.Join(columnInfo.ColumnNames, ", "), targetTable, strings.Join(columnInfo.ColumnNames, ", "))
 	return queryStarter
 }
@@ -369,8 +457,121 @@ func oracleWriteBool(value interface{}, terminator string) string {
 	return returnVal
 }
 
-func (dsConn Oracle) getCreateTableType(resultSetColInfo structs.ResultSetColumnInfo, colNum int) string {
-	return oracleCreateTableTypes[resultSetColInfo.ColumnIntermediateTypes[colNum]](resultSetColInfo, colNum)
+func (dsConn Oracle) getCreateTableType(
+	resultSetColInfo ResultSetColumnInfo,
+	colNum int,
+) (
+	createType string,
+) {
+	scanType := resultSetColInfo.ColumnScanTypes[colNum]
+	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
+
+	switch scanType.Name() {
+	case "bool":
+		createType = "NUMBER(1)"
+	case "int", "int8", "int16", "int32", "uint8", "uint16":
+		createType = "INTEGER"
+	case "int64", "uint32", "uint64":
+		createType = "NUMBER(19, 0)"
+	case "float32":
+		createType = "BINARY_FLOAT"
+	case "float64":
+		createType = "BINARY_DOUBLE"
+	case "Time":
+		createType = "TIMESTAMP"
+	}
+
+	if createType != "" {
+		return createType
+	}
+
+	switch intermediateType {
+	case "PostgreSQL_BIGINT":
+		createType = "NUMBER(19, 0)"
+	case "PostgreSQL_BIT":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_VARBIT":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_BOOLEAN":
+		createType = "NUMBER(1)"
+	case "PostgreSQL_BOX":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_BYTEA":
+		createType = "BLOB"
+	case "PostgreSQL_BPCHAR":
+		createType = "NVARCHAR2(2000)"
+	case "PostgreSQL_CIDR":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_CIRCLE":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_DATE":
+		createType = "DATE"
+	case "PostgreSQL_FLOAT8":
+		createType = "BINARY_DOUBLE"
+	case "PostgreSQL_INET":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_INT4":
+		createType = "INTEGER"
+	case "PostgreSQL_INTERVAL":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_JSON":
+		createType = "NVARCHAR2(2000)"
+	case "PostgreSQL_JSONB":
+		createType = "NVARCHAR2(2000)"
+	case "PostgreSQL_LINE":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_LSEG":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_MACADDR":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_MONEY":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_PATH":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_PG_LSN":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_POINT":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_POLYGON":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_FLOAT4":
+		createType = "BINARY_FLOAT"
+	case "PostgreSQL_INT2":
+		createType = "INTEGER"
+	case "PostgreSQL_TEXT":
+		createType = "NVARCHAR2(2000)"
+	case "PostgreSQL_TIME":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_TIMETZ":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "PostgreSQL_TIMESTAMPTZ":
+		createType = "TIMESTAMP WITH TIME ZONE"
+	case "PostgreSQL_TSQUERY":
+		createType = "NVARCHAR2(2000)"
+	case "PostgreSQL_TSVECTOR":
+		createType = "NVARCHAR2(2000)"
+	case "PostgreSQL_TXID_SNAPSHOT":
+		createType = "NVARCHAR2(2000)"
+	case "PostgreSQL_UUID":
+		createType = "VARCHAR2(4000)"
+	case "PostgreSQL_XML":
+		createType = "NVARCHAR2(2000)"
+	case "PostgreSQL_VARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR2(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "PostgreSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"NUMBER(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+	}
+
+	return createType
 }
 
 var oracleIntermediateTypes = map[string]string{
@@ -390,81 +591,81 @@ var oracleIntermediateTypes = map[string]string{
 	"OracleType(109)":  "Oracle_OracleType(109)_interface{}",
 }
 
-var oracleCreateTableTypes = map[string]func(columnInfo structs.ResultSetColumnInfo, colNum int) string{
+var oracleCreateTableTypes = map[string]func(columnInfo ResultSetColumnInfo, colNum int) string{
 
 	// Oracle
-	"Oracle_OCIClobLocator_interface{}":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NCLOB" },
-	"Oracle_OCIBlobLocator_interface{}":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"Oracle_LONG_interface{}":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "LONG" },
-	"Oracle_NUMBER_interface{}":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER" },
-	"Oracle_IBFloat_interface{}":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"Oracle_IBDouble_interface{}":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Oracle_DATE_interface{}":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Oracle_TimeStampDTY_interface{}":    func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Oracle_TimeStampTZ_DTY_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"Oracle_TimeStampLTZ_DTY_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"Oracle_OCIClobLocator_interface{}":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "NCLOB" },
+	"Oracle_OCIBlobLocator_interface{}":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"Oracle_LONG_interface{}":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "LONG" },
+	"Oracle_NUMBER_interface{}":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER" },
+	"Oracle_IBFloat_interface{}":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
+	"Oracle_IBDouble_interface{}":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
+	"Oracle_DATE_interface{}":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"Oracle_TimeStampDTY_interface{}":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"Oracle_TimeStampTZ_DTY_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
+	"Oracle_TimeStampLTZ_DTY_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return "TIMESTAMP WITH LOCAL TIME ZONE"
 	},
-	"Oracle_CHAR_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"Oracle_CHAR_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR2(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"Oracle_NCHAR_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"Oracle_NCHAR_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR2(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	// "Oracle_OracleType(109)_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	// "Oracle_NOT_interface{}":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	// "Oracle_OracleType(109)_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	// "Oracle_NOT_interface{}":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
 
 	// PostgreSQL
 
-	"PostgreSQL_BIGINT_int64":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
-	"PostgreSQL_BIT_string":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_VARBIT_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_BOOLEAN_bool":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
-	"PostgreSQL_BOX_string":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_BYTEA_[]uint8":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"PostgreSQL_BPCHAR_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_CIDR_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_CIRCLE_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_DATE_time.Time":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"PostgreSQL_FLOAT8_float64":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"PostgreSQL_INET_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_INT4_int32":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"PostgreSQL_INTERVAL_string":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_JSON_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_JSONB_string":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_LINE_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_LSEG_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_MACADDR_string":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_MONEY_string":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_PATH_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_PG_LSN_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_POINT_string":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_POLYGON_string":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_FLOAT4_float32":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"PostgreSQL_INT2_int16":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"PostgreSQL_TEXT_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_TIME_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_TIMETZ_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_TIMESTAMP_time.Time":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"PostgreSQL_TIMESTAMPTZ_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"PostgreSQL_TSQUERY_string":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_TSVECTOR_string":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_TXID_SNAPSHOT_string":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_UUID_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_XML_string":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_VARCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"PostgreSQL_BIGINT_int64":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
+	"PostgreSQL_BIT_string":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_VARBIT_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_BOOLEAN_bool":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
+	"PostgreSQL_BOX_string":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_BYTEA_[]uint8":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"PostgreSQL_BPCHAR_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"PostgreSQL_CIDR_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_CIRCLE_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_DATE_time.Time":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"PostgreSQL_FLOAT8_float64":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
+	"PostgreSQL_INET_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_INT4_int32":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"PostgreSQL_INTERVAL_string":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_JSON_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"PostgreSQL_JSONB_string":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"PostgreSQL_LINE_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_LSEG_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_MACADDR_string":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_MONEY_string":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_PATH_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_PG_LSN_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_POINT_string":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_POLYGON_string":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_FLOAT4_float32":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
+	"PostgreSQL_INT2_int16":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"PostgreSQL_TEXT_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"PostgreSQL_TIME_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_TIMETZ_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_TIMESTAMP_time.Time":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"PostgreSQL_TIMESTAMPTZ_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
+	"PostgreSQL_TSQUERY_string":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"PostgreSQL_TSVECTOR_string":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"PostgreSQL_TXID_SNAPSHOT_string":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"PostgreSQL_UUID_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"PostgreSQL_XML_string":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"PostgreSQL_VARCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR2(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"PostgreSQL_DECIMAL_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"PostgreSQL_DECIMAL_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NUMBER(%d,%d)",
 			columnInfo.ColumnPrecisions[colNum],
@@ -474,28 +675,28 @@ var oracleCreateTableTypes = map[string]func(columnInfo structs.ResultSetColumnI
 
 	// MySQL
 
-	"MySQL_BIT_sql.RawBytes":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_TINYINT_sql.RawBytes":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_SMALLINT_sql.RawBytes":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_MEDIUMINT_sql.RawBytes": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_INT_sql.RawBytes":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_FLOAT4_sql.NullFloat64": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"MySQL_FLOAT8_sql.NullFloat64": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"MySQL_DATE_sql.NullTime":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"MySQL_TIME_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MySQL_DATETIME_sql.NullTime":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MySQL_TIMESTAMP_sql.NullTime": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MySQL_YEAR_sql.NullInt64":     func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_CHAR_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MySQL_VARCHAR_sql.RawBytes":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MySQL_TEXT_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MySQL_BINARY_sql.RawBytes":    func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_VARBINARY_sql.RawBytes": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_BLOB_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_GEOMETRY_sql.RawBytes":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_JSON_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MySQL_BIGINT_sql.NullInt64":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
-	"MySQL_DECIMAL_sql.RawBytes": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MySQL_BIT_sql.RawBytes":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"MySQL_TINYINT_sql.RawBytes":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"MySQL_SMALLINT_sql.RawBytes":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"MySQL_MEDIUMINT_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"MySQL_INT_sql.RawBytes":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"MySQL_FLOAT4_sql.NullFloat64": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
+	"MySQL_FLOAT8_sql.NullFloat64": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
+	"MySQL_DATE_sql.NullTime":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"MySQL_TIME_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"MySQL_DATETIME_sql.NullTime":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MySQL_TIMESTAMP_sql.NullTime": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MySQL_YEAR_sql.NullInt64":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"MySQL_CHAR_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"MySQL_VARCHAR_sql.RawBytes":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"MySQL_TEXT_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"MySQL_BINARY_sql.RawBytes":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"MySQL_VARBINARY_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"MySQL_BLOB_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"MySQL_GEOMETRY_sql.RawBytes":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"MySQL_JSON_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"MySQL_BIGINT_sql.NullInt64":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
+	"MySQL_DECIMAL_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NUMBER(%d,%d)",
 			columnInfo.ColumnPrecisions[colNum],
@@ -505,52 +706,52 @@ var oracleCreateTableTypes = map[string]func(columnInfo structs.ResultSetColumnI
 
 	// MSSQL
 
-	"MSSQL_BIGINT_int64":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
-	"MSSQL_BIT_bool":                 func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
-	"MSSQL_INT_int64":                func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MSSQL_MONEY_[]uint8":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_SMALLINT_int64":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MSSQL_SMALLMONEY_[]uint8":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_TINYINT_int64":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MSSQL_FLOAT_float64":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"MSSQL_REAL_float64":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"MSSQL_DATE_time.Time":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"MSSQL_DATETIME2_time.Time":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_DATETIME_time.Time":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_DATETIMEOFFSET_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"MSSQL_SMALLDATETIME_time.Time":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_TIME_time.Time":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_TEXT_string":              func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_NTEXT_string":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MSSQL_BINARY_[]uint8":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MSSQL_VARBINARY_[]uint8":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MSSQL_UNIQUEIDENTIFIER_[]uint8": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_XML_string":               func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MSSQL_CHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_BIGINT_int64":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
+	"MSSQL_BIT_bool":                 func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
+	"MSSQL_INT_int64":                func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"MSSQL_MONEY_[]uint8":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"MSSQL_SMALLINT_int64":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"MSSQL_SMALLMONEY_[]uint8":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"MSSQL_TINYINT_int64":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"MSSQL_FLOAT_float64":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
+	"MSSQL_REAL_float64":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
+	"MSSQL_DATE_time.Time":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"MSSQL_DATETIME2_time.Time":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MSSQL_DATETIME_time.Time":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MSSQL_DATETIMEOFFSET_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
+	"MSSQL_SMALLDATETIME_time.Time":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MSSQL_TIME_time.Time":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"MSSQL_TEXT_string":              func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"MSSQL_NTEXT_string":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"MSSQL_BINARY_[]uint8":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"MSSQL_VARBINARY_[]uint8":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"MSSQL_UNIQUEIDENTIFIER_[]uint8": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"MSSQL_XML_string":               func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"MSSQL_CHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"CHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"MSSQL_VARCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_VARCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"VARCHAR2(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"MSSQL_NCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_NCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NCHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"MSSQL_NVARCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_NVARCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR2(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"MSSQL_DECIMAL_[]uint8": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_DECIMAL_[]uint8": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NUMBER(%d,%d)",
 			columnInfo.ColumnPrecisions[colNum],
@@ -560,39 +761,39 @@ var oracleCreateTableTypes = map[string]func(columnInfo structs.ResultSetColumnI
 
 	// SNOWFLAKE
 
-	"Snowflake_NUMBER_float64": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Snowflake_BINARY_string":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"Snowflake_REAL_float64":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Snowflake_TEXT_string":    func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Snowflake_BOOLEAN_bool":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
-	"Snowflake_DATE_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Snowflake_TIME_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"Snowflake_TIMESTAMP_LTZ_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"Snowflake_NUMBER_float64": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
+	"Snowflake_BINARY_string":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
+	"Snowflake_REAL_float64":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
+	"Snowflake_TEXT_string":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"Snowflake_BOOLEAN_bool":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
+	"Snowflake_DATE_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"Snowflake_TIME_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"Snowflake_TIMESTAMP_LTZ_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return "TIMESTAMP WITH LOCAL TIME ZONE"
 	},
-	"Snowflake_TIMESTAMP_NTZ_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Snowflake_TIMESTAMP_TZ_time.Time":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"Snowflake_VARIANT_string":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Snowflake_OBJECT_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Snowflake_ARRAY_string":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"Snowflake_TIMESTAMP_NTZ_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"Snowflake_TIMESTAMP_TZ_time.Time":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
+	"Snowflake_VARIANT_string":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"Snowflake_OBJECT_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"Snowflake_ARRAY_string":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
 
 	// Redshift
 
-	"Redshift_BIGINT_int64":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
-	"Redshift_BOOLEAN_bool":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
-	"Redshift_CHAR_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Redshift_BPCHAR_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Redshift_DATE_time.Time":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Redshift_DOUBLE_float64":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Redshift_INT_int32":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"Redshift_NUMERIC_float64":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Redshift_REAL_float32":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"Redshift_SMALLINT_int16":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"Redshift_TIME_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"Redshift_TIMETZ_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"Redshift_TIMESTAMP_time.Time":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Redshift_TIMESTAMPTZ_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"Redshift_VARCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"Redshift_BIGINT_int64":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
+	"Redshift_BOOLEAN_bool":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
+	"Redshift_CHAR_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"Redshift_BPCHAR_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
+	"Redshift_DATE_time.Time":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"Redshift_DOUBLE_float64":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
+	"Redshift_INT_int32":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"Redshift_NUMERIC_float64":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
+	"Redshift_REAL_float32":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
+	"Redshift_SMALLINT_int16":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
+	"Redshift_TIME_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"Redshift_TIMETZ_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
+	"Redshift_TIMESTAMP_time.Time":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"Redshift_TIMESTAMPTZ_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
+	"Redshift_VARCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR2(%d)",
 			columnInfo.ColumnLengths[colNum],
@@ -601,60 +802,70 @@ var oracleCreateTableTypes = map[string]func(columnInfo structs.ResultSetColumnI
 }
 
 var oracleValWriters = map[string]func(value interface{}, terminator string) string{
+
+	// Generics
+	"bool":    oracleWriteBool,
+	"float32": writeInsertFloat,
+	"float64": writeInsertFloat,
+	"int16":   writeInsertInt,
+	"int32":   writeInsertInt,
+	"int64":   writeInsertInt,
+	"Time":    oracleWriteDatetimeFromTime,
+
 	// Oracle
 
-	"Oracle_CHAR_interface{}":            writeInsertEscapedString,
-	"Oracle_NCHAR_interface{}":           writeInsertEscapedString,
-	"Oracle_OCIClobLocator_interface{}":  writeInsertEscapedString,
-	"Oracle_OCIBlobLocator_interface{}":  oracleWriteBlob,
-	"Oracle_LONG_interface{}":            writeInsertEscapedString,
-	"Oracle_NUMBER_interface{}":          oracleWriteNumber,
-	"Oracle_DATE_interface{}":            oracleWriteDateFromTime,
-	"Oracle_TimeStampDTY_interface{}":    oracleWriteDatetimeFromTime,
-	"Oracle_IBFloat_interface{}":         oracleWriteNumber,
-	"Oracle_IBDouble_interface{}":        oracleWriteNumber,
-	"Oracle_NOT_interface{}":             writeInsertEscapedString,
-	"Oracle_OracleType(109)_interface{}": writeInsertEscapedString,
+	"Oracle_CHAR":            writeInsertEscapedString,
+	"Oracle_NCHAR":           writeInsertEscapedString,
+	"Oracle_OCIClobLocator":  writeInsertEscapedString,
+	"Oracle_OCIBlobLocator":  oracleWriteBlob,
+	"Oracle_LONG":            writeInsertEscapedString,
+	"Oracle_NUMBER":          oracleWriteNumber,
+	"Oracle_DATE":            oracleWriteDateFromTime,
+	"Oracle_TimeStampDTY":    oracleWriteDatetimeFromTime,
+	"Oracle_IBFloat":         oracleWriteNumber,
+	"Oracle_IBDouble":        oracleWriteNumber,
+	"Oracle_NOT":             writeInsertEscapedString,
+	"Oracle_OracleType(109)": writeInsertEscapedString,
 
 	// PostgreSQL
-	"PostgreSQL_BIGINT_int64":          writeInsertInt,
-	"PostgreSQL_BIT_string":            writeInsertStringNoEscape,
-	"PostgreSQL_VARBIT_string":         writeInsertStringNoEscape,
-	"PostgreSQL_BOOLEAN_bool":          oracleWriteBool,
-	"PostgreSQL_BOX_string":            writeInsertStringNoEscape,
-	"PostgreSQL_BYTEA_[]uint8":         oracleWriteBlob,
-	"PostgreSQL_CIDR_string":           writeInsertStringNoEscape,
-	"PostgreSQL_CIRCLE_string":         writeInsertStringNoEscape,
-	"PostgreSQL_FLOAT8_float64":        writeInsertFloat,
-	"PostgreSQL_INET_string":           writeInsertStringNoEscape,
-	"PostgreSQL_INT4_int32":            writeInsertInt,
-	"PostgreSQL_INTERVAL_string":       writeInsertStringNoEscape,
-	"PostgreSQL_LINE_string":           writeInsertStringNoEscape,
-	"PostgreSQL_LSEG_string":           writeInsertStringNoEscape,
-	"PostgreSQL_MACADDR_string":        writeInsertStringNoEscape,
-	"PostgreSQL_MONEY_string":          writeInsertStringNoEscape,
-	"PostgreSQL_DECIMAL_string":        writeInsertRawStringNoQuotes,
-	"PostgreSQL_PATH_string":           writeInsertStringNoEscape,
-	"PostgreSQL_PG_LSN_string":         writeInsertStringNoEscape,
-	"PostgreSQL_POINT_string":          writeInsertStringNoEscape,
-	"PostgreSQL_POLYGON_string":        writeInsertStringNoEscape,
-	"PostgreSQL_FLOAT4_float32":        writeInsertFloat,
-	"PostgreSQL_INT2_int16":            writeInsertInt,
-	"PostgreSQL_TIME_string":           writeInsertStringNoEscape,
-	"PostgreSQL_TIMETZ_string":         writeInsertStringNoEscape,
-	"PostgreSQL_TXID_SNAPSHOT_string":  writeInsertStringNoEscape,
-	"PostgreSQL_UUID_string":           writeInsertStringNoEscape,
-	"PostgreSQL_VARCHAR_string":        writeInsertEscapedString,
-	"PostgreSQL_BPCHAR_string":         writeInsertEscapedString,
-	"PostgreSQL_DATE_time.Time":        oracleWriteDateFromTime,
-	"PostgreSQL_JSON_string":           writeInsertEscapedString,
-	"PostgreSQL_JSONB_string":          writeInsertEscapedString,
-	"PostgreSQL_TEXT_string":           writeInsertEscapedString,
-	"PostgreSQL_TIMESTAMP_time.Time":   oracleWriteDatetimeFromTime,
-	"PostgreSQL_TIMESTAMPTZ_time.Time": oracleWriteDatetimeFromTime,
-	"PostgreSQL_TSQUERY_string":        writeInsertEscapedString,
-	"PostgreSQL_TSVECTOR_string":       writeInsertEscapedString,
-	"PostgreSQL_XML_string":            writeInsertEscapedString,
+	"PostgreSQL_BIGINT":        writeInsertInt,
+	"PostgreSQL_BIT":           writeInsertStringNoEscape,
+	"PostgreSQL_VARBIT":        writeInsertStringNoEscape,
+	"PostgreSQL_BOOLEAN":       oracleWriteBool,
+	"PostgreSQL_BOX":           writeInsertStringNoEscape,
+	"PostgreSQL_BYTEA":         oracleWriteBlob,
+	"PostgreSQL_CIDR":          writeInsertStringNoEscape,
+	"PostgreSQL_CIRCLE":        writeInsertStringNoEscape,
+	"PostgreSQL_FLOAT8":        writeInsertFloat,
+	"PostgreSQL_INET":          writeInsertStringNoEscape,
+	"PostgreSQL_INT4":          writeInsertInt,
+	"PostgreSQL_INTERVAL":      writeInsertStringNoEscape,
+	"PostgreSQL_LINE":          writeInsertStringNoEscape,
+	"PostgreSQL_LSEG":          writeInsertStringNoEscape,
+	"PostgreSQL_MACADDR":       writeInsertStringNoEscape,
+	"PostgreSQL_MONEY":         writeInsertStringNoEscape,
+	"PostgreSQL_DECIMAL":       writeInsertRawStringNoQuotes,
+	"PostgreSQL_PATH":          writeInsertStringNoEscape,
+	"PostgreSQL_PG_LSN":        writeInsertStringNoEscape,
+	"PostgreSQL_POINT":         writeInsertStringNoEscape,
+	"PostgreSQL_POLYGON":       writeInsertStringNoEscape,
+	"PostgreSQL_FLOAT4":        writeInsertFloat,
+	"PostgreSQL_INT2":          writeInsertInt,
+	"PostgreSQL_TIME":          writeInsertStringNoEscape,
+	"PostgreSQL_TIMETZ":        writeInsertStringNoEscape,
+	"PostgreSQL_TXID_SNAPSHOT": writeInsertStringNoEscape,
+	"PostgreSQL_UUID":          writeInsertStringNoEscape,
+	"PostgreSQL_VARCHAR":       writeInsertEscapedString,
+	"PostgreSQL_BPCHAR":        writeInsertEscapedString,
+	"PostgreSQL_DATE":          oracleWriteDateFromTime,
+	"PostgreSQL_JSON":          writeInsertEscapedString,
+	"PostgreSQL_JSONB":         writeInsertEscapedString,
+	"PostgreSQL_TEXT":          writeInsertEscapedString,
+	"PostgreSQL_TIMESTAMP":     oracleWriteDatetimeFromTime,
+	"PostgreSQL_TIMESTAMPTZ":   oracleWriteDatetimeFromTime,
+	"PostgreSQL_TSQUERY":       writeInsertEscapedString,
+	"PostgreSQL_TSVECTOR":      writeInsertEscapedString,
+	"PostgreSQL_XML":           writeInsertEscapedString,
 
 	// MySQL
 	"MySQL_BIT_sql.RawBytes":       oracleWriteBlob,

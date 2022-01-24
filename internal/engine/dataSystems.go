@@ -147,12 +147,12 @@ func GetDs(connection data.Connection) (
 		dsConn, errProperties, err = getNewMySQL(connection)
 	case "mssql":
 		dsConn, errProperties, err = getNewMSSQL(connection)
-	// case "redshift":
-	// 	dsConn = getNewRedshift(connection)
+	case "oracle":
+		dsConn, errProperties, err = getNewOracle(connection)
+	case "redshift":
+		dsConn, errProperties, err = getNewRedshift(connection)
 	// case "snowflake":
 	// 	dsConn = getNewSnowflake(connection)
-	// case "oracle":
-	// 	dsConn = getNewOracle(connection)
 	default:
 		panic("Unknown DsType")
 	}
@@ -382,7 +382,6 @@ func standardGetFormattedResults(
 		// scan incoming values into valueptrs, which in turn points to values
 
 		rows.Scan(valuePtrs...)
-
 		for j := 0; j < numCols; j++ {
 			queryResult.Rows = append(queryResult.Rows, dsConn.getValToWriteRaw(colTypes[j], values[j]))
 		}

@@ -85,33 +85,33 @@ env/spinup:
 		--allocated-storage 20 \
 		--no-enable-performance-insights >/dev/null;
 
-	aws rds create-db-instance \
-		--db-instance-identifier sqlpipe-test-mysql \
-		--db-name testing \
-		--backup-retention-period 0 \
-		--db-instance-class db.t3.micro \
-		--engine mysql \
-		--no-multi-az \
-		--vpc-security-group-ids ${rdsSecurityGroup} \
-		--master-username sqlpipe \
-		--master-user-password Mypass123 \
-		--storage-type gp2 \
-		--allocated-storage 20 \
-		--no-enable-performance-insights >/dev/null;
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-mysql \
+	# 	--db-name testing \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.micro \
+	# 	--engine mysql \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password Mypass123 \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--no-enable-performance-insights >/dev/null;
 
-	aws rds create-db-instance \
-		--db-instance-identifier sqlpipe-test-mssql \
-		--backup-retention-period 0 \
-		--db-instance-class db.t3.small \
-		--engine sqlserver-web \
-		--no-multi-az \
-		--vpc-security-group-ids ${rdsSecurityGroup} \
-		--master-username sqlpipe \
-		--master-user-password Mypass123 \
-		--storage-type gp2 \
-		--allocated-storage 20 \
-		--license-model license-included \
-		--no-enable-performance-insights >/dev/null;
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-mssql \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.small \
+	# 	--engine sqlserver-web \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password Mypass123 \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--license-model license-included \
+	# 	--no-enable-performance-insights >/dev/null;
 
 	# aws rds create-db-instance \
 	# 	--db-instance-identifier sqlpipe-test-oracle \
@@ -128,28 +128,33 @@ env/spinup:
 	# 	--license-model license-included \
 	# 	--no-enable-performance-insights >/dev/null;
 
-	# aws redshift create-cluster \
-	# 	--node-type dc2.large \
-	# 	--master-username sqlpipe \
-	# 	--db-name sqlpipe-test-redshift \
-	# 	--cluster-type single-node \
-	# 	--master-user-password Mypass123 \
-	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
-	# 	--cluster-identifier sqlpipe-test-redshift >/dev/null;
+	aws redshift create-cluster \
+		--node-type dc2.large \
+		--master-username sqlpipe \
+		--db-name testing \
+		--cluster-type single-node \
+		--master-user-password Mypass123 \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--cluster-identifier sqlpipe-test-redshift >/dev/null;
 
 # env/teardown: Spin down cloud instances
 .PHONY: env/teardown
 env/teardown:
-	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-postgresql --skip-final-snapshot &> /dev/null;
-	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mysql --skip-final-snapshot &> /dev/null;
-	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mssql --skip-final-snapshot &> /dev/null;
+	# aws rds delete-db-instance --db-instance-identifier sqlpipe-test-postgresql --skip-final-snapshot &> /dev/null;
+	# aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mysql --skip-final-snapshot &> /dev/null;
+	# aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mssql --skip-final-snapshot &> /dev/null;
 	# aws rds delete-db-instance --db-instance-identifier sqlpipe-test-oracle --skip-final-snapshot &> /dev/null;
-	# aws redshift delete-cluster --cluster-identifier sqlpipe-test-redshift --skip-final-cluster-snapshot &> /dev/null;
+	aws redshift delete-cluster --cluster-identifier sqlpipe-test-redshift --skip-final-cluster-snapshot &> /dev/null;
 
 # db/postgresql: Open shell to PostgreSQL testing DB
 .PHONY: db/postgresql
 db/postgresql:
 	PGPASSWORD=${postgresqlPassword} psql -h ${postgresqlHostname} -U ${postgresqlUsername} -d ${postgresqlDbName}
+
+# db/redshift: Open shell to redshift testing DB
+.PHONY: db/redshift
+db/redshift:
+	PGPASSWORD=${redshiftPassword} psql -h ${redshiftHostname} -U ${redshiftUsername} -d ${redshiftDbName} -p 5439
 
 # db/mysql: Open shell to MySQL testing DB
 .PHONY: db/mysql

@@ -1,105 +1,165 @@
-//go:build allDbs
-// +build allDbs
-
 package engine
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	"sqlpipe/app/models"
-	"sqlpipe/global/structs"
 	"strings"
 	"time"
 
+	"github.com/calmitchell617/sqlpipe/internal/data"
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
 var redshift *sql.DB
-var redshiftDsInfo structs.DsInfo
 
 type Redshift struct {
 	dsType          string
 	driverName      string `json:"-"`
 	connString      string `json:"-"`
 	debugConnString string
-	canConnect      bool
 }
 
-func (dsConn Redshift) GetDb() *sql.DB {
-	return redshift
-}
-
-func (dsConn Redshift) GetDsInfo() structs.DsInfo {
-	return redshiftDsInfo
-}
-
-func getNewRedshift(dsInfo structs.DsInfo) DsConnection {
-
-	redshiftDsInfo = dsInfo
+func getNewRedshift(
+	connection data.Connection,
+) (
+	dsConn DsConnection,
+	errProperties map[string]string,
+	err error,
+) {
 
 	connString := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s",
-		dsInfo.Username,
-		dsInfo.Password,
-		dsInfo.Host,
-		dsInfo.Port,
-		dsInfo.DbName,
+		"postgres://%s:%s@%s:%d/%s",
+		connection.Username,
+		connection.Password,
+		connection.Hostname,
+		connection.Port,
+		connection.DbName,
 	)
 
-	var err error
 	redshift, err = sql.Open("pgx", connString)
 	if err != nil {
-		panic(fmt.Sprintf("couldn't open a connection to Redshift at host %s", dsInfo.Host))
+		return dsConn, errProperties, err
 	}
+
 	redshift.SetConnMaxLifetime(time.Minute * 1)
 
-	return Redshift{
+	dsConn = Redshift{
 		"redshift",
 		"pgx",
 		fmt.Sprintf(
-			"postgres://%s:%s@%s:%s/%s",
-			dsInfo.Username,
-			dsInfo.Password,
-			dsInfo.Host,
-			dsInfo.Port,
-			dsInfo.DbName,
+			"postgres://%s:%s@%s:%d/%s",
+			connection.Username,
+			connection.Password,
+			connection.Hostname,
+			connection.Port,
+			connection.DbName,
 		),
 		fmt.Sprintf(
-			"postgres://<USERNAME_MASKED>:<PASSWORD_MASKED>@%s:%s/%s",
-			dsInfo.Host,
-			dsInfo.Port,
-			dsInfo.DbName,
+			"postgres://<USERNAME_MASKED>:<PASSWORD_MASKED>@%s:%d/%s",
+			connection.Hostname,
+			connection.Port,
+			connection.DbName,
 		),
-		false,
 	}
+	return dsConn, errProperties, err
 }
 
-func (dsConn Redshift) getRows(transfer models.Transfer) (*sql.Rows, structs.ResultSetColumnInfo) {
+func (dsConn Redshift) getRows(
+	transfer data.Transfer,
+) (
+	rows *sql.Rows,
+	resultSetColumnInfo ResultSetColumnInfo,
+	errProperties map[string]string,
+	err error,
+) {
 	return standardGetRows(dsConn, transfer)
 }
 
 func (dsConn Redshift) turboTransfer(
 	rows *sql.Rows,
-	transfer models.Transfer,
-	resultSetColumnInfo structs.ResultSetColumnInfo,
-) (err error) {
-	return err
+	transfer data.Transfer,
+	resultSetColumnInfo ResultSetColumnInfo,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return errProperties, err
 }
 
-func (dsConn Redshift) turboWriteMidVal(valType string, value interface{}, builder *strings.Builder) {
-	panic("Redshift hasn't implemented turbo write yet")
+func (dsConn Redshift) turboWriteMidVal(
+	valType string,
+	value interface{},
+	builder *strings.Builder,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return errProperties, errors.New("we haven't implemented redshift turbo transfer yet")
 }
 
-func (dsConn Redshift) turboWriteEndVal(valType string, value interface{}, builder *strings.Builder) {
-	panic("Redshift hasn't implemented turbo write yet")
+func (dsConn Redshift) turboWriteEndVal(
+	valType string,
+	value interface{},
+	builder *strings.Builder,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return errProperties, errors.New("we haven't implemented redshift turbo transfer yet")
 }
 
-func (dsConn Redshift) getFormattedResults(query string) structs.QueryResult {
-	return standardGetFormattedResults(dsConn, queryInfo)
+func (dsConn Redshift) getFormattedResults(
+	query string,
+) (
+	queryResult QueryResult,
+	errProperties map[string]string,
+	err error,
+) {
+	return standardGetFormattedResults(dsConn, query)
 }
 
-func (dsConn Redshift) getIntermediateType(colTypeFromDriver string) string {
-	return redshiftIntermediateTypes[colTypeFromDriver]
+func (dsConn Redshift) getIntermediateType(
+	colTypeFromDriver string,
+) (
+	intermediateType string,
+	errProperties map[string]string,
+	err error,
+) {
+	switch colTypeFromDriver {
+	case "INT8":
+		intermediateType = "int64"
+	case "BOOL":
+		intermediateType = "bool"
+	case "BPCHAR":
+		intermediateType = "Redshift_CHAR"
+	case "VARCHAR":
+		intermediateType = "Redshift_VARCHAR"
+	case "DATE":
+		intermediateType = "time.Time"
+	case "FLOAT8":
+		intermediateType = "float64"
+	case "INT4":
+		intermediateType = "int32"
+	case "NUMERIC":
+		intermediateType = "float64"
+	case "FLOAT4":
+		intermediateType = "float32"
+	case "INT2":
+		intermediateType = "int16"
+	case "TIME":
+		intermediateType = "Redshift_TIME"
+	case "1266":
+		intermediateType = "Redshift_TIMETZ"
+	case "TIMESTAMP":
+		intermediateType = "Time"
+	case "TIMESTAMPTZ":
+		intermediateType = "Time"
+	default:
+		err = fmt.Errorf("no Redshift intermediate type for driver type '%v'", colTypeFromDriver)
+	}
+
+	return intermediateType, errProperties, err
 }
 
 func (dsConn Redshift) getConnectionInfo() (string, string, string) {
@@ -118,20 +178,41 @@ func (db Redshift) insertChecker(currentLen int, currentRow int) bool {
 	}
 }
 
-func (dsConn Redshift) dropTable(transfer models.Transfer) {
-	dropTableIfExistsWithSchema(dsConn, transfer)
+func (dsConn Redshift) dropTable(
+	transfer data.Transfer,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return dropTableIfExistsWithSchema(dsConn, transfer)
 }
 
-func (dsConn Redshift) deleteFromTable(transfer models.Transfer) {
-	deleteFromTableWithSchema(dsConn, transfer)
+func (dsConn Redshift) deleteFromTable(
+	transfer data.Transfer,
+) (
+	errProperties map[string]string,
+	err error,
+) {
+	return deleteFromTableWithSchema(dsConn, transfer)
 }
 
-func (dsConn Redshift) createTable(transfer models.Transfer, columnInfo structs.ResultSetColumnInfo) string {
+func (dsConn Redshift) createTable(
+	transfer data.Transfer,
+	columnInfo ResultSetColumnInfo,
+) (
+	errProperties map[string]string,
+	err error,
+) {
 	return standardCreateTable(dsConn, transfer, columnInfo)
 }
 
 func (dsConn Redshift) getValToWriteMidRow(valType string, value interface{}) string {
 	return redshiftValWriters[valType](value, ",")
+}
+
+func (dsConn Redshift) getValToWriteRaw(valType string, value interface{}) string {
+	fmt.Println(valType)
+	return redshiftValWriters[valType](value, "")
 }
 
 func (dsConn Redshift) getValToWriteRowEnd(valType string, value interface{}) string {
@@ -146,12 +227,120 @@ func (dsConn Redshift) getQueryEnder(targetTable string) string {
 	return ""
 }
 
-func (dsConn Redshift) getQueryStarter(targetTable string, columnInfo structs.ResultSetColumnInfo) string {
+func (dsConn Redshift) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
 	return standardGetQueryStarter(targetTable, columnInfo)
 }
 
-func (dsConn Redshift) getCreateTableType(resultSetColInfo structs.ResultSetColumnInfo, colNum int) string {
-	return redshiftCreateTableTypes[resultSetColInfo.ColumnIntermediateTypes[colNum]](resultSetColInfo, colNum)
+func (dsConn Redshift) getCreateTableType(resultSetColInfo ResultSetColumnInfo, colNum int) (createType string) {
+
+	scanType := resultSetColInfo.ColumnScanTypes[colNum]
+	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
+
+	switch scanType.Name() {
+	case "bool":
+		createType = "BOOLEAN"
+	case "int", "int8", "int16", "int32", "uint8", "uint16":
+		createType = "INT"
+	case "int64", "uint32", "uint64":
+		createType = "BIGINT"
+	case "float32":
+		createType = "REAL"
+	case "float64":
+		createType = "DOUBLE PRECISION"
+	case "Time":
+		createType = "TIMESTAMP"
+	}
+
+	if createType != "" {
+		return createType
+	}
+	switch intermediateType {
+	case "PostgreSQL_BIGINT":
+		createType = "BIGINT"
+	case "PostgreSQL_BIT":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_VARBIT":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_BOOLEAN":
+		createType = "BOOLEAN"
+	case "PostgreSQL_BOX":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_BYTEA":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_BPCHAR":
+		createType = "NVARCHAR(MAX)"
+	case "PostgreSQL_CIDR":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_CIRCLE":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_DATE":
+		createType = "DATE"
+	case "PostgreSQL_FLOAT8":
+		createType = "DOUBLE PRECISION"
+	case "PostgreSQL_INET":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_INT4":
+		createType = "INT"
+	case "PostgreSQL_INTERVAL":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_JSON":
+		createType = "NVARCHAR(MAX)"
+	case "PostgreSQL_JSONB":
+		createType = "NVARCHAR(MAX)"
+	case "PostgreSQL_LINE":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_LSEG":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_MACADDR":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_MONEY":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_PATH":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_PG_LSN":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_POINT":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_POLYGON":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_FLOAT4":
+		createType = "REAL"
+	case "PostgreSQL_INT2":
+		createType = "SMALLINT"
+	case "PostgreSQL_TEXT":
+		createType = "NVARCHAR(MAX)"
+	case "PostgreSQL_TIME":
+		createType = "NVARCHAR(MAX)"
+	case "PostgreSQL_TIMETZ":
+		createType = "TIMETZ"
+	case "PostgreSQL_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "PostgreSQL_TIMESTAMPTZ":
+		createType = "TIMESTAMPTZ"
+	case "PostgreSQL_TSQUERY":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_TSVECTOR":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_TXID_SNAPSHOT":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_UUID":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_XML":
+		createType = "VARCHAR(MAX)"
+	case "PostgreSQL_VARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "PostgreSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"NUMERIC(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+	}
+
+	return createType
 }
 
 func redshiftWriteBytesAsVarchar(value interface{}, terminator string) string {
@@ -175,25 +364,25 @@ var redshiftIntermediateTypes = map[string]string{
 	"TIMESTAMPTZ": "Redshift_TIMESTAMPTZ_time.Time",
 }
 
-var redshiftCreateTableTypes = map[string]func(columnInfo structs.ResultSetColumnInfo, colNum int) string{
+var redshiftCreateTableTypes = map[string]func(columnInfo ResultSetColumnInfo, colNum int) string{
 
 	// Redshift
 
-	"Redshift_BIGINT_int64":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-	"Redshift_BOOLEAN_bool":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BOOLEAN" },
-	"Redshift_CHAR_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"Redshift_BPCHAR_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"Redshift_DATE_time.Time":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Redshift_DOUBLE_float64":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-	"Redshift_INT_int32":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INT" },
-	"Redshift_REAL_float32":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "REAL" },
-	"Redshift_SMALLINT_int16":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"Redshift_TIME_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIME" },
-	"Redshift_TIMETZ_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMETZ" },
-	"Redshift_TIMESTAMP_time.Time":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Redshift_TIMESTAMPTZ_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
-	"Redshift_NUMERIC_float64":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-	"Redshift_VARCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"Redshift_BIGINT_int64":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
+	"Redshift_BOOLEAN_bool":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "BOOLEAN" },
+	"Redshift_CHAR_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"Redshift_BPCHAR_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"Redshift_DATE_time.Time":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"Redshift_DOUBLE_float64":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+	"Redshift_INT_int32":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+	"Redshift_REAL_float32":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
+	"Redshift_SMALLINT_int16":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+	"Redshift_TIME_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
+	"Redshift_TIMETZ_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMETZ" },
+	"Redshift_TIMESTAMP_time.Time":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"Redshift_TIMESTAMPTZ_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
+	"Redshift_NUMERIC_float64":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+	"Redshift_VARCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
@@ -202,49 +391,49 @@ var redshiftCreateTableTypes = map[string]func(columnInfo structs.ResultSetColum
 
 	// PostgreSQL
 
-	"PostgreSQL_BIGINT_int64":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-	"PostgreSQL_BIT_string":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_VARBIT_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_BOOLEAN_bool":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BOOLEAN" },
-	"PostgreSQL_BOX_string":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_BYTEA_[]uint8":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_BPCHAR_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"PostgreSQL_CIDR_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_CIRCLE_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_DATE_time.Time":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"PostgreSQL_FLOAT8_float64":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-	"PostgreSQL_INET_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_INT4_int32":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INT" },
-	"PostgreSQL_INTERVAL_string":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_JSON_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"PostgreSQL_JSONB_string":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"PostgreSQL_LINE_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_LSEG_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_MACADDR_string":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_MONEY_string":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_PATH_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_PG_LSN_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_POINT_string":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_POLYGON_string":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_FLOAT4_float32":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "REAL" },
-	"PostgreSQL_INT2_int16":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"PostgreSQL_TEXT_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"PostgreSQL_TIME_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"PostgreSQL_TIMETZ_string":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMETZ" },
-	"PostgreSQL_TIMESTAMP_time.Time":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"PostgreSQL_TIMESTAMPTZ_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
-	"PostgreSQL_TSQUERY_string":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_TSVECTOR_string":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_TXID_SNAPSHOT_string":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_UUID_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_XML_string":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"PostgreSQL_VARCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"PostgreSQL_BIGINT_int64":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
+	"PostgreSQL_BIT_string":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_VARBIT_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_BOOLEAN_bool":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "BOOLEAN" },
+	"PostgreSQL_BOX_string":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_BYTEA_[]uint8":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_BPCHAR_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"PostgreSQL_CIDR_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_CIRCLE_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_DATE_time.Time":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"PostgreSQL_FLOAT8_float64":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+	"PostgreSQL_INET_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_INT4_int32":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+	"PostgreSQL_INTERVAL_string":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_JSON_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"PostgreSQL_JSONB_string":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"PostgreSQL_LINE_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_LSEG_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_MACADDR_string":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_MONEY_string":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_PATH_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_PG_LSN_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_POINT_string":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_POLYGON_string":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_FLOAT4_float32":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
+	"PostgreSQL_INT2_int16":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+	"PostgreSQL_TEXT_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"PostgreSQL_TIME_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"PostgreSQL_TIMETZ_string":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMETZ" },
+	"PostgreSQL_TIMESTAMP_time.Time":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"PostgreSQL_TIMESTAMPTZ_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
+	"PostgreSQL_TSQUERY_string":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_TSVECTOR_string":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_TXID_SNAPSHOT_string":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_UUID_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_XML_string":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"PostgreSQL_VARCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"PostgreSQL_DECIMAL_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"PostgreSQL_DECIMAL_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NUMERIC(%d,%d)",
 			columnInfo.ColumnPrecisions[colNum],
@@ -254,28 +443,28 @@ var redshiftCreateTableTypes = map[string]func(columnInfo structs.ResultSetColum
 
 	// MySQL
 
-	"MySQL_BIT_sql.RawBytes":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MySQL_TINYINT_sql.RawBytes":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"MySQL_SMALLINT_sql.RawBytes":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"MySQL_MEDIUMINT_sql.RawBytes": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INT" },
-	"MySQL_INT_sql.RawBytes":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INT" },
-	"MySQL_BIGINT_sql.NullInt64":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-	"MySQL_FLOAT4_sql.NullFloat64": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "REAL" },
-	"MySQL_FLOAT8_sql.NullFloat64": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-	"MySQL_DATE_sql.NullTime":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"MySQL_TIME_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIME" },
-	"MySQL_DATETIME_sql.NullTime":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MySQL_TIMESTAMP_sql.NullTime": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MySQL_YEAR_sql.NullInt64":     func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INT" },
-	"MySQL_CHAR_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"MySQL_VARCHAR_sql.RawBytes":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"MySQL_TEXT_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"MySQL_BINARY_sql.RawBytes":    func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MySQL_VARBINARY_sql.RawBytes": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MySQL_BLOB_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MySQL_GEOMETRY_sql.RawBytes":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MySQL_JSON_sql.RawBytes":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"MySQL_DECIMAL_sql.RawBytes": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MySQL_BIT_sql.RawBytes":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MySQL_TINYINT_sql.RawBytes":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+	"MySQL_SMALLINT_sql.RawBytes":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+	"MySQL_MEDIUMINT_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+	"MySQL_INT_sql.RawBytes":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+	"MySQL_BIGINT_sql.NullInt64":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
+	"MySQL_FLOAT4_sql.NullFloat64": func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
+	"MySQL_FLOAT8_sql.NullFloat64": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+	"MySQL_DATE_sql.NullTime":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"MySQL_TIME_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
+	"MySQL_DATETIME_sql.NullTime":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MySQL_TIMESTAMP_sql.NullTime": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MySQL_YEAR_sql.NullInt64":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+	"MySQL_CHAR_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"MySQL_VARCHAR_sql.RawBytes":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"MySQL_TEXT_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"MySQL_BINARY_sql.RawBytes":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MySQL_VARBINARY_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MySQL_BLOB_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MySQL_GEOMETRY_sql.RawBytes":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MySQL_JSON_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"MySQL_DECIMAL_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NUMERIC(%d,%d)",
 			columnInfo.ColumnPrecisions[colNum],
@@ -285,53 +474,53 @@ var redshiftCreateTableTypes = map[string]func(columnInfo structs.ResultSetColum
 
 	// MSSQL
 
-	"MSSQL_BIGINT_int64":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-	"MSSQL_BIT_bool":                 func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BOOL" },
-	"MSSQL_INT_int64":                func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "INT" },
-	"MSSQL_MONEY_[]uint8":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MSSQL_SMALLINT_int64":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"MSSQL_SMALLMONEY_[]uint8":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MSSQL_TINYINT_int64":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"MSSQL_FLOAT_float64":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-	"MSSQL_REAL_float64":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "REAL" },
-	"MSSQL_DATE_time.Time":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"MSSQL_DATETIME2_time.Time":      func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_DATETIME_time.Time":       func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_DATETIMEOFFSET_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
-	"MSSQL_SMALLDATETIME_time.Time":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_TIME_time.Time":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIME" },
-	"MSSQL_TEXT_string":              func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MSSQL_NTEXT_string":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"MSSQL_BINARY_[]uint8":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MSSQL_UNIQUEIDENTIFIER_[]uint8": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MSSQL_XML_string":               func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"MSSQL_VARBINARY_[]uint8":        func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"MSSQL_DECIMAL_[]uint8": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_BIGINT_int64":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
+	"MSSQL_BIT_bool":                 func(columnInfo ResultSetColumnInfo, colNum int) string { return "BOOL" },
+	"MSSQL_INT_int64":                func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+	"MSSQL_MONEY_[]uint8":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MSSQL_SMALLINT_int64":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+	"MSSQL_SMALLMONEY_[]uint8":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MSSQL_TINYINT_int64":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+	"MSSQL_FLOAT_float64":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+	"MSSQL_REAL_float64":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
+	"MSSQL_DATE_time.Time":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"MSSQL_DATETIME2_time.Time":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MSSQL_DATETIME_time.Time":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MSSQL_DATETIMEOFFSET_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
+	"MSSQL_SMALLDATETIME_time.Time":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"MSSQL_TIME_time.Time":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
+	"MSSQL_TEXT_string":              func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MSSQL_NTEXT_string":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"MSSQL_BINARY_[]uint8":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MSSQL_UNIQUEIDENTIFIER_[]uint8": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MSSQL_XML_string":               func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"MSSQL_VARBINARY_[]uint8":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"MSSQL_DECIMAL_[]uint8": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NUMERIC(%d,%d)",
 			columnInfo.ColumnPrecisions[colNum],
 			columnInfo.ColumnScales[colNum],
 		)
 	},
-	"MSSQL_CHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_CHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"CHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"MSSQL_VARCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_VARCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"VARCHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"MSSQL_NCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_NCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NCHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"MSSQL_NVARCHAR_string": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"MSSQL_NVARCHAR_string": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
@@ -340,19 +529,19 @@ var redshiftCreateTableTypes = map[string]func(columnInfo structs.ResultSetColum
 
 	// Oracle
 
-	"Oracle_OCIClobLocator_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"Oracle_OCIBlobLocator_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"Oracle_LONG_interface{}":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"Oracle_NUMBER_interface{}":         func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-	"Oracle_DATE_interface{}":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Oracle_TimeStampDTY_interface{}":   func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Oracle_CHAR_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"Oracle_OCIClobLocator_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"Oracle_OCIBlobLocator_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"Oracle_LONG_interface{}":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"Oracle_NUMBER_interface{}":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+	"Oracle_DATE_interface{}":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"Oracle_TimeStampDTY_interface{}":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"Oracle_CHAR_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"VARCHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
 		)
 	},
-	"Oracle_NCHAR_interface{}": func(columnInfo structs.ResultSetColumnInfo, colNum int) string {
+	"Oracle_NCHAR_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string {
 		return fmt.Sprintf(
 			"NVARCHAR(%d)",
 			columnInfo.ColumnLengths[colNum],
@@ -361,81 +550,90 @@ var redshiftCreateTableTypes = map[string]func(columnInfo structs.ResultSetColum
 
 	// SNOWFLAKE
 
-	"Snowflake_NUMBER_float64":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-	"Snowflake_BINARY_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"Snowflake_REAL_float64":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-	"Snowflake_TEXT_string":             func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"Snowflake_BOOLEAN_bool":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "BOOLEAN" },
-	"Snowflake_DATE_time.Time":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Snowflake_TIME_time.Time":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
-	"Snowflake_TIMESTAMP_LTZ_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
-	"Snowflake_TIMESTAMP_NTZ_time.Time": func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Snowflake_TIMESTAMP_TZ_time.Time":  func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
-	"Snowflake_VARIANT_string":          func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"Snowflake_OBJECT_string":           func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"Snowflake_ARRAY_string":            func(columnInfo structs.ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"Snowflake_NUMBER_float64":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+	"Snowflake_BINARY_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"Snowflake_REAL_float64":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+	"Snowflake_TEXT_string":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"Snowflake_BOOLEAN_bool":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "BOOLEAN" },
+	"Snowflake_DATE_time.Time":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+	"Snowflake_TIME_time.Time":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(MAX)" },
+	"Snowflake_TIMESTAMP_LTZ_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
+	"Snowflake_TIMESTAMP_NTZ_time.Time": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+	"Snowflake_TIMESTAMP_TZ_time.Time":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMPTZ" },
+	"Snowflake_VARIANT_string":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"Snowflake_OBJECT_string":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
+	"Snowflake_ARRAY_string":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
 }
 
 var redshiftValWriters = map[string]func(value interface{}, terminator string) string{
 
+	// Generics
+	"bool":    writeInsertBool,
+	"float32": writeInsertFloat,
+	"float64": writeInsertFloat,
+	"int16":   writeInsertInt,
+	"int32":   writeInsertInt,
+	"int64":   writeInsertInt,
+	"Time":    postgresqlWriteTimeStampFromTime,
+
 	// Redshift
 
-	"Redshift_BIGINT_int64":          writeInsertInt,
-	"Redshift_BOOLEAN_bool":          writeInsertBool,
-	"Redshift_CHAR_string":           writeInsertEscapedString,
-	"Redshift_BPCHAR_string":         writeInsertEscapedString,
-	"Redshift_VARCHAR_string":        writeInsertEscapedString,
-	"Redshift_DATE_time.Time":        postgresqlWriteDate,
-	"Redshift_DOUBLE_float64":        writeInsertFloat,
-	"Redshift_INT_int32":             writeInsertInt,
-	"Redshift_NUMERIC_float64":       writeInsertRawStringNoQuotes,
-	"Redshift_REAL_float32":          writeInsertFloat,
-	"Redshift_SMALLINT_int16":        writeInsertInt,
-	"Redshift_TIME_string":           writeInsertStringNoEscape,
-	"Redshift_TIMETZ_string":         writeInsertStringNoEscape,
-	"Redshift_TIMESTAMP_time.Time":   postgresqlWriteTimeStampFromString,
-	"Redshift_TIMESTAMPTZ_time.Time": postgresqlWriteTimeStampFromString,
+	"Redshift_BIGINT":      writeInsertInt,
+	"Redshift_BOOLEAN":     writeInsertBool,
+	"Redshift_CHAR":        writeInsertEscapedString,
+	"Redshift_BPCHAR":      writeInsertEscapedString,
+	"Redshift_VARCHAR":     writeInsertEscapedString,
+	"Redshift_DATE":        postgresqlWriteDate,
+	"Redshift_DOUBLE":      writeInsertFloat,
+	"Redshift_INT":         writeInsertInt,
+	"Redshift_NUMERIC":     writeInsertRawStringNoQuotes,
+	"Redshift_REAL":        writeInsertFloat,
+	"Redshift_SMALLINT":    writeInsertInt,
+	"Redshift_TIME":        writeInsertStringNoEscape,
+	"Redshift_TIMETZ":      writeInsertStringNoEscape,
+	"Redshift_TIMESTAMP":   postgresqlWriteTimeStampFromString,
+	"Redshift_TIMESTAMPTZ": postgresqlWriteTimeStampFromString,
 
 	// PostgreSQL
 
-	"PostgreSQL_BIGINT_int64":          writeInsertInt,
-	"PostgreSQL_BIT_string":            writeInsertStringNoEscape,
-	"PostgreSQL_VARBIT_string":         writeInsertStringNoEscape,
-	"PostgreSQL_BOOLEAN_bool":          writeInsertBool,
-	"PostgreSQL_BOX_string":            writeInsertStringNoEscape,
-	"PostgreSQL_BYTEA_[]uint8":         redshiftWriteBytesAsVarchar,
-	"PostgreSQL_CIDR_string":           writeInsertStringNoEscape,
-	"PostgreSQL_CIRCLE_string":         writeInsertStringNoEscape,
-	"PostgreSQL_FLOAT8_float64":        writeInsertFloat,
-	"PostgreSQL_INET_string":           writeInsertStringNoEscape,
-	"PostgreSQL_INT4_int32":            writeInsertInt,
-	"PostgreSQL_INTERVAL_string":       writeInsertStringNoEscape,
-	"PostgreSQL_LINE_string":           writeInsertStringNoEscape,
-	"PostgreSQL_LSEG_string":           writeInsertStringNoEscape,
-	"PostgreSQL_MACADDR_string":        writeInsertStringNoEscape,
-	"PostgreSQL_MONEY_string":          writeInsertStringNoEscape,
-	"PostgreSQL_DECIMAL_string":        writeInsertRawStringNoQuotes,
-	"PostgreSQL_PATH_string":           writeInsertStringNoEscape,
-	"PostgreSQL_PG_LSN_string":         writeInsertStringNoEscape,
-	"PostgreSQL_POINT_string":          writeInsertStringNoEscape,
-	"PostgreSQL_POLYGON_string":        writeInsertStringNoEscape,
-	"PostgreSQL_FLOAT4_float32":        writeInsertFloat,
-	"PostgreSQL_INT2_int16":            writeInsertInt,
-	"PostgreSQL_TIME_string":           writeInsertStringNoEscape,
-	"PostgreSQL_TIMETZ_string":         writeInsertStringNoEscape,
-	"PostgreSQL_TXID_SNAPSHOT_string":  writeInsertStringNoEscape,
-	"PostgreSQL_UUID_string":           writeInsertStringNoEscape,
-	"PostgreSQL_VARCHAR_string":        writeInsertEscapedString,
-	"PostgreSQL_BPCHAR_string":         writeInsertEscapedString,
-	"PostgreSQL_DATE_time.Time":        postgresqlWriteDate,
-	"PostgreSQL_JSON_string":           writeInsertEscapedString,
-	"PostgreSQL_JSONB_string":          writeInsertEscapedString,
-	"PostgreSQL_TEXT_string":           writeInsertEscapedString,
-	"PostgreSQL_TIMESTAMP_time.Time":   postgresqlWriteTimeStampFromString,
-	"PostgreSQL_TIMESTAMPTZ_time.Time": postgresqlWriteTimeStampFromString,
-	"PostgreSQL_TSQUERY_string":        writeInsertEscapedString,
-	"PostgreSQL_TSVECTOR_string":       writeInsertEscapedString,
-	"PostgreSQL_XML_string":            writeInsertEscapedString,
+	"PostgreSQL_BIGINT":        writeInsertInt,
+	"PostgreSQL_BIT":           writeInsertStringNoEscape,
+	"PostgreSQL_VARBIT":        writeInsertStringNoEscape,
+	"PostgreSQL_BOOLEAN":       writeInsertBool,
+	"PostgreSQL_BOX":           writeInsertStringNoEscape,
+	"PostgreSQL_BYTEA":         redshiftWriteBytesAsVarchar,
+	"PostgreSQL_CIDR":          writeInsertStringNoEscape,
+	"PostgreSQL_CIRCLE":        writeInsertStringNoEscape,
+	"PostgreSQL_FLOAT8":        writeInsertFloat,
+	"PostgreSQL_INET":          writeInsertStringNoEscape,
+	"PostgreSQL_INT4":          writeInsertInt,
+	"PostgreSQL_INTERVAL":      writeInsertStringNoEscape,
+	"PostgreSQL_LINE":          writeInsertStringNoEscape,
+	"PostgreSQL_LSEG":          writeInsertStringNoEscape,
+	"PostgreSQL_MACADDR":       writeInsertStringNoEscape,
+	"PostgreSQL_MONEY":         writeInsertStringNoEscape,
+	"PostgreSQL_DECIMAL":       writeInsertRawStringNoQuotes,
+	"PostgreSQL_PATH":          writeInsertStringNoEscape,
+	"PostgreSQL_PG_LSN":        writeInsertStringNoEscape,
+	"PostgreSQL_POINT":         writeInsertStringNoEscape,
+	"PostgreSQL_POLYGON":       writeInsertStringNoEscape,
+	"PostgreSQL_FLOAT4":        writeInsertFloat,
+	"PostgreSQL_INT2":          writeInsertInt,
+	"PostgreSQL_TIME":          writeInsertStringNoEscape,
+	"PostgreSQL_TIMETZ":        writeInsertStringNoEscape,
+	"PostgreSQL_TXID_SNAPSHOT": writeInsertStringNoEscape,
+	"PostgreSQL_UUID":          writeInsertStringNoEscape,
+	"PostgreSQL_VARCHAR":       writeInsertEscapedString,
+	"PostgreSQL_BPCHAR":        writeInsertEscapedString,
+	"PostgreSQL_DATE":          postgresqlWriteDate,
+	"PostgreSQL_JSON":          writeInsertEscapedString,
+	"PostgreSQL_JSONB":         writeInsertEscapedString,
+	"PostgreSQL_TEXT":          writeInsertEscapedString,
+	"PostgreSQL_TIMESTAMP":     postgresqlWriteTimeStampFromString,
+	"PostgreSQL_TIMESTAMPTZ":   postgresqlWriteTimeStampFromString,
+	"PostgreSQL_TSQUERY":       writeInsertEscapedString,
+	"PostgreSQL_TSVECTOR":      writeInsertEscapedString,
+	"PostgreSQL_XML":           writeInsertEscapedString,
 
 	// MYSQL
 
