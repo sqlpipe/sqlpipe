@@ -405,28 +405,28 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 
 // 	// MySQL
 
-// 	"MySQL_BIT_sql.RawBytes":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBIT" },
-// 	"MySQL_TINYINT_sql.RawBytes":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-// 	"MySQL_SMALLINT_sql.RawBytes":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-// 	"MySQL_MEDIUMINT_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-// 	"MySQL_INT_sql.RawBytes":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-// 	"MySQL_BIGINT_sql.NullInt64":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-// 	"MySQL_FLOAT4_sql.NullFloat64": func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
-// 	"MySQL_FLOAT8_sql.NullFloat64": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
-// 	"MySQL_DATE_sql.NullTime":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-// 	"MySQL_TIME_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
-// 	"MySQL_DATETIME_sql.NullTime":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-// 	"MySQL_TIMESTAMP_sql.NullTime": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-// 	"MySQL_YEAR_sql.NullInt64":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-// 	"MySQL_CHAR_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
-// 	"MySQL_VARCHAR_sql.RawBytes":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
-// 	"MySQL_TEXT_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
-// 	"MySQL_BINARY_sql.RawBytes":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"MySQL_VARBINARY_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"MySQL_BLOB_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"MySQL_GEOMETRY_sql.RawBytes":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"MySQL_JSON_sql.RawBytes":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "JSON" },
-// 	"MySQL_DECIMAL_sql.RawBytes": func(columnInfo ResultSetColumnInfo, colNum int) string {
+// 	"MySQL_BIT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBIT" },
+// 	"MySQL_TINYINT":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+// 	"MySQL_SMALLINT":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
+// 	"MySQL_MEDIUMINT": func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+// 	"MySQL_INT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+// 	"MySQL_BIGINT":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
+// 	"MySQL_FLOAT4": func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
+// 	"MySQL_FLOAT8": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DOUBLE PRECISION" },
+// 	"MySQL_DATE":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+// 	"MySQL_TIME":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
+// 	"MySQL_DATETIME":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+// 	"MySQL_TIMESTAMP": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+// 	"MySQL_YEAR":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
+// 	"MySQL_CHAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
+// 	"MySQL_VARCHAR":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
+// 	"MySQL_TEXT":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
+// 	"MySQL_BINARY":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// 	"MySQL_VARBINARY": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// 	"MySQL_BLOB":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// 	"MySQL_GEOMETRY":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// 	"MySQL_JSON":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "JSON" },
+// 	"MySQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
 // 		return fmt.Sprintf(
 // 			"NUMERIC(%d,%d)",
 // 			columnInfo.ColumnPrecisions[colNum],
@@ -491,19 +491,19 @@ func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo
 
 // 	// Oracle
 
-// 	"Oracle_OCIClobLocator_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
-// 	"Oracle_OCIBlobLocator_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
-// 	"Oracle_LONG_interface{}":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
-// 	"Oracle_NUMBER_interface{}":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMERIC" },
-// 	"Oracle_DATE_interface{}":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-// 	"Oracle_TimeStampDTY_interface{}":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-// 	"Oracle_CHAR_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string {
+// 	"Oracle_OCIClobLocator": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR" },
+// 	"Oracle_OCIBlobLocator": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BYTEA" },
+// 	"Oracle_LONG":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
+// 	"Oracle_NUMBER":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMERIC" },
+// 	"Oracle_DATE":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
+// 	"Oracle_TimeStampDTY":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
+// 	"Oracle_CHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
 // 		return fmt.Sprintf(
 // 			"VARCHAR(%d)",
 // 			columnInfo.ColumnLengths[colNum],
 // 		)
 // 	},
-// 	"Oracle_NCHAR_interface{}": func(columnInfo ResultSetColumnInfo, colNum int) string {
+// 	"Oracle_NCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
 // 		return fmt.Sprintf(
 // 			"VARCHAR(%d)",
 // 			columnInfo.ColumnLengths[colNum],
@@ -594,28 +594,28 @@ var postgresValWriters = map[string]func(value interface{}, terminator string) s
 
 	// MYSQL
 
-	"MySQL_BIT_sql.RawBytes":       postgresqlWriteMySQLBitRawBytes,
-	"MySQL_TINYINT_sql.RawBytes":   writeInsertRawStringNoQuotes,
-	"MySQL_SMALLINT_sql.RawBytes":  writeInsertRawStringNoQuotes,
-	"MySQL_MEDIUMINT_sql.RawBytes": writeInsertRawStringNoQuotes,
-	"MySQL_INT_sql.RawBytes":       writeInsertRawStringNoQuotes,
-	"MySQL_BIGINT_sql.NullInt64":   writeInsertRawStringNoQuotes,
-	"MySQL_DECIMAL_sql.RawBytes":   writeInsertRawStringNoQuotes,
-	"MySQL_FLOAT4_sql.NullFloat64": writeInsertRawStringNoQuotes,
-	"MySQL_FLOAT8_sql.NullFloat64": writeInsertRawStringNoQuotes,
-	"MySQL_DATE_sql.NullTime":      writeInsertStringNoEscape,
-	"MySQL_TIME_sql.RawBytes":      writeInsertStringNoEscape,
-	"MySQL_TIMESTAMP_sql.NullTime": writeInsertStringNoEscape,
-	"MySQL_DATETIME_sql.NullTime":  writeInsertStringNoEscape,
-	"MySQL_YEAR_sql.NullInt64":     writeInsertRawStringNoQuotes,
-	"MySQL_CHAR_sql.RawBytes":      writeInsertEscapedString,
-	"MySQL_VARCHAR_sql.RawBytes":   writeInsertEscapedString,
-	"MySQL_TEXT_sql.RawBytes":      writeInsertEscapedString,
-	"MySQL_BINARY_sql.RawBytes":    postgresqlWriteByteArray,
-	"MySQL_VARBINARY_sql.RawBytes": postgresqlWriteByteArray,
-	"MySQL_BLOB_sql.RawBytes":      postgresqlWriteByteArray,
-	"MySQL_GEOMETRY_sql.RawBytes":  postgresqlWriteByteArray,
-	"MySQL_JSON_sql.RawBytes":      writeInsertEscapedString,
+	"MySQL_BIT":       postgresqlWriteMySQLBitRawBytes,
+	"MySQL_TINYINT":   writeInsertRawStringNoQuotes,
+	"MySQL_SMALLINT":  writeInsertRawStringNoQuotes,
+	"MySQL_MEDIUMINT": writeInsertRawStringNoQuotes,
+	"MySQL_INT":       writeInsertRawStringNoQuotes,
+	"MySQL_BIGINT":    writeInsertRawStringNoQuotes,
+	"MySQL_DECIMAL":   writeInsertRawStringNoQuotes,
+	"MySQL_FLOAT4":    writeInsertRawStringNoQuotes,
+	"MySQL_FLOAT8":    writeInsertRawStringNoQuotes,
+	"MySQL_DATE":      writeInsertStringNoEscape,
+	"MySQL_TIME":      writeInsertStringNoEscape,
+	"MySQL_TIMESTAMP": writeInsertStringNoEscape,
+	"MySQL_DATETIME":  writeInsertStringNoEscape,
+	"MySQL_YEAR":      writeInsertRawStringNoQuotes,
+	"MySQL_CHAR":      writeInsertEscapedString,
+	"MySQL_VARCHAR":   writeInsertEscapedString,
+	"MySQL_TEXT":      writeInsertEscapedString,
+	"MySQL_BINARY":    postgresqlWriteByteArray,
+	"MySQL_VARBINARY": postgresqlWriteByteArray,
+	"MySQL_BLOB":      postgresqlWriteByteArray,
+	"MySQL_GEOMETRY":  postgresqlWriteByteArray,
+	"MySQL_JSON":      writeInsertEscapedString,
 
 	// MSSQL
 
@@ -648,14 +648,14 @@ var postgresValWriters = map[string]func(value interface{}, terminator string) s
 
 	// Oracle
 
-	"Oracle_CHAR_interface{}":           writeInsertEscapedString,
-	"Oracle_NCHAR_interface{}":          writeInsertEscapedString,
-	"Oracle_OCIClobLocator_interface{}": writeInsertEscapedString,
-	"Oracle_OCIBlobLocator_interface{}": postgresqlWriteByteArray,
-	"Oracle_LONG_interface{}":           writeInsertEscapedString,
-	"Oracle_NUMBER_interface{}":         oracleWriteNumber,
-	"Oracle_DATE_interface{}":           postgresqlWriteTimeStampFromTime,
-	"Oracle_TimeStampDTY_interface{}":   postgresqlWriteTimeStampFromTime,
+	"Oracle_CHAR":           writeInsertEscapedString,
+	"Oracle_NCHAR":          writeInsertEscapedString,
+	"Oracle_OCIClobLocator": writeInsertEscapedString,
+	"Oracle_OCIBlobLocator": postgresqlWriteByteArray,
+	"Oracle_LONG":           writeInsertEscapedString,
+	"Oracle_NUMBER":         oracleWriteNumber,
+	"Oracle_DATE":           postgresqlWriteTimeStampFromTime,
+	"Oracle_TimeStampDTY":   postgresqlWriteTimeStampFromTime,
 
 	// Snowflake
 

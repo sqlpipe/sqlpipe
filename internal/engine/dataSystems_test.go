@@ -8,7 +8,7 @@ import (
 )
 
 var queryTests = []queryTest{
-	// PostgreSQL Setup
+	// // PostgreSQL Setup
 	// {
 	// 	name:                  "postgresqlWideTableDrop",
 	// 	connection:            postgresqlTestConnection,
@@ -31,6 +31,29 @@ var queryTests = []queryTest{
 	// 	checkQuery:  "select * from wide_table",
 	// 	checkResult: postgresqlWideTableInsertResult,
 	// },
+	// MySQL Setup
+	{
+		name:                  "mysqlWideTableDrop",
+		connection:            mysqlTestConnection,
+		testQuery:             "drop table if exists wide_table;",
+		checkQuery:            "select * from wide_table",
+		expectedErr:           "db.Query() threw an error",
+		expectedErrProperties: mysqlWideTableDropErrProperties,
+	},
+	{
+		name:        "mysqlWideTableCreate",
+		connection:  mysqlTestConnection,
+		testQuery:   mysqlWideTableCreateQuery,
+		checkQuery:  "select * from wide_table",
+		checkResult: mysqlWideTableCreateResult,
+	},
+	{
+		name:        "mysqlWideTableInsert",
+		connection:  mysqlTestConnection,
+		testQuery:   mysqlWideTableInsertQuery,
+		checkQuery:  "select * from wide_table",
+		checkResult: mysqlWideTableInsertResult,
+	},
 	// // MSSQL setup
 	// {
 	// 	name:       "mssqlTestingDbDrop",
@@ -45,7 +68,7 @@ var queryTests = []queryTest{
 }
 
 var transferTests = []transferTest{
-	// PostgreSQL Transfers
+	// // PostgreSQL Transfers
 	// {
 	// 	name:          "postgresql2postgresql_wide",
 	// 	source:        postgresqlTestConnection,
@@ -98,17 +121,17 @@ var transferTests = []transferTest{
 	// 	checkQuery:    "select * from postgresql_wide_table",
 	// 	checkResult:   postgresql2redshift_wide_result,
 	// },
-	{
-		name:          "postgresql2snowflake_wide",
-		source:        postgresqlTestConnection,
-		target:        snowflakeTestConnection,
-		overwrite:     true,
-		targetSchema:  "public",
-		targetTable:   "postgresql_wide_table",
-		transferQuery: "select * from wide_table",
-		checkQuery:    "select * from postgresql_wide_table",
-		checkResult:   postgresql2snowflake_wide_result,
-	},
+	// {
+	// 	name:          "postgresql2snowflake_wide",
+	// 	source:        postgresqlTestConnection,
+	// 	target:        snowflakeTestConnection,
+	// 	overwrite:     true,
+	// 	targetSchema:  "public",
+	// 	targetTable:   "postgresql_wide_table",
+	// 	transferQuery: "select * from wide_table",
+	// 	checkQuery:    "select * from postgresql_wide_table",
+	// 	checkResult:   postgresql2snowflake_wide_result,
+	// },
 }
 
 func TestRunQuery(t *testing.T) {
