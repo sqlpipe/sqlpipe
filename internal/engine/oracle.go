@@ -610,6 +610,162 @@ func (dsConn Oracle) getCreateTableType(
 			resultSetColInfo.ColumnPrecisions[colNum],
 			resultSetColInfo.ColumnScales[colNum],
 		)
+	case "Oracle_OCIClobLocator":
+		createType = "NCLOB"
+	case "Oracle_OCIBlobLocator":
+		createType = "BLOB"
+	case "Oracle_LONG":
+		createType = "LONG"
+	case "Oracle_NUMBER":
+		createType = "NUMBER"
+	case "Oracle_IBFloat":
+		createType = "BINARY_FLOAT"
+	case "Oracle_IBDouble":
+		createType = "BINARY_DOUBLE"
+	case "Oracle_DATE":
+		createType = "DATE"
+	case "Oracle_TimeStampDTY":
+		createType = "TIMESTAMP"
+	case "Oracle_TimeStampTZ_DTY":
+		createType = "TIMESTAMP WITH TIME ZONE"
+	case "Oracle_TimeStampLTZ_DTY":
+		createType = "TIMESTAMP WITH LOCAL TIME ZONE"
+	case "Oracle_CHAR":
+		createType = "VARCHAR2(4000)"
+	case "Oracle_NCHAR":
+		createType = "VARCHAR2(4000)"
+
+	case "MSSQL_BIGINT":
+		createType = "NUMBER(19, 0)"
+	case "MSSQL_BIT":
+		createType = "NUMBER(1)"
+	case "MSSQL_INT":
+		createType = "INTEGER"
+	case "MSSQL_MONEY":
+		createType = "VARCHAR2(4000)"
+	case "MSSQL_SMALLINT":
+		createType = "INTEGER"
+	case "MSSQL_SMALLMONEY":
+		createType = "VARCHAR2(4000)"
+	case "MSSQL_TINYINT":
+		createType = "INTEGER"
+	case "MSSQL_FLOAT":
+		createType = "BINARY_DOUBLE"
+	case "MSSQL_REAL":
+		createType = "BINARY_FLOAT"
+	case "MSSQL_DATE":
+		createType = "DATE"
+	case "MSSQL_DATETIME2":
+		createType = "TIMESTAMP"
+	case "MSSQL_DATETIME":
+		createType = "TIMESTAMP"
+	case "MSSQL_DATETIMEOFFSET":
+		createType = "TIMESTAMP WITH TIME ZONE"
+	case "MSSQL_SMALLDATETIME":
+		createType = "TIMESTAMP"
+	case "MSSQL_TIME":
+		createType = "VARCHAR2(4000)"
+	case "MSSQL_TEXT":
+		createType = "VARCHAR2(4000)"
+	case "MSSQL_NTEXT":
+		createType = "NVARCHAR2(2000)"
+	case "MSSQL_BINARY":
+		createType = "BLOB"
+	case "MSSQL_VARBINARY":
+		createType = "BLOB"
+	case "MSSQL_UNIQUEIDENTIFIER":
+		createType = "VARCHAR2(4000)"
+	case "MSSQL_XML":
+		createType = "NVARCHAR2(2000)"
+	case "MSSQL_CHAR":
+		createType = fmt.Sprintf(
+			"CHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_VARCHAR":
+		createType = fmt.Sprintf(
+			"VARCHAR2(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_NCHAR":
+		createType = fmt.Sprintf(
+			"NCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_NVARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR2(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"NUMBER(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+
+	case "Snowflake_NUMBER":
+		createType = "BINARY_DOUBLE"
+	case "Snowflake_BINARY":
+		createType = "BLOB"
+	case "Snowflake_REAL":
+		createType = "BINARY_DOUBLE"
+	case "Snowflake_TEXT":
+		createType = "NVARCHAR2(2000)"
+	case "Snowflake_BOOLEAN":
+		createType = "NUMBER(1)"
+	case "Snowflake_DATE":
+		createType = "DATE"
+	case "Snowflake_TIME":
+		createType = "VARCHAR2(4000)"
+	case "Snowflake_TIMESTAMP_LTZ":
+		createType = "TIMESTAMP WITH LOCAL TIME ZONE"
+	case "Snowflake_TIMESTAMP_NTZ":
+		createType = "TIMESTAMP"
+	case "Snowflake_TIMESTAMP_TZ":
+		createType = "TIMESTAMP WITH TIME ZONE"
+	case "Snowflake_VARIANT":
+		createType = "NVARCHAR2(2000)"
+	case "Snowflake_OBJECT":
+		createType = "NVARCHAR2(2000)"
+	case "Snowflake_ARRAY":
+		createType = "NVARCHAR2(2000)"
+
+	case "Redshift_BIGINT":
+		createType = "NUMBER(19, 0)"
+	case "Redshift_BOOLEAN":
+		createType = "NUMBER(1)"
+	case "Redshift_CHAR":
+		createType = "NVARCHAR2(2000)"
+	case "Redshift_BPCHAR":
+		createType = "NVARCHAR2(2000)"
+	case "Redshift_DATE":
+		createType = "DATE"
+	case "Redshift_DOUBLE":
+		createType = "BINARY_DOUBLE"
+	case "Redshift_INT":
+		createType = "INTEGER"
+	case "Redshift_NUMERIC":
+		createType = "BINARY_DOUBLE"
+	case "Redshift_REAL":
+		createType = "BINARY_FLOAT"
+	case "Redshift_SMALLINT":
+		createType = "INTEGER"
+	case "Redshift_TIME":
+		createType = "VARCHAR2(4000)"
+	case "Redshift_TIMETZ":
+		createType = "VARCHAR2(4000)"
+	case "Redshift_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "Redshift_TIMESTAMPTZ":
+		createType = "TIMESTAMP WITH TIME ZONE"
+	case "Redshift_VARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR2(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	default:
+		createType = "NVARCHAR2(2000)"
 	}
 
 	return createType
@@ -855,18 +1011,20 @@ var oracleValWriters = map[string]func(value interface{}, terminator string) str
 
 	// Oracle
 
-	"Oracle_CHAR":            writeInsertEscapedString,
-	"Oracle_NCHAR":           writeInsertEscapedString,
-	"Oracle_OCIClobLocator":  writeInsertEscapedString,
-	"Oracle_OCIBlobLocator":  oracleWriteBlob,
-	"Oracle_LONG":            writeInsertEscapedString,
-	"Oracle_NUMBER":          oracleWriteNumber,
-	"Oracle_DATE":            oracleWriteDateFromTime,
-	"Oracle_TimeStampDTY":    oracleWriteDatetimeFromTime,
-	"Oracle_IBFloat":         oracleWriteNumber,
-	"Oracle_IBDouble":        oracleWriteNumber,
-	"Oracle_NOT":             writeInsertEscapedString,
-	"Oracle_OracleType(109)": writeInsertEscapedString,
+	"Oracle_CHAR":             writeInsertEscapedString,
+	"Oracle_NCHAR":            writeInsertEscapedString,
+	"Oracle_OCIClobLocator":   writeInsertEscapedString,
+	"Oracle_OCIBlobLocator":   oracleWriteBlob,
+	"Oracle_LONG":             writeInsertEscapedString,
+	"Oracle_NUMBER":           oracleWriteNumber,
+	"Oracle_DATE":             oracleWriteDateFromTime,
+	"Oracle_TimeStampDTY":     oracleWriteDatetimeFromTime,
+	"Oracle_TimeStampTZ_DTY":  oracleWriteDatetimeFromTime,
+	"Oracle_TimeStampLTZ_DTY": oracleWriteDatetimeFromTime,
+	"Oracle_IBFloat":          oracleWriteNumber,
+	"Oracle_IBDouble":         oracleWriteNumber,
+	"Oracle_NOT":              writeInsertEscapedString,
+	"Oracle_OracleType(109)":  writeInsertEscapedString,
 
 	// PostgreSQL
 	"PostgreSQL_BIGINT":        writeInsertInt,

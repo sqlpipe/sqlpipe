@@ -71,19 +71,19 @@ env/insert:
 # env/spinup: Spinup cloud instances
 .PHONY: env/spinup
 env/spinup:
-	# aws rds create-db-instance \
-	# 	--db-instance-identifier sqlpipe-test-postgresql \
-	# 	--db-name testing \
-	# 	--backup-retention-period 0 \
-	# 	--db-instance-class db.t3.micro \
-	# 	--engine postgres \
-	# 	--no-multi-az \
-	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
-	# 	--master-username sqlpipe \
-	# 	--master-user-password Mypass123 \
-	# 	--storage-type gp2 \
-	# 	--allocated-storage 20 \
-	# 	--no-enable-performance-insights >/dev/null;
+	aws rds create-db-instance \
+		--db-instance-identifier sqlpipe-test-postgresql \
+		--db-name testing \
+		--backup-retention-period 0 \
+		--db-instance-class db.t3.micro \
+		--engine postgres \
+		--no-multi-az \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--master-username sqlpipe \
+		--master-user-password Mypass123 \
+		--storage-type gp2 \
+		--allocated-storage 20 \
+		--no-enable-performance-insights >/dev/null;
 
 	aws rds create-db-instance \
 		--db-instance-identifier sqlpipe-test-mysql \

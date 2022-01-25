@@ -398,6 +398,161 @@ func (dsConn MySQL) getCreateTableType(
 			resultSetColInfo.ColumnPrecisions[colNum],
 			resultSetColInfo.ColumnScales[colNum],
 		)
+
+	case "MSSQL_BIGINT":
+		createType = "BIGINT"
+	case "MSSQL_BIT":
+		createType = "BOOL"
+	case "MSSQL_INT":
+		createType = "INT"
+	case "MSSQL_SMALLINT":
+		createType = "SMALLINT"
+	case "MSSQL_TINYINT":
+		createType = "TINYINT"
+	case "MSSQL_FLOAT":
+		createType = "DOUBLE"
+	case "MSSQL_REAL":
+		createType = "FLOAT"
+	case "MSSQL_DATE":
+		createType = "DATE"
+	case "MSSQL_DATETIME2":
+		createType = "DATETIME"
+	case "MSSQL_DATETIME":
+		createType = "DATETIME"
+	case "MSSQL_DATETIMEOFFSET":
+		createType = "DATETIME"
+	case "MSSQL_SMALLDATETIME":
+		createType = "DATETIME"
+	case "MSSQL_TIME":
+		createType = "TIME"
+	case "MSSQL_TEXT":
+		createType = "TEXT"
+	case "MSSQL_NTEXT":
+		createType = "TEXT CHARACTER SET utf8"
+	case "MSSQL_BINARY":
+		createType = "LONGBLOB"
+	case "MSSQL_VARBINARY":
+		createType = "LONGBLOB"
+	case "MSSQL_UNIQUEIDENTIFIER":
+		createType = "TEXT"
+	case "MSSQL_XML":
+		createType = "TEXT CHARACTER SET utf8"
+	case "MSSQL_MONEY":
+		createType = "TEXT"
+	case "MSSQL_SMALLMONEY":
+		createType = "TEXT"
+	case "MSSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"DECIMAL(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+
+	case "MSSQL_CHAR":
+		createType = fmt.Sprintf(
+			"CHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	case "MSSQL_VARCHAR":
+		createType = fmt.Sprintf(
+			"VARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	case "MSSQL_NCHAR":
+		createType = fmt.Sprintf(
+			"NCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	case "MSSQL_NVARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	case "Oracle_OCIClobLocator":
+		createType = "TEXT CHARACTER SET utf8"
+	case "Oracle_OCIBlobLocator":
+		createType = "LONGBLOB"
+	case "Oracle_LONG":
+		createType = "TEXT CHARACTER SET utf8"
+	case "Oracle_NUMBER":
+		createType = "DOUBLE"
+	case "Oracle_DATE":
+		createType = "DATE"
+	case "Oracle_TimeStampDTY":
+		createType = "TIMESTAMP"
+	case "Oracle_CHAR":
+		createType = "TEXT"
+
+	case "Oracle_NCHAR":
+		createType = "TEXT"
+
+	case "Snowflake_NUMBER":
+		createType = "DOUBLE"
+	case "Snowflake_BINARY":
+		createType = "LONGBLOB"
+	case "Snowflake_REAL":
+		createType = "DOUBLE"
+	case "Snowflake_TEXT":
+		createType = "TEXT CHARACTER SET utf8"
+	case "Snowflake_BOOLEAN":
+		createType = "BOOLEAN"
+	case "Snowflake_DATE":
+		createType = "DATE"
+	case "Snowflake_TIME":
+		createType = "TIME"
+	case "Snowflake_TIMESTAMP_LTZ":
+		createType = "TIMESTAMP"
+	case "Snowflake_TIMESTAMP_NTZ":
+		createType = "TIMESTAMP"
+	case "Snowflake_TIMESTAMP_TZ":
+		createType = "TIMESTAMP"
+	case "Snowflake_VARIANT":
+		createType = "TEXT CHARACTER SET utf8"
+	case "Snowflake_OBJECT":
+		createType = "TEXT CHARACTER SET utf8"
+	case "Snowflake_ARRAY":
+		createType = "TEXT CHARACTER SET utf8"
+
+	case "Redshift_BIGINT":
+		createType = "BIGINT"
+	case "Redshift_BOOLEAN":
+		createType = "BOOLEAN"
+	case "Redshift_CHAR":
+		createType = "TEXT CHARACTER SET utf8"
+	case "Redshift_DATE":
+		createType = "DATE"
+	case "Redshift_DOUBLE":
+		createType = "DOUBLE"
+	case "Redshift_INT":
+		createType = "INT"
+	case "Redshift_NUMERIC":
+		createType = "DOUBLE"
+	case "Redshift_REAL":
+		createType = "REAL"
+	case "Redshift_SMALLINT":
+		createType = "SMALLINT"
+	case "Redshift_TIME":
+		createType = "TIME"
+	case "Redshift_TIMETZ":
+		createType = "TEXT"
+	case "Redshift_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "Redshift_TIMESTAMPTZ":
+		createType = "TIMESTAMP"
+	case "Redshift_BPCHAR":
+		createType = "TEXT CHARACTER SET utf8"
+	case "Redshift_VARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	default:
+		createType = "TEXT"
+
 	}
 
 	return createType

@@ -380,6 +380,158 @@ func (dsConn Redshift) getCreateTableType(resultSetColInfo ResultSetColumnInfo, 
 			resultSetColInfo.ColumnPrecisions[colNum],
 			resultSetColInfo.ColumnScales[colNum],
 		)
+	case "Redshift_BIGINT":
+		createType = "BIGINT"
+	case "Redshift_BOOLEAN":
+		createType = "BOOLEAN"
+	case "Redshift_CHAR":
+		createType = "NVARCHAR(MAX)"
+	case "Redshift_BPCHAR":
+		createType = "NVARCHAR(MAX)"
+	case "Redshift_DATE":
+		createType = "DATE"
+	case "Redshift_DOUBLE":
+		createType = "DOUBLE PRECISION"
+	case "Redshift_INT":
+		createType = "INT"
+	case "Redshift_REAL":
+		createType = "REAL"
+	case "Redshift_SMALLINT":
+		createType = "SMALLINT"
+	case "Redshift_TIME":
+		createType = "TIME"
+	case "Redshift_TIMETZ":
+		createType = "TIMETZ"
+	case "Redshift_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "Redshift_TIMESTAMPTZ":
+		createType = "TIMESTAMPTZ"
+	case "Redshift_NUMERIC":
+		createType = "DOUBLE PRECISION"
+	case "Redshift_VARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	case "MSSQL_BIGINT":
+		createType = "BIGINT"
+	case "MSSQL_BIT":
+		createType = "BOOL"
+	case "MSSQL_INT":
+		createType = "INT"
+	case "MSSQL_MONEY":
+		createType = "VARCHAR(MAX)"
+	case "MSSQL_SMALLINT":
+		createType = "SMALLINT"
+	case "MSSQL_SMALLMONEY":
+		createType = "VARCHAR(MAX)"
+	case "MSSQL_TINYINT":
+		createType = "SMALLINT"
+	case "MSSQL_FLOAT":
+		createType = "DOUBLE PRECISION"
+	case "MSSQL_REAL":
+		createType = "REAL"
+	case "MSSQL_DATE":
+		createType = "DATE"
+	case "MSSQL_DATETIME2":
+		createType = "TIMESTAMP"
+	case "MSSQL_DATETIME":
+		createType = "TIMESTAMP"
+	case "MSSQL_DATETIMEOFFSET":
+		createType = "TIMESTAMPTZ"
+	case "MSSQL_SMALLDATETIME":
+		createType = "TIMESTAMP"
+	case "MSSQL_TIME":
+		createType = "TIME"
+	case "MSSQL_TEXT":
+		createType = "VARCHAR(MAX)"
+	case "MSSQL_NTEXT":
+		createType = "NVARCHAR(MAX)"
+	case "MSSQL_BINARY":
+		createType = "VARCHAR(MAX)"
+	case "MSSQL_UNIQUEIDENTIFIER":
+		createType = "VARCHAR(MAX)"
+	case "MSSQL_XML":
+		createType = "NVARCHAR(MAX)"
+	case "MSSQL_VARBINARY":
+		createType = "VARCHAR(MAX)"
+	case "MSSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"NUMERIC(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+	case "MSSQL_CHAR":
+		createType = fmt.Sprintf(
+			"CHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_VARCHAR":
+		createType = fmt.Sprintf(
+			"VARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_NCHAR":
+		createType = fmt.Sprintf(
+			"NCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_NVARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	// Oracle
+
+	case "Oracle_OCIClobLocator":
+		createType = "NVARCHAR(MAX)"
+	case "Oracle_OCIBlobLocator":
+		createType = "VARCHAR(MAX)"
+	case "Oracle_LONG":
+		createType = "NVARCHAR(MAX)"
+	case "Oracle_NUMBER":
+		createType = "DOUBLE PRECISION"
+	case "Oracle_DATE":
+		createType = "DATE"
+	case "Oracle_TimeStampDTY":
+		createType = "TIMESTAMP"
+	case "Oracle_CHAR":
+		createType = "NVARCHAR(MAX)"
+	case "Oracle_NCHAR":
+		createType = "NVARCHAR(MAX)"
+
+	// SNOWFLAKE
+
+	case "Snowflake_NUMBER":
+		createType = "DOUBLE PRECISION"
+	case "Snowflake_BINARY":
+		createType = "VARCHAR(MAX)"
+	case "Snowflake_REAL":
+		createType = "DOUBLE PRECISION"
+	case "Snowflake_TEXT":
+		createType = "NVARCHAR(MAX)"
+	case "Snowflake_BOOLEAN":
+		createType = "BOOLEAN"
+	case "Snowflake_DATE":
+		createType = "DATE"
+	case "Snowflake_TIME":
+		createType = "VARCHAR(MAX)"
+	case "Snowflake_TIMESTAMP_LTZ":
+		createType = "TIMESTAMPTZ"
+	case "Snowflake_TIMESTAMP_NTZ":
+		createType = "TIMESTAMP"
+	case "Snowflake_TIMESTAMP_TZ":
+		createType = "TIMESTAMPTZ"
+	case "Snowflake_VARIANT":
+		createType = "NVARCHAR(MAX)"
+	case "Snowflake_OBJECT":
+		createType = "NVARCHAR(MAX)"
+	case "Snowflake_ARRAY":
+		createType = "NVARCHAR(MAX)"
+	default:
+		createType = "NVARCHAR(MAX)"
 	}
 
 	return createType

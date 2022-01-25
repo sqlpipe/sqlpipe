@@ -542,6 +542,159 @@ func (dsConn Snowflake) getCreateTableType(resultSetColInfo ResultSetColumnInfo,
 			resultSetColInfo.ColumnPrecisions[colNum],
 			resultSetColInfo.ColumnScales[colNum],
 		)
+
+	case "Snowflake_NUMBER":
+		createType = "FLOAT"
+	case "Snowflake_BINARY":
+		createType = "BINARY"
+	case "Snowflake_REAL":
+		createType = "FLOAT"
+	case "Snowflake_TEXT":
+		createType = "TEXT"
+	case "Snowflake_BOOLEAN":
+		createType = "BOOLEAN"
+	case "Snowflake_DATE":
+		createType = "DATE"
+	case "Snowflake_TIME":
+		createType = "TIME"
+	case "Snowflake_TIMESTAMP_LTZ":
+		createType = "TIMESTAMP_LTZ"
+	case "Snowflake_TIMESTAMP_NTZ":
+		createType = "TIMESTAMP_NTZ"
+	case "Snowflake_TIMESTAMP_TZ":
+		createType = "TIMESTAMP_TZ"
+	case "Snowflake_VARIANT":
+		createType = "VARIANT"
+	case "Snowflake_OBJECT":
+		createType = "OBJECT"
+	case "Snowflake_ARRAY":
+		createType = "ARRAY"
+
+	case "MSSQL_BIGINT":
+		createType = "BIGINT"
+	case "MSSQL_BIT":
+		createType = "BOOLEAN"
+	case "MSSQL_INT":
+		createType = "INT"
+	case "MSSQL_MONEY":
+		createType = "TEXT"
+	case "MSSQL_SMALLINT":
+		createType = "SMALLINT"
+	case "MSSQL_SMALLMONEY":
+		createType = "TEXT"
+	case "MSSQL_TINYINT":
+		createType = "TINYINT"
+	case "MSSQL_FLOAT":
+		createType = "FLOAT"
+	case "MSSQL_REAL":
+		createType = "FLOAT"
+	case "MSSQL_DATE":
+		createType = "DATE"
+	case "MSSQL_DATETIME2":
+		createType = "TIMESTAMP"
+	case "MSSQL_DATETIME":
+		createType = "TIMESTAMP"
+	case "MSSQL_DATETIMEOFFSET":
+		createType = "TIMESTAMP_TZ"
+	case "MSSQL_SMALLDATETIME":
+		createType = "TIMESTAMP"
+	case "MSSQL_TIME":
+		createType = "TIMESTAMP"
+	case "MSSQL_TEXT":
+		createType = "TEXT"
+	case "MSSQL_NTEXT":
+		createType = "TEXT"
+	case "MSSQL_BINARY":
+		createType = "BINARY"
+	case "MSSQL_VARBINARY":
+		createType = "BINARY"
+	case "MSSQL_UNIQUEIDENTIFIER":
+		createType = "TEXT"
+	case "MSSQL_XML":
+		createType = "TEXT"
+	case "MSSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"NUMBER(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+	case "MSSQL_CHAR":
+		createType = fmt.Sprintf(
+			"CHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_VARCHAR":
+		createType = fmt.Sprintf(
+			"VARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_NCHAR":
+		createType = fmt.Sprintf(
+			"CHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_NVARCHAR":
+		createType = fmt.Sprintf(
+			"VARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	// Oracle
+
+	case "Oracle_OCIClobLocator":
+		createType = "TEXT"
+	case "Oracle_OCIBlobLocator":
+		createType = "BINARY"
+	case "Oracle_LONG":
+		createType = "TEXT"
+	case "Oracle_NUMBER":
+		createType = "FLOAT"
+	case "Oracle_DATE":
+		createType = "DATE"
+	case "Oracle_TimeStampDTY":
+		createType = "TIMESTAMP"
+	case "Oracle_CHAR":
+		createType = "TEXT"
+	case "Oracle_NCHAR":
+		createType = "TEXT"
+
+	// Redshift
+
+	case "Redshift_BIGINT":
+		createType = "BIGINT"
+	case "Redshift_BOOLEAN":
+		createType = "BOOLEAN"
+	case "Redshift_CHAR":
+		createType = "TEXT"
+	case "Redshift_BPCHAR":
+		createType = "TEXT"
+	case "Redshift_DATE":
+		createType = "DATE"
+	case "Redshift_DOUBLE":
+		createType = "FLOAT"
+	case "Redshift_INT":
+		createType = "INT"
+	case "Redshift_NUMERIC":
+		createType = "FLOAT"
+	case "Redshift_REAL":
+		createType = "FLOAT"
+	case "Redshift_SMALLINT":
+		createType = "SMALLINT"
+	case "Redshift_TIME":
+		createType = "TEXT"
+	case "Redshift_TIMETZ":
+		createType = "TEXT"
+	case "Redshift_TIMESTAMP":
+		createType = "TIMESTAMP"
+	case "Redshift_TIMESTAMPTZ":
+		createType = "TIMESTAMP_TZ"
+	case "Redshift_VARCHAR":
+		createType = fmt.Sprintf(
+			"VARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	default:
+		createType = "TEXT"
 	}
 
 	return createType
@@ -710,7 +863,7 @@ var snowflakeCreateTableTypes = map[string]func(columnInfo ResultSetColumnInfo, 
 	"MSSQL_DATETIME":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
 	"MSSQL_DATETIMEOFFSET":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP_TZ" },
 	"MSSQL_SMALLDATETIME":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_TIME":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
+	"MSSQL_TIME":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
 	"MSSQL_TEXT":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
 	"MSSQL_NTEXT":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
 	"MSSQL_BINARY":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY" },
@@ -933,7 +1086,7 @@ var snowflakeTurboWritersMid = map[string]func(value interface{}, builder *strin
 	"MySQL_GEOMETRY":  snowflakeWriteBinaryfromBytesMidTurbo,
 	"MySQL_JSON":      writeEscapedQuotedStringMidTurbo,
 
-	// // MSSQL
+	// MSSQL
 
 	"MSSQL_BIGINT":           writeIntMidTurbo,
 	"MSSQL_BIT":              writeBoolMidTurbo,
@@ -950,7 +1103,7 @@ var snowflakeTurboWritersMid = map[string]func(value interface{}, builder *strin
 	"MSSQL_DATETIME":         snowflakeWriteTimestampFromTimeMidTurbo,
 	"MSSQL_DATETIMEOFFSET":   snowflakeWriteTimestampFromTimeMidTurbo,
 	"MSSQL_SMALLDATETIME":    snowflakeWriteTimestampFromTimeMidTurbo,
-	"MSSQL_TIME":             snowflakeWriteTimeFromTimeMidTurbo,
+	"MSSQL_TIME":             snowflakeWriteTimestampFromTimeMidTurbo,
 	"MSSQL_CHAR":             writeEscapedQuotedStringMidTurbo,
 	"MSSQL_VARCHAR":          writeEscapedQuotedStringMidTurbo,
 	"MSSQL_TEXT":             writeEscapedQuotedStringMidTurbo,
@@ -1085,7 +1238,7 @@ var snowflakeTurboWritersEnd = map[string]func(value interface{}, builder *strin
 	"MySQL_GEOMETRY":  snowflakeWriteBinaryfromBytesEndTurbo,
 	"MySQL_JSON":      writeEscapedQuotedStringEndTurbo,
 
-	// // MSSQL
+	// MSSQL
 
 	"MSSQL_BIGINT":           writeIntEndTurbo,
 	"MSSQL_BIT":              writeBoolEndTurbo,
@@ -1102,7 +1255,7 @@ var snowflakeTurboWritersEnd = map[string]func(value interface{}, builder *strin
 	"MSSQL_DATETIME":         snowflakeWriteTimestampFromTimeEndTurbo,
 	"MSSQL_DATETIMEOFFSET":   snowflakeWriteTimestampFromTimeEndTurbo,
 	"MSSQL_SMALLDATETIME":    snowflakeWriteTimestampFromTimeEndTurbo,
-	"MSSQL_TIME":             snowflakeWriteTimeFromTimeEndTurbo,
+	"MSSQL_TIME":             snowflakeWriteTimestampFromTimeEndTurbo,
 	"MSSQL_CHAR":             writeEscapedQuotedStringEndTurbo,
 	"MSSQL_VARCHAR":          writeEscapedQuotedStringEndTurbo,
 	"MSSQL_TEXT":             writeEscapedQuotedStringEndTurbo,
@@ -1253,7 +1406,7 @@ var snowflakeValWriters = map[string]func(value interface{}, terminator string) 
 	"MSSQL_DATETIME":         snowflakeWriteTimestampFromTime,
 	"MSSQL_DATETIMEOFFSET":   snowflakeWriteTimestampFromTime,
 	"MSSQL_SMALLDATETIME":    snowflakeWriteTimestampFromTime,
-	"MSSQL_TIME":             snowflakeWriteTimeFromTime,
+	"MSSQL_TIME":             snowflakeWriteTimestampFromTime,
 	"MSSQL_CHAR":             writeInsertEscapedString,
 	"MSSQL_VARCHAR":          writeInsertEscapedString,
 	"MSSQL_TEXT":             writeInsertEscapedString,

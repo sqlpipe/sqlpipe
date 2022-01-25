@@ -498,6 +498,161 @@ func (dsConn MSSQL) getCreateTableType(
 			resultSetColInfo.ColumnPrecisions[colNum],
 			resultSetColInfo.ColumnScales[colNum],
 		)
+	case "MSSQL_BIGINT":
+		createType = "BIGINT"
+	case "MSSQL_BIT":
+		createType = "BIT"
+	case "MSSQL_INT":
+		createType = "INT"
+	case "MSSQL_MONEY":
+		createType = "VARCHAR(8000)"
+	case "MSSQL_SMALLINT":
+		createType = "SMALLINT"
+	case "MSSQL_SMALLMONEY":
+		createType = "VARCHAR(8000)"
+	case "MSSQL_TINYINT":
+		createType = "TINYINT"
+	case "MSSQL_FLOAT":
+		createType = "FLOAT"
+	case "MSSQL_REAL":
+		createType = "REAL"
+	case "MSSQL_DATE":
+		createType = "DATE"
+	case "MSSQL_DATETIME2":
+		createType = "DATETIME2"
+	case "MSSQL_DATETIME":
+		createType = "DATETIME"
+	case "MSSQL_DATETIMEOFFSET":
+		createType = "DATETIMEOFFSET"
+	case "MSSQL_SMALLDATETIME":
+		createType = "SMALLDATETIME"
+	case "MSSQL_TIME":
+		createType = "DATETIME"
+	case "MSSQL_TEXT":
+		createType = "TEXT"
+	case "MSSQL_NTEXT":
+		createType = "NTEXT"
+	case "MSSQL_BINARY":
+		createType = "VARBINARY(8000)"
+	case "MSSQL_UNIQUEIDENTIFIER":
+		createType = "UNIQUEIDENTIFIER"
+	case "MSSQL_XML":
+		createType = "XML"
+	case "MSSQL_DECIMAL":
+		createType = fmt.Sprintf(
+			"DECIMAL(%d,%d)",
+			resultSetColInfo.ColumnPrecisions[colNum],
+			resultSetColInfo.ColumnScales[colNum],
+		)
+	case "MSSQL_CHAR":
+		createType = fmt.Sprintf(
+			"CHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_VARCHAR":
+		createType = fmt.Sprintf(
+			"VARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_NCHAR":
+		createType = fmt.Sprintf(
+			"NCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_NVARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	case "MSSQL_VARBINARY":
+		createType = fmt.Sprintf(
+			"VARBINARY(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+
+	case "Oracle_OCIClobLocator":
+		createType = "NVARCHAR(4000)"
+	case "Oracle_OCIBlobLocator":
+		createType = "VARBINARY(8000)"
+	case "Oracle_LONG":
+		createType = "NTEXT"
+	case "Oracle_NUMBER":
+		createType = "FLOAT"
+	case "Oracle_DATE":
+		createType = "DATE"
+	case "Oracle_TimeStampDTY":
+		createType = "DATETIME2"
+	case "Oracle_CHAR":
+		createType = "NTEXT"
+	case "Oracle_NCHAR":
+		createType = "NTEXT"
+
+	// SNOWFLAKE
+
+	case "Snowflake_NUMBER":
+		createType = "FLOAT"
+	case "Snowflake_BINARY":
+		createType = "VARBINARY(8000)"
+	case "Snowflake_REAL":
+		createType = "FLOAT"
+	case "Snowflake_TEXT":
+		createType = "NVARCHAR(4000)"
+	case "Snowflake_BOOLEAN":
+		createType = "BIT"
+	case "Snowflake_DATE":
+		createType = "DATE"
+	case "Snowflake_TIME":
+		createType = "TIME"
+	case "Snowflake_TIMESTAMP_LTZ":
+		createType = "DATETIMEOFFSET"
+	case "Snowflake_TIMESTAMP_NTZ":
+		createType = "DATETIME2"
+	case "Snowflake_TIMESTAMP_TZ":
+		createType = "DATETIMEOFFSET"
+	case "Snowflake_VARIANT":
+		createType = "NVARCHAR(4000)"
+	case "Snowflake_OBJECT":
+		createType = "NVARCHAR(4000)"
+	case "Snowflake_ARRAY":
+		createType = "NVARCHAR(4000)"
+
+	// Redshift
+
+	case "Redshift_BIGINT":
+		createType = "BIGINT"
+	case "Redshift_BOOLEAN":
+		createType = "BIT"
+	case "Redshift_CHAR":
+		createType = "NVARCHAR(4000)"
+	case "Redshift_BPCHAR":
+		createType = "NVARCHAR(MAX)"
+	case "Redshift_DATE":
+		createType = "DATE"
+	case "Redshift_DOUBLE":
+		createType = "FLOAT"
+	case "Redshift_INT":
+		createType = "INT"
+	case "Redshift_REAL":
+		createType = "REAL"
+	case "Redshift_SMALLINT":
+		createType = "SMALLINT"
+	case "Redshift_TIME":
+		createType = "TIME"
+	case "Redshift_TIMETZ":
+		createType = "NVARCHAR(4000)"
+	case "Redshift_TIMESTAMP":
+		createType = "DATETIME2"
+	case "Redshift_TIMESTAMPTZ":
+		createType = "DATETIMEOFFSET"
+	case "Redshift_NUMERIC":
+		createType = "FLOAT"
+	case "Redshift_VARCHAR":
+		createType = fmt.Sprintf(
+			"NVARCHAR(%d)",
+			resultSetColInfo.ColumnLengths[colNum],
+		)
+	default:
+		createType = "NTEXT"
 	}
 
 	return createType
@@ -830,7 +985,7 @@ var mssqlValWriters = map[string]func(value interface{}, terminator string) stri
 	"MSSQL_DATETIME":         mssqlWriteDateTime,
 	"MSSQL_DATETIMEOFFSET":   mssqlWriteDateTime,
 	"MSSQL_SMALLDATETIME":    mssqlWriteDateTime,
-	"MSSQL_TIME":             mssqlWriteTime,
+	"MSSQL_TIME":             mssqlWriteDateTime,
 	"MSSQL_CHAR":             writeInsertEscapedString,
 	"MSSQL_VARCHAR":          writeInsertEscapedString,
 	"MSSQL_TEXT":             writeInsertEscapedString,
