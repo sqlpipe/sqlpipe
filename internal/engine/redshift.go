@@ -133,7 +133,7 @@ func (dsConn Redshift) getIntermediateType(
 	case "INT4":
 		intermediateType = "int32"
 	case "NUMERIC":
-		intermediateType = "float64"
+		intermediateType = "Redshift_NUMERIC"
 	case "FLOAT4":
 		intermediateType = "float32"
 	case "INT2":

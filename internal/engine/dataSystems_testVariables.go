@@ -574,8 +574,6 @@ var (
 
 // Redshift Setup
 var (
-	redshiftWideTableDropErrProperties = map[string]string{}
-
 	redshiftWideTableCreateQuery  = ``
 	redshiftWideTableCreateResult = QueryResult{}
 

@@ -98,9 +98,9 @@ func (dsConn Snowflake) getIntermediateType(
 ) {
 	switch colTypeFromDriver {
 	case "FIXED":
-		intermediateType = "float64"
+		intermediateType = "Snowflake_NUMBER"
 	case "REAL":
-		intermediateType = "float64"
+		intermediateType = "Snowflake_REAL"
 	case "TEXT":
 		intermediateType = "Snowflake_TEXT"
 	case "BOOLEAN":
