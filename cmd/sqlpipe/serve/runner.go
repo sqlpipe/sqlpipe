@@ -1,21 +1,21 @@
 package serve
 
 import (
+	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/engine"
 	"github.com/calmitchell617/sqlpipe/pkg"
 )
 
+var numLocalActiveTransfers int
+
 func (app *application) toDoScanner() {
 	// This loops forever, looking for transfer requests to fulfill in the db
-	var wg sync.WaitGroup
 
 	for {
-		wg.Wait()
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 1)
 
 		queuedTransfers, err := app.models.Transfers.GetQueued()
 		if err != nil {
@@ -27,15 +27,27 @@ func (app *application) toDoScanner() {
 			app.logger.PrintError(err, nil)
 		}
 
-		for _, transfer := range queuedTransfers {
-			if app.numLocalActiveTransfers < 10 {
-				wg.Add(1)
+		for i := 0; i < len(queuedTransfers); i++ {
+			if numLocalActiveTransfers < maxConcurrentTransfers {
+				numLocalActiveTransfers += 1
+				transfer := queuedTransfers[i]
 				pkg.Background(func() {
-					defer wg.Done()
 					transfer.Status = "active"
 					err = app.models.Transfers.Update(transfer)
 					if err != nil {
-						app.logger.PrintError(fmt.Errorf("%s", err), nil)
+						transfer.Status = "error"
+						transfer.Error = "unable to mark transfer as active"
+						errProperties := map[string]string{
+							"error:":   err.Error(),
+							"transfer": fmt.Sprintf("%+v", transfer),
+						}
+						transfer.ErrorProperties = fmt.Sprintf("%+v", errProperties)
+
+						app.logger.PrintError(
+							errors.New(transfer.Error),
+							errProperties,
+						)
+						numLocalActiveTransfers -= 1
 						return
 					}
 					app.logger.PrintInfo(
@@ -62,8 +74,16 @@ func (app *application) toDoScanner() {
 
 						err = app.models.Transfers.Update(transfer)
 						if err != nil {
-							app.logger.PrintError(err, errProperties)
+							errProperties := map[string]string{
+								"error:":   err.Error(),
+								"transfer": fmt.Sprintf("%+v", transfer),
+							}
+							app.logger.PrintError(
+								errors.New("unable to update transfer"),
+								errProperties,
+							)
 						}
+						numLocalActiveTransfers -= 1
 						return
 					}
 
@@ -71,13 +91,22 @@ func (app *application) toDoScanner() {
 					transfer.StoppedAt = time.Now()
 					err = app.models.Transfers.Update(transfer)
 					if err != nil {
-						app.logger.PrintError(err, errProperties)
+						errProperties := map[string]string{
+							"error:":   err.Error(),
+							"transfer": fmt.Sprintf("%+v", transfer),
+						}
+						app.logger.PrintError(
+							errors.New("unable to update transfer"),
+							errProperties,
+						)
 					}
+					numLocalActiveTransfers -= 1
 				})
 			}
 		}
 
-		for _, query := range queuedQueries {
+		for i := 0; i < len(queuedQueries); i++ {
+			query := queuedQueries[i]
 			pkg.Background(func() {
 				query.Status = "active"
 				err = app.models.Queries.Update(query)

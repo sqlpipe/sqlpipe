@@ -51,8 +51,9 @@ func (app *application) listConnectionsUiHandler(w http.ResponseWriter, r *http.
 
 	connections, errProperties, err := engine.TestConnections(connections)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, errProperties)
-		return
+		if err != nil {
+			app.logger.PrintError(err, errProperties)
+		}
 	}
 
 	paginationData := getPaginationData(metadata.CurrentPage, int(metadata.TotalRecords), metadata.PageSize, "connections")
@@ -100,8 +101,7 @@ func (app *application) createConnectionUiHandler(w http.ResponseWriter, r *http
 	if r.PostForm.Get("skipTest") != "on" {
 		connection, errProperties, err := engine.TestConnection(connection)
 		if err != nil {
-			app.errorResponse(w, r, http.StatusBadRequest, errProperties)
-			return
+			app.logger.PrintError(err, errProperties)
 		}
 		if !connection.CanConnect {
 			form.Validator.AddError("canConnect", "Unable to connect with given credentials")
@@ -145,8 +145,7 @@ func (app *application) showConnectionUiHandler(w http.ResponseWriter, r *http.R
 
 	connection, errProperties, err := engine.TestConnection(connection)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, errProperties)
-		return
+		app.logger.PrintError(err, errProperties)
 	}
 
 	app.render(w, r, "connection-detail.page.tmpl", &templateData{Connection: connection})
@@ -235,8 +234,7 @@ func (app *application) updateConnectionUiHandler(w http.ResponseWriter, r *http
 	if r.PostForm.Get("skipTest") != "on" {
 		connection, errProperties, err := engine.TestConnection(connection)
 		if err != nil {
-			app.errorResponse(w, r, http.StatusBadRequest, errProperties)
-			return
+			app.logger.PrintError(err, errProperties)
 		}
 		if !connection.CanConnect {
 			form.Validator.AddError("canConnect", "Unable to connect with given credentials")
@@ -323,8 +321,7 @@ func (app *application) createConnectionApiHandler(w http.ResponseWriter, r *htt
 	if !input.SkipTest {
 		connection, errProperties, err := engine.TestConnection(connection)
 		if err != nil {
-			app.errorResponse(w, r, http.StatusBadRequest, errProperties)
-			return
+			app.logger.PrintError(err, errProperties)
 		}
 		if !connection.CanConnect {
 			v.AddError("canConnect", "Unable to connect with given credentials")
@@ -365,8 +362,7 @@ func (app *application) listConnectionsApiHandler(w http.ResponseWriter, r *http
 
 	connections, errProperties, err := engine.TestConnections(connections)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, errProperties)
-		return
+		app.logger.PrintError(err, errProperties)
 	}
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"connections": connections, "metadata": metadata}, nil)

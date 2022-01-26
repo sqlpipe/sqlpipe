@@ -23,7 +23,8 @@ confirm:
 run/serve:
 	go run ./cmd/sqlpipe serve \
 		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
-		--secret "8i.(LBH4JZSv#Z@$qKBUcNlUk*C&y}$p"
+		--secret "8i.(LBH4JZSv#Z@$qKBUcNlUk*C&y}$p" \
+		--max-concurrency 10
 
 ## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server
 .PHONY: run/init

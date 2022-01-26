@@ -36,7 +36,8 @@ var (
 	buildTime string
 	version   string
 
-	displayVersion bool
+	displayVersion         bool
+	maxConcurrentTransfers int
 
 	secret string
 
@@ -77,12 +78,11 @@ type config struct {
 type application struct {
 	logger *jsonLog.Logger
 
-	config                  config
-	models                  data.Models
-	wg                      sync.WaitGroup
-	session                 *sessions.Session
-	templateCache           map[string]*template.Template
-	numLocalActiveTransfers int
+	config        config
+	models        data.Models
+	wg            sync.WaitGroup
+	session       *sessions.Session
+	templateCache map[string]*template.Template
 
 	tlsConfig *tls.Config
 }
@@ -107,6 +107,8 @@ func init() {
 	ServeCmd.Flags().BoolVar(&displayVersion, "version", false, "Display SQLpipe version")
 
 	ServeCmd.Flags().StringVar(&secret, "secret", "", "Secret key")
+
+	ServeCmd.Flags().IntVar(&maxConcurrentTransfers, "max-concurrency", 10, "Max number of concurrent transfers to run on this server")
 }
 
 func serve(cmd *cobra.Command, args []string) {
