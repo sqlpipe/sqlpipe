@@ -49,6 +49,10 @@
 <div class="d-block bg-light p-3">
     <code>{{ .Error }}</code>
 </div>
+<h4 class="mt-5">Error Properties</h4>
+<div class="d-block bg-light p-3">
+    <code>{{ .ErrorProperties }}</code>
+</div>
 {{ end }}
 
 <h4 class="mt-5 mb-2">Query</h4>
@@ -119,10 +123,12 @@
                         <th class="bg-dark text-light">Db Name</th>
                         <td>{{ .Target.DbName }}</td>
                     </tr>
+                    {{ if ne .TargetSchema ""}}
                     <tr>
                         <th class="bg-dark text-light">Target schema</th>
                         <td>{{ .TargetSchema }}</td>
                     </tr>
+                    {{end}}
                     <tr>
                         <th class="bg-dark text-light">Target table</th>
                         <td>{{ .TargetTable }}</td>

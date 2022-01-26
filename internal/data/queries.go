@@ -11,15 +11,16 @@ import (
 )
 
 type Query struct {
-	ID           int64      `json:"id"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	ConnectionID int64      `json:"connectionId"`
-	Connection   Connection `json:"-"`
-	Query        string     `json:"query"`
-	Status       string     `json:"status"`
-	Error        string     `json:"error"`
-	StoppedAt    time.Time  `json:"stoppedAt"`
-	Version      int        `json:"version"`
+	ID              int64      `json:"id"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	ConnectionID    int64      `json:"connectionId"`
+	Connection      Connection `json:"-"`
+	Query           string     `json:"query"`
+	Status          string     `json:"status"`
+	Error           string     `json:"error"`
+	ErrorProperties string     `json:"errorProperties"`
+	StoppedAt       time.Time  `json:"stoppedAt"`
+	Version         int        `json:"version"`
 }
 
 type QueryModel struct {
@@ -69,6 +70,7 @@ func (m QueryModel) GetAll(filters Filters) ([]*Query, Metadata, error) {
 	queries.query,
 	queries.status,
 	queries.error,
+	queries.error_properties,
 	queries.stopped_at,
 	queries.version
 FROM
@@ -117,6 +119,7 @@ offset
 			&query.Query,
 			&query.Status,
 			&query.Error,
+			&query.ErrorProperties,
 			&query.StoppedAt,
 			&query.Version,
 		)
@@ -152,6 +155,7 @@ func (m QueryModel) GetQueued() ([]*Query, error) {
 	queries.query,
 	queries.status,
 	queries.error,
+	queries.error_properties,
 	queries.stopped_at,
 	queries.version
 FROM
@@ -195,6 +199,7 @@ order by
 			&query.Query,
 			&query.Status,
 			&query.Error,
+			&query.ErrorProperties,
 			&query.StoppedAt,
 			&query.Version,
 		)
@@ -226,6 +231,7 @@ func (m QueryModel) GetById(id int64) (*Query, error) {
 	queries.query,
 	queries.status,
 	queries.error,
+	queries.error_properties,
 	queries.stopped_at,
 	queries.version
 FROM
@@ -255,6 +261,7 @@ where
 		&query.Query,
 		&query.Status,
 		&query.Error,
+		&query.ErrorProperties,
 		&query.StoppedAt,
 		&query.Version,
 	)
@@ -274,13 +281,14 @@ where
 func (m QueryModel) Update(query *Query) error {
 	queryToRun := `
         UPDATE queries 
-        SET status = $1, error = $2, stopped_at = $3, version = version + 1
-        WHERE id = $4 AND version = $5
+        SET status = $1, error = $2, error_properties = $3, stopped_at = $4, version = version + 1
+        WHERE id = $5 AND version = $6
         RETURNING version`
 
 	args := []interface{}{
 		&query.Status,
 		&query.Error,
+		&query.ErrorProperties,
 		&query.StoppedAt,
 		&query.ID,
 		&query.Version,

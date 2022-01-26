@@ -22,7 +22,7 @@ confirm:
 .PHONY: run/serve
 run/serve:
 	go run ./cmd/sqlpipe serve \
-		--dsn=postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable \
+		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
 		--secret "8i.(LBH4JZSv#Z@$qKBUcNlUk*C&y}$p"
 
 ## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server
@@ -30,23 +30,23 @@ run/serve:
 run/init: db/init
 	go run ./cmd/sqlpipe serve \
 		--admin-username=sqlpipe \
-		--admin-password=Mypass123 \
-		--dsn=postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable \
+		--admin-password=${SQLPIPE-PASSWORD} \
+		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
 		--create-admin
 
 ## db/init: Initialize a fresh instance of postgresql
 .PHONY: db/init
 db/init:
 	docker container rm -f sqlpipe-postgresql;
-	docker container run -d -p 5432:5432 --name sqlpipe-postgresql -e POSTGRES_PASSWORD=Mypass123 postgres:14.1
+	docker container run -d -p 5432:5432 --name sqlpipe-postgresql -e POSTGRES_PASSWORD=${SQLPIPE-PASSWORD} postgres:14.1
 	sleep 1
-	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
-	go run ./cmd/sqlpipe initialize --dsn=postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable --force
+	docker exec -it sqlpipe-postgresql psql postgres://postgres:${SQLPIPE-PASSWORD}@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
+	go run ./cmd/sqlpipe initialize --dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable --force
 
 ## db/backend: connect to the backend database as postgres user
 .PHONY: db/backend
 db/backend:
-	docker exec -it sqlpipe-postgresql psql postgres://postgres:Mypass123@localhost/sqlpipe?sslmode=disable
+	docker exec -it sqlpipe-postgresql psql postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable
 
 ## docker/prune: Prune unused docker stuff
 .PHONY: docker/prune
@@ -59,14 +59,20 @@ docker/prune:
 env/insert:
 	@echo 'inserting a few records in each table'
 	# insert a non admin user
-	curl -u sqlpipe:Mypass123 -k -i -d '{"username": "normalUser", "password": "Mypass123", "admin": false}' https://localhost:9000/api/v1/users
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"username": "normalUser", "password": "${SQLPIPE-PASSWORD}", "admin": false}' https://localhost:9000/api/v1/users
 	# insert a connection
-	curl -u sqlpipe:Mypass123 -k -i -d '{"name": "prod", "dsType": "postgresql", "hostname": "localhost", "port": 5432, "dbName": "sqlpipe", "username": "postgres", "password": "Mypass123", "skipTest": true}' https://localhost:9000/api/v1/connections
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "prod", "dsType": "postgresql", "hostname": "localhost", "port": 5432, "dbName": "sqlpipe", "username": "postgres", "password": "${SQLPIPE-PASSWORD}", "skipTest": true}' https://localhost:9000/api/v1/connections
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "postgresql", "dsType": "postgresql", "hostname": "${postgresqlHostname}", "port": 5432, "dbName": "testing", "username": "sqlpipe", "password": "${SQLPIPE-PASSWORD}"}' https://localhost:9000/api/v1/connections;
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "mysql", "dsType": "mysql", "hostname": "${mysqlHostname}", "port": 3306, "dbName": "testing", "username": "sqlpipe", "password": "${SQLPIPE-PASSWORD}"}' https://localhost:9000/api/v1/connections;
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "mssql", "dsType": "mssql", "hostname": "${mssqlHostname}", "port": 1433, "dbName": "testing", "username": "sqlpipe", "password": "${SQLPIPE-PASSWORD}"}' https://localhost:9000/api/v1/connections;
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "oracle", "dsType": "oracle", "hostname": "${oracleHostname}", "port": 1521, "dbName": "testing", "username": "sqlpipe", "password": "${SQLPIPE-PASSWORD}"}' https://localhost:9000/api/v1/connections;
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "redshift", "dsType": "redshift", "hostname": "${redshiftHostname}", "port": 5439, "dbName": "testing", "username": "sqlpipe", "password": "${SQLPIPE-PASSWORD}"}' https://localhost:9000/api/v1/connections;
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "snowflake", "dsType": "snowflake", "accountId": "${snowflakeAccountId}", "dbName": "testing", "username": "${snowflakeUsername}", "password": "${snowflakePassword}"}' https://localhost:9000/api/v1/connections;
 	# insert a transfer
-	curl -u sqlpipe:Mypass123 -k -i -d '{"sourceId": 1, "targetId": 1, "query": "select * from connections", "targetSchema": "public", "targetTable": "mytarget", "overwrite": true}' https://localhost:9000/api/v1/transfers
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"sourceId": 1, "targetId": 1, "query": "select * from connections", "targetSchema": "public", "targetTable": "mytarget", "overwrite": true}' https://localhost:9000/api/v1/transfers
 	# insert a couple queries
-	curl -u sqlpipe:Mypass123 -k -i -d '{"connectionId": 1, "query": "create table newtable (id int)"}' https://localhost:9000/api/v1/queries
-	curl -u sqlpipe:Mypass123 -k -i -d '{"connectionId": 1, "query": "insert into newtable (id) values (1),(2)"}' https://localhost:9000/api/v1/queries
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"connectionId": 1, "query": "create table newtable (id int)"}' https://localhost:9000/api/v1/queries
+	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"connectionId": 1, "query": "insert into newtable (id) values (1),(2)"}' https://localhost:9000/api/v1/queries
 
 # env/spinup: Spinup cloud instances
 .PHONY: env/spinup
@@ -80,7 +86,7 @@ env/spinup:
 		--no-multi-az \
 		--vpc-security-group-ids ${rdsSecurityGroup} \
 		--master-username sqlpipe \
-		--master-user-password Mypass123 \
+		--master-user-password ${SQLPIPE-PASSWORD} \
 		--storage-type gp2 \
 		--allocated-storage 20 \
 		--no-enable-performance-insights >/dev/null;
@@ -94,7 +100,7 @@ env/spinup:
 		--no-multi-az \
 		--vpc-security-group-ids ${rdsSecurityGroup} \
 		--master-username sqlpipe \
-		--master-user-password Mypass123 \
+		--master-user-password ${SQLPIPE-PASSWORD} \
 		--storage-type gp2 \
 		--allocated-storage 20 \
 		--no-enable-performance-insights >/dev/null;
@@ -107,7 +113,7 @@ env/spinup:
 		--no-multi-az \
 		--vpc-security-group-ids ${rdsSecurityGroup} \
 		--master-username sqlpipe \
-		--master-user-password Mypass123 \
+		--master-user-password ${SQLPIPE-PASSWORD} \
 		--storage-type gp2 \
 		--allocated-storage 20 \
 		--license-model license-included \
@@ -122,7 +128,7 @@ env/spinup:
 		--no-multi-az \
 		--vpc-security-group-ids ${rdsSecurityGroup} \
 		--master-username sqlpipe \
-		--master-user-password Mypass123 \
+		--master-user-password ${SQLPIPE-PASSWORD} \
 		--storage-type gp2 \
 		--allocated-storage 20 \
 		--license-model license-included \
@@ -133,7 +139,7 @@ env/spinup:
 		--master-username sqlpipe \
 		--db-name testing \
 		--cluster-type single-node \
-		--master-user-password Mypass123 \
+		--master-user-password ${SQLPIPE-PASSWORD} \
 		--vpc-security-group-ids ${rdsSecurityGroup} \
 		--cluster-identifier sqlpipe-test-redshift >/dev/null;
 

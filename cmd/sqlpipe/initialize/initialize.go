@@ -63,6 +63,7 @@ var (
 			overwrite bool not null,
 			status text not null default 'queued',
 			error text not null default '',
+			error_properties text not null default '',
 			stopped_at timestamp(0) not null,
 			Version int not null default 1,
 			FOREIGN KEY (source_id) REFERENCES connections(id),
@@ -78,6 +79,7 @@ var (
 		query text not null,
 		status text not null default 'queued',
 		error text not null default '',
+		error_properties text not null default '',
 		stopped_at timestamp(0) not null,
 		Version int not null default 1,
 		FOREIGN KEY (connection_id) REFERENCES connections(id)

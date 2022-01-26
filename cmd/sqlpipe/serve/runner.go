@@ -36,6 +36,7 @@ func (app *application) toDoScanner() {
 					err = app.models.Transfers.Update(transfer)
 					if err != nil {
 						app.logger.PrintError(fmt.Errorf("%s", err), nil)
+						return
 					}
 					app.logger.PrintInfo(
 						"now running a transfer",
@@ -56,6 +57,7 @@ func (app *application) toDoScanner() {
 						app.logger.PrintError(err, errProperties)
 						transfer.Status = "error"
 						transfer.Error = err.Error()
+						transfer.ErrorProperties = fmt.Sprint(errProperties)
 						transfer.StoppedAt = time.Now()
 
 						err = app.models.Transfers.Update(transfer)
@@ -97,6 +99,7 @@ func (app *application) toDoScanner() {
 					app.logger.PrintError(err, errProperties)
 					query.Status = "error"
 					query.Error = err.Error()
+					query.ErrorProperties = fmt.Sprint(errProperties)
 					query.StoppedAt = time.Now()
 					err = app.models.Queries.Update(query)
 					if err != nil {

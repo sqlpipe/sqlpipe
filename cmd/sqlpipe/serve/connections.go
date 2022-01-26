@@ -49,9 +49,9 @@ func (app *application) listConnectionsUiHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	connections, _, err = engine.TestConnections(connections)
+	connections, errProperties, err := engine.TestConnections(connections)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		app.errorResponse(w, r, http.StatusBadRequest, errProperties)
 		return
 	}
 
@@ -98,9 +98,9 @@ func (app *application) createConnectionUiHandler(w http.ResponseWriter, r *http
 	}
 
 	if r.PostForm.Get("skipTest") != "on" {
-		connection, _, err = engine.TestConnection(connection)
+		connection, errProperties, err := engine.TestConnection(connection)
 		if err != nil {
-			app.serverErrorResponse(w, r, err)
+			app.errorResponse(w, r, http.StatusBadRequest, errProperties)
 			return
 		}
 		if !connection.CanConnect {
@@ -143,9 +143,9 @@ func (app *application) showConnectionUiHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	connection, _, err = engine.TestConnection(connection)
+	connection, errProperties, err := engine.TestConnection(connection)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		app.errorResponse(w, r, http.StatusBadRequest, errProperties)
 		return
 	}
 
@@ -233,9 +233,9 @@ func (app *application) updateConnectionUiHandler(w http.ResponseWriter, r *http
 	}
 
 	if r.PostForm.Get("skipTest") != "on" {
-		connection, _, err = engine.TestConnection(connection)
+		connection, errProperties, err := engine.TestConnection(connection)
 		if err != nil {
-			app.serverErrorResponse(w, r, err)
+			app.errorResponse(w, r, http.StatusBadRequest, errProperties)
 			return
 		}
 		if !connection.CanConnect {
@@ -321,9 +321,9 @@ func (app *application) createConnectionApiHandler(w http.ResponseWriter, r *htt
 	}
 
 	if !input.SkipTest {
-		connection, _, err = engine.TestConnection(connection)
+		connection, errProperties, err := engine.TestConnection(connection)
 		if err != nil {
-			app.serverErrorResponse(w, r, err)
+			app.errorResponse(w, r, http.StatusBadRequest, errProperties)
 			return
 		}
 		if !connection.CanConnect {
@@ -363,9 +363,9 @@ func (app *application) listConnectionsApiHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	connections, _, err = engine.TestConnections(connections)
+	connections, errProperties, err := engine.TestConnections(connections)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		app.errorResponse(w, r, http.StatusBadRequest, errProperties)
 		return
 	}
 

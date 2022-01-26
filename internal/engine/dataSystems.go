@@ -1,12 +1,14 @@
 package engine
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/pkg"
@@ -101,7 +103,21 @@ func TestConnection(
 		return connection, errProperties, err
 	}
 
-	if err := db.Ping(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = db.PingContext(ctx)
+	if err != nil {
+		errProperties = map[string]string{
+			"dsType":    connection.DsType,
+			"host":      connection.Hostname,
+			"port":      fmt.Sprint(connection.Port),
+			"accountId": connection.AccountId,
+			"username":  connection.Username,
+			"dbName":    connection.DbName,
+			"err":       fmt.Sprint(err),
+		}
+		err = errors.New("couldn't connect to DB")
 		return connection, errProperties, err
 	}
 
@@ -306,6 +322,9 @@ func sqlInsert(
 		})
 	}
 	wg.Wait()
+	if insertError != nil {
+		return errProperties, insertError
+	}
 
 	return nil, nil
 }

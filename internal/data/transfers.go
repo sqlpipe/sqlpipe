@@ -11,20 +11,21 @@ import (
 )
 
 type Transfer struct {
-	ID           int64      `json:"id"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	SourceID     int64      `json:"sourceID"`
-	Source       Connection `json:"-"`
-	TargetID     int64      `json:"targetID"`
-	Target       Connection `json:"-"`
-	Query        string     `json:"query"`
-	TargetSchema string     `json:"targetSchema"`
-	TargetTable  string     `json:"targetTable"`
-	Overwrite    bool       `json:"overwrite"`
-	Status       string     `json:"status"`
-	Error        string     `json:"error"`
-	StoppedAt    time.Time  `json:"stoppedAt"`
-	Version      int        `json:"version"`
+	ID              int64      `json:"id"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	SourceID        int64      `json:"sourceID"`
+	Source          Connection `json:"-"`
+	TargetID        int64      `json:"targetID"`
+	Target          Connection `json:"-"`
+	Query           string     `json:"query"`
+	TargetSchema    string     `json:"targetSchema"`
+	TargetTable     string     `json:"targetTable"`
+	Overwrite       bool       `json:"overwrite"`
+	Status          string     `json:"status"`
+	Error           string     `json:"error"`
+	ErrorProperties string     `json:"errorProperties"`
+	StoppedAt       time.Time  `json:"stoppedAt"`
+	Version         int        `json:"version"`
 }
 
 type TransferModel struct {
@@ -103,6 +104,7 @@ func (m TransferModel) GetAll(filters Filters) ([]*Transfer, Metadata, error) {
 	transfers.overwrite,
 	transfers.status,
 	transfers.error,
+	transfers.error_properties,
 	transfers.stopped_at,
 	transfers.version
 FROM
@@ -114,7 +116,7 @@ on
 left join
 	connections target
 on
-	transfers.source_id = target.id
+	transfers.target_id = target.id
 order by
 	%s %s,
 	id asc
@@ -162,6 +164,7 @@ offset
 			&transfer.Overwrite,
 			&transfer.Status,
 			&transfer.Error,
+			&transfer.ErrorProperties,
 			&transfer.StoppedAt,
 			&transfer.Version,
 		)
@@ -216,7 +219,7 @@ on
 left join
 	connections target
 on
-	transfers.source_id = target.id
+	transfers.target_id = target.id
 where 
 	transfers.status = 'queued'
 order by 
@@ -298,6 +301,7 @@ func (m TransferModel) GetById(id int64) (*Transfer, error) {
 	transfers.overwrite,
 	transfers.status,
 	transfers.error,
+	transfers.error_properties,
 	transfers.stopped_at,
 	transfers.version
 FROM
@@ -309,7 +313,7 @@ on
 left join
 	connections target
 on
-	transfers.source_id = target.id
+	transfers.target_id = target.id
 where transfers.id = $1
 `
 
@@ -337,6 +341,7 @@ where transfers.id = $1
 		&transfer.Overwrite,
 		&transfer.Status,
 		&transfer.Error,
+		&transfer.ErrorProperties,
 		&transfer.StoppedAt,
 		&transfer.Version,
 	)
@@ -356,13 +361,14 @@ where transfers.id = $1
 func (m TransferModel) Update(transfer *Transfer) error {
 	query := `
         UPDATE transfers 
-        SET status = $1, error = $2, stopped_at = $3, version = version + 1
-        WHERE id = $4 AND version = $5
+        SET status = $1, error = $2, error_properties = $3, stopped_at = $4, version = version + 1
+        WHERE id = $5 AND version = $6
         RETURNING version`
 
 	args := []interface{}{
 		&transfer.Status,
 		&transfer.Error,
+		&transfer.ErrorProperties,
 		&transfer.StoppedAt,
 		&transfer.ID,
 		&transfer.Version,
