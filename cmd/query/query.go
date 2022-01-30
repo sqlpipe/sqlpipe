@@ -5,6 +5,7 @@ import (
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/engine"
+	"github.com/calmitchell617/sqlpipe/internal/globals"
 	"github.com/spf13/cobra"
 )
 
@@ -34,5 +35,6 @@ func runQuery(cmd *cobra.Command, args []string) {
 		fmt.Println(errProperties, err)
 		return
 	}
+	globals.SendAnonymizedQueryAnalytics(query, false)
 	fmt.Println("Query complete. We make a good team!")
 }

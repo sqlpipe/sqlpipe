@@ -103,6 +103,8 @@ func init() {
 
 	ServeCmd.Flags().StringVar(&secret, "secret", "", "Secret key")
 
+	ServeCmd.Flags().BoolVar(&globals.Analytics, "analytics", true, "Send anonymized usage data to SQLpipe for product improvements")
+
 	ServeCmd.Flags().IntVar(&maxConcurrentTransfers, "max-concurrency", 10, "Max number of concurrent transfers to run on this server")
 }
 

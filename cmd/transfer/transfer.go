@@ -5,6 +5,7 @@ import (
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/engine"
+	"github.com/calmitchell617/sqlpipe/internal/globals"
 	"github.com/spf13/cobra"
 )
 
@@ -37,6 +38,7 @@ func init() {
 	TransferCmd.Flags().StringVar(&transfer.Target.DbName, "target-db-name", "", "Target system's DB name")
 	TransferCmd.Flags().StringVar(&transfer.Target.Username, "target-username", "", "Target username")
 	TransferCmd.Flags().StringVar(&transfer.Target.Password, "target-password", "", "Target password")
+	TransferCmd.Flags().BoolVar(&globals.Analytics, "analytics", true, "Send anonymized usage data to SQLpipe for product improvements")
 }
 
 func runTransfer(cmd *cobra.Command, args []string) {
@@ -45,5 +47,6 @@ func runTransfer(cmd *cobra.Command, args []string) {
 		fmt.Println(errProperties, err)
 		return
 	}
+	globals.SendAnonymizedTransferAnalytics(transfer, false)
 	fmt.Println("Transfer complete. We make a good team!")
 }

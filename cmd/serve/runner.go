@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/engine"
+	"github.com/calmitchell617/sqlpipe/internal/globals"
 	"github.com/calmitchell617/sqlpipe/pkg"
 )
 
@@ -48,13 +49,17 @@ func (app *application) toDoScanner() {
 							errProperties,
 						)
 						numLocalActiveTransfers -= 1
+						errProperties, err = globals.SendAnonymizedTransferAnalytics(*transfer, true)
+						if err != nil {
+							app.logger.PrintError(err, errProperties)
+						}
 						return
 					}
 					app.logger.PrintInfo(
 						"now running a transfer",
 						map[string]string{
 							"ID":           fmt.Sprint(transfer.ID),
-							"CreatedAt":    humanDate(transfer.CreatedAt),
+							"CreatedAt":    globals.HumanDate(transfer.CreatedAt),
 							"SourceID":     fmt.Sprint(transfer.SourceID),
 							"TargetID":     fmt.Sprint(transfer.TargetID),
 							"Query":        transfer.Query,
@@ -84,6 +89,10 @@ func (app *application) toDoScanner() {
 							)
 						}
 						numLocalActiveTransfers -= 1
+						errProperties, err = globals.SendAnonymizedTransferAnalytics(*transfer, true)
+						if err != nil {
+							app.logger.PrintError(err, errProperties)
+						}
 						return
 					}
 
@@ -101,6 +110,10 @@ func (app *application) toDoScanner() {
 						)
 					}
 					numLocalActiveTransfers -= 1
+					errProperties, err = globals.SendAnonymizedTransferAnalytics(*transfer, true)
+					if err != nil {
+						app.logger.PrintError(err, errProperties)
+					}
 				})
 			}
 		}
@@ -111,13 +124,29 @@ func (app *application) toDoScanner() {
 				query.Status = "active"
 				err = app.models.Queries.Update(query)
 				if err != nil {
-					app.logger.PrintError(fmt.Errorf("%s", err), nil)
+					query.Status = "error"
+					query.Error = "unable to mark query as active"
+					errProperties := map[string]string{
+						"error:": err.Error(),
+						"query":  fmt.Sprintf("%+v", query),
+					}
+					query.ErrorProperties = fmt.Sprintf("%+v", errProperties)
+
+					app.logger.PrintError(
+						errors.New(query.Error),
+						errProperties,
+					)
+					errProperties, err = globals.SendAnonymizedQueryAnalytics(*query, true)
+					if err != nil {
+						app.logger.PrintError(err, errProperties)
+					}
+					return
 				}
 				app.logger.PrintInfo(
 					"now running a query",
 					map[string]string{
 						"ID":           fmt.Sprint(query.ID),
-						"CreatedAt":    humanDate(query.CreatedAt),
+						"CreatedAt":    globals.HumanDate(query.CreatedAt),
 						"ConnectionID": fmt.Sprint(query.ConnectionID),
 						"Query":        query.Query,
 						"Status":       query.Status,
@@ -132,6 +161,17 @@ func (app *application) toDoScanner() {
 					query.StoppedAt = time.Now()
 					err = app.models.Queries.Update(query)
 					if err != nil {
+						errProperties := map[string]string{
+							"error:": err.Error(),
+							"query":  fmt.Sprintf("%+v", query),
+						}
+						app.logger.PrintError(
+							errors.New("unable to update query"),
+							errProperties,
+						)
+					}
+					errProperties, err = globals.SendAnonymizedQueryAnalytics(*query, true)
+					if err != nil {
 						app.logger.PrintError(err, errProperties)
 					}
 					return
@@ -140,6 +180,17 @@ func (app *application) toDoScanner() {
 				query.Status = "complete"
 				query.StoppedAt = time.Now()
 				err = app.models.Queries.Update(query)
+				if err != nil {
+					errProperties := map[string]string{
+						"error:": err.Error(),
+						"query":  fmt.Sprintf("%+v", query),
+					}
+					app.logger.PrintError(
+						errors.New("unable to update query"),
+						errProperties,
+					)
+				}
+				errProperties, err = globals.SendAnonymizedQueryAnalytics(*query, true)
 				if err != nil {
 					app.logger.PrintError(err, errProperties)
 				}
