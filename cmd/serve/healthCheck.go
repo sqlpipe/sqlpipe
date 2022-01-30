@@ -2,13 +2,15 @@ package serve
 
 import (
 	"net/http"
+
+	"github.com/calmitchell617/sqlpipe/internal/globals"
 )
 
 func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
 	env := envelope{
 		"status": "available",
 		"system_info": map[string]string{
-			"version": version,
+			"version": globals.Version,
 		},
 	}
 

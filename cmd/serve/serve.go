@@ -20,6 +20,7 @@ import (
 	"github.com/golangcollege/sessions"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/calmitchell617/sqlpipe/internal/globals"
 	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
 	"github.com/spf13/cobra"
 )
@@ -33,10 +34,6 @@ var (
 
 	cfg config
 
-	buildTime string
-	version   string
-
-	displayVersion         bool
 	maxConcurrentTransfers int
 
 	secret string
@@ -104,15 +101,12 @@ func init() {
 	ServeCmd.Flags().StringVar(&cfg.adminCredentials.username, "admin-username", "", "Admin username")
 	ServeCmd.Flags().StringVar(&cfg.adminCredentials.password, "admin-password", "", "Admin password")
 
-	ServeCmd.Flags().BoolVar(&displayVersion, "version", false, "Display SQLpipe version")
-
 	ServeCmd.Flags().StringVar(&secret, "secret", "", "Secret key")
 
 	ServeCmd.Flags().IntVar(&maxConcurrentTransfers, "max-concurrency", 10, "Max number of concurrent transfers to run on this server")
 }
 
 func serve(cmd *cobra.Command, args []string) {
-	checkDisplayVersion()
 
 	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
 
@@ -161,14 +155,6 @@ func serve(cmd *cobra.Command, args []string) {
 	}
 }
 
-func checkDisplayVersion() {
-	if displayVersion {
-		fmt.Printf("Version:\t%s\n", version)
-		fmt.Printf("Build time:\t%s\n", buildTime)
-		os.Exit(0)
-	}
-}
-
 func openDB(cfg config) (*sql.DB, error) {
 	db, err := sql.Open("postgres", cfg.db.dsn)
 	if err != nil {
@@ -198,7 +184,7 @@ func openDB(cfg config) (*sql.DB, error) {
 }
 
 func publishMetrics(db *sql.DB) {
-	expvar.NewString("version").Set(version)
+	expvar.NewString("version").Set(globals.Version)
 	expvar.Publish("goroutines", expvar.Func(func() interface{} {
 		return runtime.NumGoroutine()
 	}))

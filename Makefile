@@ -21,7 +21,7 @@ confirm:
 ## run/serve: build and run a sqlpipe server
 .PHONY: run/serve
 run/serve:
-	go run ./cmd/sqlpipe serve \
+	go run ./cmd serve \
 		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
 		--secret "8i.(LBH4JZSv#Z@$qKBUcNlUk*C&y}$p" \
 		--max-concurrency 10
@@ -29,7 +29,7 @@ run/serve:
 ## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server
 .PHONY: run/init
 run/init: db/init
-	go run ./cmd/sqlpipe serve \
+	go run ./cmd serve \
 		--admin-username=sqlpipe \
 		--admin-password=${SQLPIPE-PASSWORD} \
 		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
@@ -42,7 +42,7 @@ db/init:
 	docker container run -d -p 5432:5432 --name sqlpipe-postgresql -e POSTGRES_PASSWORD=${SQLPIPE-PASSWORD} postgres:14.1
 	sleep 1
 	docker exec -it sqlpipe-postgresql psql postgres://postgres:${SQLPIPE-PASSWORD}@localhost/postgres?sslmode=disable  -c 'CREATE DATABASE sqlpipe'
-	go run ./cmd/sqlpipe initialize --dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable --force
+	go run ./cmd initialize --dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable --force
 
 ## db/backend: connect to the backend database as postgres user
 .PHONY: db/backend
@@ -208,13 +208,13 @@ vendor:
 
 current_time = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 git_description = $(shell git describe --always --dirty --tags --long)
-linker_flags = '-s -X main.buildTime=${current_time} -X main.version=${git_description}'
+linker_flags = '-s -X main.buildVersion=${git_description}'
 
 ## build/sqlpipe: build the cmd/sqlpipe application
 .PHONY: build/sqlpipe
 build/sqlpipe:
 	@echo 'Building cmd/sqlpipe...'
-	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd/sqlpipe
-	GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd/sqlpipe
-	GOOS=darwin GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/darwin_arm64/sqlpipe ./cmd/sqlpipe
-	GOOS=windows GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/windows_arm64/sqlpipe ./cmd/sqlpipe
+	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd
+	GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd
+	GOOS=darwin GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/darwin_arm64/sqlpipe ./cmd
+	GOOS=windows GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/windows_arm64/sqlpipe ./cmd

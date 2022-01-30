@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 	"github.com/calmitchell617/sqlpipe/pkg"
 	"github.com/julienschmidt/httprouter"
@@ -210,4 +211,34 @@ func getPaginationData(
 		}
 		return PaginationData{true, pages, offset, currentPageName}
 	}
+}
+
+func (app *application) sendAnonymizedTransferAnalytics(transfer data.Transfer, server bool) {
+
+	var input struct {
+		SourceType     string `json:"sourceType"`
+		TargetType     string `json:"targetType"`
+		Status         string `json:"status"`
+		Overwrite      bool   `json:"overwrite"`
+		CreatedAt      string `json:"createdAt"`
+		StoppedAt      string `json:"StoppedAt"`
+		Server         bool   `json:"server"`
+		SQLpipeVersion string `json:"sqlpipeVersion"`
+	}
+
+	input.SourceType = transfer.Source.DsType
+	input.TargetType = transfer.Target.DsType
+	input.Status = transfer.Status
+	input.Overwrite = transfer.Overwrite
+	input.CreatedAt = humanDate(transfer.CreatedAt)
+	input.CreatedAt = humanDate(transfer.StoppedAt)
+	input.Server = server
+	input.SQLpipeVersion = "1.0"
+
+	body, err := json.Marshal(input)
+	if err != nil {
+		app.logger.PrintError(errors.New("unable to send anonymized analytics data"), map[string]string{"error": err.Error()})
+	}
+
+	_, _ = http.Post("https://analytics.sqlpipe.com/transfer", "application/json", bytes.NewBuffer(body))
 }
