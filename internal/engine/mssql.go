@@ -17,6 +17,15 @@ type MSSQL struct {
 	driverName      string `json:"-"`
 	connString      string `json:"-"`
 	debugConnString string
+	db              *sql.DB
+}
+
+func (dsConn MSSQL) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
+	return standardExecute(query, dsConn.dsType, dsConn.db)
+}
+
+func (dsConn MSSQL) closeDb() {
+	dsConn.db.Close()
 }
 
 func getNewMSSQL(
@@ -42,7 +51,9 @@ func getNewMSSQL(
 		return dsConn, errProperties, err
 	}
 
-	mssql.SetConnMaxLifetime(time.Minute * 1)
+	mssql.SetMaxIdleConns(5)
+	duration, _ := time.ParseDuration("10s")
+	mssql.SetConnMaxIdleTime(duration)
 
 	dsConn = MSSQL{
 		"mssql",
@@ -61,6 +72,7 @@ func getNewMSSQL(
 			connection.Port,
 			connection.DbName,
 		),
+		mssql,
 	}
 
 	return dsConn, errProperties, err
@@ -685,211 +697,6 @@ var mssqlIntermediateTypes = map[string]string{
 	"VARBINARY":        "MSSQL_VARBINARY",
 	"UNIQUEIDENTIFIER": "MSSQL_UNIQUEIDENTIFIER",
 	"XML":              "MSSQL_XML",
-}
-
-var mssqlCreateTableTypes = map[string]func(columnInfo ResultSetColumnInfo, colNum int) string{
-
-	// MSSQL
-	"MSSQL_BIGINT":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-	"MSSQL_BIT":              func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIT" },
-	"MSSQL_INT":              func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-	"MSSQL_MONEY":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"MSSQL_SMALLINT":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"MSSQL_SMALLMONEY":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"MSSQL_TINYINT":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "TINYINT" },
-	"MSSQL_FLOAT":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "FLOAT" },
-	"MSSQL_REAL":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
-	"MSSQL_DATE":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"MSSQL_DATETIME2":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIME2" },
-	"MSSQL_DATETIME":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIME" },
-	"MSSQL_DATETIMEOFFSET":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIMEOFFSET" },
-	"MSSQL_SMALLDATETIME":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLDATETIME" },
-	"MSSQL_TIME":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
-	"MSSQL_TEXT":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "TEXT" },
-	"MSSQL_NTEXT":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "NTEXT" },
-	"MSSQL_BINARY":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBINARY(8000)" },
-	"MSSQL_UNIQUEIDENTIFIER": func(columnInfo ResultSetColumnInfo, colNum int) string { return "UNIQUEIDENTIFIER" },
-	"MSSQL_XML":              func(columnInfo ResultSetColumnInfo, colNum int) string { return "XML" },
-	"MSSQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"DECIMAL(%d,%d)",
-			columnInfo.ColumnPrecisions[colNum],
-			columnInfo.ColumnScales[colNum],
-		)
-	},
-	"MSSQL_CHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"CHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"MSSQL_VARCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"VARCHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"MSSQL_NCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NCHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"MSSQL_NVARCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"MSSQL_VARBINARY": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"VARBINARY(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-
-	// PostgreSQL
-
-	"PostgreSQL_BIGINT":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-	"PostgreSQL_BIT":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_VARBIT":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_BOOLEAN":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIT" },
-	"PostgreSQL_BOX":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_BYTEA":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBINARY(8000)" },
-	"PostgreSQL_BPCHAR":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"PostgreSQL_CIDR":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_CIRCLE":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_DATE":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"PostgreSQL_FLOAT8":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "FLOAT" },
-	"PostgreSQL_INET":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_INT4":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-	"PostgreSQL_INTERVAL":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_JSON":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"PostgreSQL_JSONB":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"PostgreSQL_LINE":          func(ColumnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_LSEG":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_MACADDR":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_MONEY":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_PATH":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_PG_LSN":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_POINT":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_POLYGON":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_FLOAT4":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
-	"PostgreSQL_INT2":          func(ColumnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"PostgreSQL_TEXT":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NTEXT" },
-	"PostgreSQL_TIME":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
-	"PostgreSQL_TIMETZ":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_TIMESTAMP":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIME2" },
-	"PostgreSQL_TIMESTAMPTZ":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIMEOFFSET" },
-	"PostgreSQL_TSQUERY":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"PostgreSQL_TSVECTOR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"PostgreSQL_TXID_SNAPSHOT": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"PostgreSQL_UUID":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "UNIQUEIDENTIFIER" },
-	"PostgreSQL_XML":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "XML" },
-	"PostgreSQL_VARCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"PostgreSQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"DECIMAL(%d,%d)",
-			columnInfo.ColumnPrecisions[colNum],
-			columnInfo.ColumnScales[colNum],
-		)
-	},
-
-	// MySQL
-
-	"MySQL_BIT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR(8000)" },
-	"MySQL_TINYINT":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TINYINT" },
-	"MySQL_SMALLINT":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"MySQL_MEDIUMINT": func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-	"MySQL_INT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-	"MySQL_BIGINT":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-	"MySQL_FLOAT4":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
-	"MySQL_FLOAT8":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "FLOAT" },
-	"MySQL_DATE":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"MySQL_TIME":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
-	"MySQL_DATETIME":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIME2" },
-	"MySQL_TIMESTAMP": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIME2" },
-	"MySQL_YEAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-	"MySQL_CHAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(255)" },
-	"MySQL_VARCHAR":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"MySQL_TEXT":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NTEXT" },
-	"MySQL_BINARY":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBINARY(255)" },
-	"MySQL_VARBINARY": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBINARY(8000)" },
-	"MySQL_BLOB":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBINARY(8000)" },
-	"MySQL_GEOMETRY":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBINARY(8000)" },
-	"MySQL_JSON":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"MySQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"DECIMAL(%d,%d)",
-			columnInfo.ColumnPrecisions[colNum],
-			columnInfo.ColumnScales[colNum],
-		)
-	},
-
-	// Oracle
-
-	"Oracle_OCIClobLocator": func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"Oracle_OCIBlobLocator": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBINARY(8000)" },
-	"Oracle_LONG":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NTEXT" },
-	"Oracle_NUMBER":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "FLOAT" },
-	"Oracle_DATE":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Oracle_TimeStampDTY":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIME2" },
-	"Oracle_CHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"Oracle_NCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-
-	// SNOWFLAKE
-
-	"Snowflake_NUMBER":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "FLOAT" },
-	"Snowflake_BINARY":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARBINARY(8000)" },
-	"Snowflake_REAL":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "FLOAT" },
-	"Snowflake_TEXT":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"Snowflake_BOOLEAN":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIT" },
-	"Snowflake_DATE":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Snowflake_TIME":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
-	"Snowflake_TIMESTAMP_LTZ": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIMEOFFSET" },
-	"Snowflake_TIMESTAMP_NTZ": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIME2" },
-	"Snowflake_TIMESTAMP_TZ":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIMEOFFSET" },
-	"Snowflake_VARIANT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"Snowflake_OBJECT":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"Snowflake_ARRAY":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-
-	// Redshift
-
-	"Redshift_BIGINT":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIGINT" },
-	"Redshift_BOOLEAN":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "BIT" },
-	"Redshift_CHAR":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"Redshift_BPCHAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(MAX)" },
-	"Redshift_DATE":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Redshift_DOUBLE":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "FLOAT" },
-	"Redshift_INT":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "INT" },
-	"Redshift_REAL":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "REAL" },
-	"Redshift_SMALLINT":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "SMALLINT" },
-	"Redshift_TIME":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIME" },
-	"Redshift_TIMETZ":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR(4000)" },
-	"Redshift_TIMESTAMP":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIME2" },
-	"Redshift_TIMESTAMPTZ": func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATETIMEOFFSET" },
-	"Redshift_NUMERIC":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "FLOAT" },
-	"Redshift_VARCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
 }
 
 var mssqlValWriters = map[string]func(value interface{}, terminator string) string{

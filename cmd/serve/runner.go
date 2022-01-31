@@ -43,6 +43,7 @@ func (app *application) toDoScanner() {
 							"transfer": fmt.Sprintf("%+v", transfer),
 						}
 						transfer.ErrorProperties = fmt.Sprintf("%+v", errProperties)
+						transfer.StoppedAt = time.Now()
 
 						app.logger.PrintError(
 							errors.New(transfer.Error),

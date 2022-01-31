@@ -18,7 +18,7 @@ func SendAnonymizedTransferAnalytics(transfer data.Transfer, server bool) (errPr
 			Status         string `json:"status"`
 			Overwrite      bool   `json:"overwrite"`
 			CreatedAt      string `json:"createdAt"`
-			StoppedAt      string `json:"StoppedAt"`
+			StoppedAt      string `json:"stoppedAt"`
 			Server         bool   `json:"server"`
 			SQLpipeVersion string `json:"sqlpipeVersion"`
 		}
@@ -28,7 +28,7 @@ func SendAnonymizedTransferAnalytics(transfer data.Transfer, server bool) (errPr
 		input.Status = transfer.Status
 		input.Overwrite = transfer.Overwrite
 		input.CreatedAt = PgDate(transfer.CreatedAt)
-		input.CreatedAt = PgDate(transfer.StoppedAt)
+		input.StoppedAt = PgDate(transfer.StoppedAt)
 		input.Server = server
 		input.SQLpipeVersion = Version
 

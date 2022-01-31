@@ -81,6 +81,11 @@ type DsConnection interface {
 
 	// Runs a turbo transfer
 	turboTransfer(rows *sql.Rows, transferInfo data.Transfer, resultSetColumnInfo ResultSetColumnInfo) (errProperties map[string]string, err error)
+
+	// Bottom level func where queries actually get run
+	execute(query string) (rows *sql.Rows, errProperties map[string]string, err error)
+
+	closeDb()
 }
 
 func TestConnection(
@@ -91,6 +96,7 @@ func TestConnection(
 	error,
 ) {
 	dsConn, errProperties, err := GetDs(*connection)
+	defer dsConn.closeDb()
 	if err != nil {
 		return connection, errProperties, err
 	}
@@ -98,10 +104,10 @@ func TestConnection(
 	_, driverName, connString := dsConn.getConnectionInfo()
 
 	db, err := sql.Open(driverName, connString)
-
 	if err != nil {
 		return connection, errProperties, err
 	}
+	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -188,6 +194,7 @@ func RunTransfer(
 	targetConnection := transfer.Target
 
 	sourceSystem, errProperties, err := GetDs(sourceConnection)
+	defer sourceSystem.closeDb()
 	if err != nil {
 		return errProperties, err
 	}
@@ -196,9 +203,9 @@ func RunTransfer(
 	if err != nil {
 		return errProperties, err
 	}
-	defer rows.Close()
 
 	targetSystem, errProperties, err := GetDs(targetConnection)
+	defer targetSystem.closeDb()
 	if err != nil {
 		return errProperties, err
 	}
@@ -212,10 +219,15 @@ func RunQuery(query *data.Query) (
 	err error,
 ) {
 	dsConn, errProperties, err := GetDs(query.Connection)
+	defer dsConn.closeDb()
 	if err != nil {
 		return errProperties, err
 	}
-	_, errProperties, err = execute(dsConn, query.Query)
+	rows, errProperties, err := dsConn.execute(query.Query)
+	if err != nil {
+		return errProperties, err
+	}
+	defer rows.Close()
 	return errProperties, err
 }
 
@@ -229,7 +241,7 @@ func standardGetRows(
 	err error,
 ) {
 
-	rows, errProperties, err = execute(dsConn, transferInfo.Query)
+	rows, errProperties, err = dsConn.execute(transferInfo.Query)
 	if err != nil {
 		return rows, resultSetColumnInfo, errProperties, err
 	}
@@ -299,7 +311,11 @@ func sqlInsert(
 			wg.Add(1)
 			pkg.Background(func() {
 				defer wg.Done()
-				_, insertErrProperties, insertError = execute(dsConn, queryString)
+				rows, insertErrProperties, insertError = dsConn.execute(queryString)
+				if insertError != nil {
+					return
+				}
+				defer rows.Close()
 			})
 			isFirst = true
 			queryBuilder.Reset()
@@ -318,7 +334,11 @@ func sqlInsert(
 		wg.Add(1)
 		pkg.Background(func() {
 			defer wg.Done()
-			_, errProperties, insertError = execute(dsConn, queryString)
+			rows, insertErrProperties, insertError = dsConn.execute(queryString)
+			if insertError != nil {
+				return
+			}
+			defer rows.Close()
 		})
 	}
 	wg.Wait()
@@ -374,7 +394,7 @@ func standardGetFormattedResults(
 	err error,
 ) {
 
-	rows, errProperties, err := execute(dsConn, query)
+	rows, errProperties, err := dsConn.execute(query)
 	if err != nil {
 		return queryResult, errProperties, err
 	}
@@ -410,36 +430,7 @@ func standardGetFormattedResults(
 	return queryResult, errProperties, err
 }
 
-// This is the base level function, where queries actually get executed.
-func execute(
-	dsConn DsConnection,
-	query string,
-) (rows *sql.Rows, errProperties map[string]string, err error) {
-
-	_, driverName, connString := dsConn.getConnectionInfo()
-	dsType, debugConnString := dsConn.GetDebugInfo()
-
-	db, err := sql.Open(driverName, connString)
-	if err != nil {
-		msg := errors.New("error while running sql.Open()")
-		errProperties := map[string]string{
-			"debugConnString": debugConnString,
-			"error":           err.Error(),
-		}
-		return rows, errProperties, msg
-	}
-	defer db.Close()
-
-	err = db.Ping()
-	if err != nil {
-		msg := errors.New("error while running db.Ping()")
-		errProperties := map[string]string{
-			"debugConnString": debugConnString,
-			"error":           err.Error(),
-		}
-		return rows, errProperties, msg
-	}
-
+func standardExecute(query string, dsType string, db *sql.DB) (rows *sql.Rows, errProperties map[string]string, err error) {
 	rows, err = db.Query(query)
 	if err != nil {
 		if len(query) > 1000 {
@@ -551,20 +542,32 @@ func dropTableIfExistsWithSchema(
 		transferInfo.TargetTable,
 	)
 
-	_, errProperties, err = execute(dsConn, dropQuery)
+	rows, errProperties, err := dsConn.execute(dropQuery)
+	if err != nil {
+		return errProperties, err
+	}
+	defer rows.Close()
 
 	return errProperties, err
 }
 
 func dropTableIfExistsNoSchema(dsConn DsConnection, transferInfo data.Transfer) (errProperties map[string]string, err error) {
 	dropQuery := fmt.Sprintf("DROP TABLE IF EXISTS %v", transferInfo.TargetTable)
-	_, errProperties, err = execute(dsConn, dropQuery)
+	rows, errProperties, err := dsConn.execute(dropQuery)
+	if err != nil {
+		return errProperties, err
+	}
+	defer rows.Close()
 	return errProperties, err
 }
 
 func dropTableNoSchema(dsConn DsConnection, transferInfo data.Transfer) (errProperties map[string]string, err error) {
 	dropQuery := fmt.Sprintf("DROP TABLE %v", transferInfo.TargetTable)
-	_, errProperties, err = execute(dsConn, dropQuery)
+	rows, errProperties, err := dsConn.execute(dropQuery)
+	if err != nil {
+		return errProperties, err
+	}
+	defer rows.Close()
 	return errProperties, err
 }
 
@@ -582,7 +585,11 @@ func deleteFromTableWithSchema(
 		transferInfo.TargetTable,
 	)
 
-	_, errProperties, err = execute(dsConn, query)
+	rows, errProperties, err := dsConn.execute(query)
+	if err != nil {
+		return errProperties, err
+	}
+	defer rows.Close()
 
 	return errProperties, err
 }
@@ -595,7 +602,11 @@ func deleteFromTableNoSchema(dsConn DsConnection, transferInfo data.Transfer) (
 		"DELETE FROM %v",
 		transferInfo.TargetTable,
 	)
-	_, errProperties, err = execute(dsConn, query)
+	rows, errProperties, err := dsConn.execute(query)
+	if err != nil {
+		return errProperties, err
+	}
+	defer rows.Close()
 
 	return errProperties, err
 }
@@ -644,7 +655,11 @@ func standardCreateTable(
 
 	query := queryBuilder.String()
 
-	_, errProperties, err = execute(dsConn, query)
+	rows, errProperties, err := dsConn.execute(query)
+	if err != nil {
+		return errProperties, err
+	}
+	defer rows.Close()
 
 	return errProperties, err
 }

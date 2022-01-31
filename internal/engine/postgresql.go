@@ -17,6 +17,15 @@ type PostgreSQL struct {
 	driverName      string `json:"-"`
 	connString      string `json:"-"`
 	debugConnString string
+	db              *sql.DB
+}
+
+func (dsConn PostgreSQL) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
+	return standardExecute(query, dsConn.dsType, dsConn.db)
+}
+
+func (dsConn PostgreSQL) closeDb() {
+	dsConn.db.Close()
 }
 
 func getNewPostgreSQL(
@@ -42,7 +51,9 @@ func getNewPostgreSQL(
 		return dsConn, errProperties, err
 	}
 
-	postgresql.SetConnMaxLifetime(time.Minute * 1)
+	postgresql.SetMaxIdleConns(5)
+	duration, _ := time.ParseDuration("10s")
+	postgresql.SetConnMaxIdleTime(duration)
 
 	dsConn = PostgreSQL{
 		"postgresql",
@@ -61,6 +72,7 @@ func getNewPostgreSQL(
 			connection.Port,
 			connection.DbName,
 		),
+		postgresql,
 	}
 
 	return dsConn, errProperties, err

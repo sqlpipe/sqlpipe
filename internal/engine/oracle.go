@@ -17,6 +17,15 @@ type Oracle struct {
 	driverName      string `json:"-"`
 	connString      string `json:"-"`
 	debugConnString string
+	db              *sql.DB
+}
+
+func (dsConn Oracle) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
+	return standardExecute(query, dsConn.dsType, dsConn.db)
+}
+
+func (dsConn Oracle) closeDb() {
+	dsConn.db.Close()
 }
 
 func getNewOracle(
@@ -42,7 +51,9 @@ func getNewOracle(
 		return dsConn, errProperties, err
 	}
 
-	oracle.SetConnMaxLifetime(time.Minute * 1)
+	oracle.SetMaxIdleConns(5)
+	duration, _ := time.ParseDuration("10s")
+	oracle.SetConnMaxIdleTime(duration)
 
 	dsConn = Oracle{
 		"oracle",
@@ -61,6 +72,7 @@ func getNewOracle(
 			connection.Port,
 			connection.DbName,
 		),
+		oracle,
 	}
 
 	return dsConn, errProperties, err
@@ -142,7 +154,7 @@ func (dsConn Oracle) getRows(
 	errProperties map[string]string,
 	err error,
 ) {
-	rows, errProperties, err = execute(dsConn, transfer.Query)
+	rows, errProperties, err = dsConn.execute(transfer.Query)
 	if err != nil {
 		return rows, resultSetColumnInfo, errProperties, err
 	}
@@ -180,23 +192,8 @@ func (dsConn Oracle) getFormattedResults(
 	errProperties map[string]string,
 	err error,
 ) {
-	// defer func() {
-	// 	if raisedValue := recover(); raisedValue != nil {
-	// 		switch val := raisedValue.(type) {
-	// 		case runtime.Error:
-	// 			if strings.Contains(fmt.Sprint(val), "runtime error: integer divide by zero") {
-	// 				return
-	// 			}
-	// 		case ErrorInfo:
-	// 			if strings.Contains(val.ErrorMessage, "TTC error: received code 0 during stmt reading") {
-	// 				panic(`Got error: "TTC error: received code 0 during stmt reading". This usually means you are trying to extract an XML or URIType column from Oracle, which is not currently supported.`)
-	// 			}
-	// 		}
-	// 		panic(raisedValue)
-	// 	}
-	// }()
 
-	rows, errProperties, err := execute(dsConn, query)
+	rows, errProperties, err := dsConn.execute(query)
 	if err != nil {
 		return queryResult, errProperties, err
 	}
@@ -786,216 +783,6 @@ var oracleIntermediateTypes = map[string]string{
 	"TimeStampLTZ_DTY": "Oracle_TimeStampLTZ_DTY",
 	"NOT":              "Oracle_NOT",
 	"OracleType(109)":  "Oracle_OracleType(109)",
-}
-
-var oracleCreateTableTypes = map[string]func(columnInfo ResultSetColumnInfo, colNum int) string{
-
-	// Oracle
-	"Oracle_OCIClobLocator":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "NCLOB" },
-	"Oracle_OCIBlobLocator":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"Oracle_LONG":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "LONG" },
-	"Oracle_NUMBER":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER" },
-	"Oracle_IBFloat":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"Oracle_IBDouble":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Oracle_DATE":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Oracle_TimeStampDTY":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Oracle_TimeStampTZ_DTY": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"Oracle_TimeStampLTZ_DTY": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return "TIMESTAMP WITH LOCAL TIME ZONE"
-	},
-	"Oracle_CHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR2(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"Oracle_NCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR2(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	// "Oracle_OracleType(109)": func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	// "Oracle_NOT":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-
-	// PostgreSQL
-
-	"PostgreSQL_BIGINT":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
-	"PostgreSQL_BIT":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_VARBIT":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_BOOLEAN":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
-	"PostgreSQL_BOX":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_BYTEA":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"PostgreSQL_BPCHAR":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_CIDR":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_CIRCLE":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_DATE":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"PostgreSQL_FLOAT8":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"PostgreSQL_INET":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_INT4":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"PostgreSQL_INTERVAL":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_JSON":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_JSONB":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_LINE":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_LSEG":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_MACADDR":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_MONEY":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_PATH":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_PG_LSN":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_POINT":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_POLYGON":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_FLOAT4":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"PostgreSQL_INT2":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"PostgreSQL_TEXT":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_TIME":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_TIMETZ":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_TIMESTAMP":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"PostgreSQL_TIMESTAMPTZ":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"PostgreSQL_TSQUERY":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_TSVECTOR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_TXID_SNAPSHOT": func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_UUID":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"PostgreSQL_XML":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"PostgreSQL_VARCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR2(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"PostgreSQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NUMBER(%d,%d)",
-			columnInfo.ColumnPrecisions[colNum],
-			columnInfo.ColumnScales[colNum],
-		)
-	},
-
-	// MySQL
-
-	"MySQL_BIT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_TINYINT":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_SMALLINT":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_MEDIUMINT": func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_INT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_FLOAT4":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"MySQL_FLOAT8":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"MySQL_DATE":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"MySQL_TIME":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MySQL_DATETIME":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MySQL_TIMESTAMP": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MySQL_YEAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MySQL_CHAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MySQL_VARCHAR":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MySQL_TEXT":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MySQL_BINARY":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_VARBINARY": func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_BLOB":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_GEOMETRY":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MySQL_JSON":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MySQL_BIGINT":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
-	"MySQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NUMBER(%d,%d)",
-			columnInfo.ColumnPrecisions[colNum],
-			columnInfo.ColumnScales[colNum],
-		)
-	},
-
-	// MSSQL
-
-	"MSSQL_BIGINT":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
-	"MSSQL_BIT":              func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
-	"MSSQL_INT":              func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MSSQL_MONEY":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_SMALLINT":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MSSQL_SMALLMONEY":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_TINYINT":          func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"MSSQL_FLOAT":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"MSSQL_REAL":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"MSSQL_DATE":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"MSSQL_DATETIME2":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_DATETIME":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_DATETIMEOFFSET":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"MSSQL_SMALLDATETIME":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"MSSQL_TIME":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_TEXT":             func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_NTEXT":            func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MSSQL_BINARY":           func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MSSQL_VARBINARY":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"MSSQL_UNIQUEIDENTIFIER": func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"MSSQL_XML":              func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"MSSQL_CHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"CHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"MSSQL_VARCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"VARCHAR2(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"MSSQL_NCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NCHAR(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"MSSQL_NVARCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR2(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
-	"MSSQL_DECIMAL": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NUMBER(%d,%d)",
-			columnInfo.ColumnPrecisions[colNum],
-			columnInfo.ColumnScales[colNum],
-		)
-	},
-
-	// SNOWFLAKE
-
-	"Snowflake_NUMBER":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Snowflake_BINARY":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "BLOB" },
-	"Snowflake_REAL":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Snowflake_TEXT":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Snowflake_BOOLEAN": func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
-	"Snowflake_DATE":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Snowflake_TIME":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"Snowflake_TIMESTAMP_LTZ": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return "TIMESTAMP WITH LOCAL TIME ZONE"
-	},
-	"Snowflake_TIMESTAMP_NTZ": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Snowflake_TIMESTAMP_TZ":  func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"Snowflake_VARIANT":       func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Snowflake_OBJECT":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Snowflake_ARRAY":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-
-	// Redshift
-
-	"Redshift_BIGINT":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(19, 0)" },
-	"Redshift_BOOLEAN":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "NUMBER(1)" },
-	"Redshift_CHAR":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Redshift_BPCHAR":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "NVARCHAR2(2000)" },
-	"Redshift_DATE":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "DATE" },
-	"Redshift_DOUBLE":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Redshift_INT":         func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"Redshift_NUMERIC":     func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_DOUBLE" },
-	"Redshift_REAL":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "BINARY_FLOAT" },
-	"Redshift_SMALLINT":    func(columnInfo ResultSetColumnInfo, colNum int) string { return "INTEGER" },
-	"Redshift_TIME":        func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"Redshift_TIMETZ":      func(columnInfo ResultSetColumnInfo, colNum int) string { return "VARCHAR2(4000)" },
-	"Redshift_TIMESTAMP":   func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP" },
-	"Redshift_TIMESTAMPTZ": func(columnInfo ResultSetColumnInfo, colNum int) string { return "TIMESTAMP WITH TIME ZONE" },
-	"Redshift_VARCHAR": func(columnInfo ResultSetColumnInfo, colNum int) string {
-		return fmt.Sprintf(
-			"NVARCHAR2(%d)",
-			columnInfo.ColumnLengths[colNum],
-		)
-	},
 }
 
 var oracleValWriters = map[string]func(value interface{}, terminator string) string{

@@ -89,8 +89,8 @@ func init() {
 
 	ServeCmd.Flags().StringVar(&cfg.db.dsn, "dsn", "", "Database backend connection string")
 
-	ServeCmd.Flags().IntVar(&cfg.db.maxOpenConns, "max-connections", 100, "The port SQLPipe will run on. Default 9000")
-	ServeCmd.Flags().IntVar(&cfg.db.maxIdleConns, "max-idle-connections", 5, "The port SQLPipe will run on. Default 9000")
+	ServeCmd.Flags().IntVar(&cfg.db.maxOpenConns, "max-connections", 50, "Max backend db connections")
+	ServeCmd.Flags().IntVar(&cfg.db.maxIdleConns, "max-idle-connections", 50, "Max idle backend db connections")
 	ServeCmd.Flags().StringVar(&cfg.db.maxIdleTime, "max-idle-time", "5m", "Database backend connection string")
 
 	ServeCmd.Flags().Float64Var(&cfg.limiter.rps, "limiter-rps", 100, "Rate limiter maximum requests per second")
@@ -105,7 +105,7 @@ func init() {
 
 	ServeCmd.Flags().BoolVar(&globals.Analytics, "analytics", true, "Send anonymized usage data to SQLpipe for product improvements")
 
-	ServeCmd.Flags().IntVar(&maxConcurrentTransfers, "max-concurrency", 10, "Max number of concurrent transfers to run on this server")
+	ServeCmd.Flags().IntVar(&maxConcurrentTransfers, "max-concurrency", 20, "Max number of concurrent transfers to run on this server")
 }
 
 func serve(cmd *cobra.Command, args []string) {

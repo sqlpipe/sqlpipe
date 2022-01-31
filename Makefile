@@ -20,15 +20,15 @@ confirm:
 
 ## run/serve: build and run a sqlpipe server
 .PHONY: run/serve
-run/serve:
-	go run ./cmd serve \
+run/serve: build
+	./bin/sqlpipe serve \
 		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
 		--secret "8i.(LBH4JZSv#Z@$qKBUcNlUk*C&y}$p" \
-		--max-concurrency 10
+		--max-concurrency 20
 
 ## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server
 .PHONY: run/init
-run/init: db/init
+run/init: db/init build
 	go run ./cmd serve \
 		--admin-username=sqlpipe \
 		--admin-password=${SQLPIPE-PASSWORD} \
@@ -210,9 +210,9 @@ current_time = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 git_description = $(shell git describe --always --dirty --tags --long)
 linker_flags = '-s -X main.buildVersion=${git_description}'
 
-## build/sqlpipe: build the cmd/sqlpipe application
-.PHONY: build/sqlpipe
-build/sqlpipe:
+## build: build the application
+.PHONY: build
+build:
 	@echo 'Building cmd/sqlpipe...'
 	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd
 	GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd
