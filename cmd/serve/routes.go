@@ -23,8 +23,8 @@ func (app *application) routes() http.Handler {
 	uiRequireAdmin := uiRequireLoggedInUser.Append(app.requireAdminUi)
 
 	// Home page ui redirects
-	router.Handler(http.MethodGet, "/", uiRequireLoggedInUser.ThenFunc(app.listTransfersUiHandler))
-	router.Handler(http.MethodGet, "/ui", uiRequireLoggedInUser.ThenFunc(app.listTransfersUiHandler))
+	router.Handler(http.MethodGet, "/", uiRequireLoggedInUser.ThenFunc(app.homeReRoute))
+	router.Handler(http.MethodGet, "/ui", uiRequireLoggedInUser.ThenFunc(app.homeReRoute))
 
 	// Users
 	// API

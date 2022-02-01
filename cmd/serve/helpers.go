@@ -212,63 +212,6 @@ func getPaginationData(
 	}
 }
 
-// func (app *application) sendAnonymizedTransferAnalytics(transfer data.Transfer, server bool) {
-// 	if globals.Analytics {
-
-// 		var input struct {
-// 			SourceType     string `json:"sourceType"`
-// 			TargetType     string `json:"targetType"`
-// 			Status         string `json:"status"`
-// 			Overwrite      bool   `json:"overwrite"`
-// 			CreatedAt      string `json:"createdAt"`
-// 			StoppedAt      string `json:"StoppedAt"`
-// 			Server         bool   `json:"server"`
-// 			SQLpipeVersion string `json:"sqlpipeVersion"`
-// 		}
-
-// 		input.SourceType = transfer.Source.DsType
-// 		input.TargetType = transfer.Target.DsType
-// 		input.Status = transfer.Status
-// 		input.Overwrite = transfer.Overwrite
-// 		input.CreatedAt = globals.HumanDate(transfer.CreatedAt)
-// 		input.CreatedAt = globals.HumanDate(transfer.StoppedAt)
-// 		input.Server = server
-// 		input.SQLpipeVersion = globals.Version
-
-// 		body, err := json.Marshal(input)
-// 		if err != nil {
-// 			app.logger.PrintError(errors.New("unable to send anonymized analytics data"), map[string]string{"error": err.Error()})
-// 		}
-
-// 		client := http.Client{Timeout: 5 * time.Second}
-// 		_, _ = client.Post("https://analytics.sqlpipe.com/transfer", "application/json", bytes.NewBuffer(body))
-// 	}
-// }
-
-// func (app *application) sendAnonymizedQueryAnalytics(query data.Query, server bool) {
-// 	if globals.Analytics {
-// 		var input struct {
-// 			ConnectionType string `json:"ConnectionType"`
-// 			Status         string `json:"status"`
-// 			CreatedAt      string `json:"createdAt"`
-// 			StoppedAt      string `json:"StoppedAt"`
-// 			Server         bool   `json:"server"`
-// 			SQLpipeVersion string `json:"sqlpipeVersion"`
-// 		}
-
-// 		input.ConnectionType = query.Connection.DsType
-// 		input.Status = query.Status
-// 		input.CreatedAt = globals.HumanDate(query.CreatedAt)
-// 		input.CreatedAt = globals.HumanDate(query.StoppedAt)
-// 		input.Server = server
-// 		input.SQLpipeVersion = globals.Version
-
-// 		body, err := json.Marshal(input)
-// 		if err != nil {
-// 			app.logger.PrintError(errors.New("unable to send anonymized analytics data"), map[string]string{"error": err.Error()})
-// 		}
-
-// 		client := http.Client{Timeout: 5 * time.Second}
-// 		_, _ = client.Post("https://analytics.sqlpipe.com/query", "application/json", bytes.NewBuffer(body))
-// 	}
-// }
+func (app *application) homeReRoute(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/ui/transfers?sort=-id", http.StatusSeeOther)
+}
