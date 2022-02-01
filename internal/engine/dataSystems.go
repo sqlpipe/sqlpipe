@@ -328,12 +328,12 @@ func sqlInsert(
 		queryString := sqlEndStringNilReplacer.Replace(withQueryEnder)
 		wg.Wait()
 		if insertError != nil {
-			return errProperties, insertError
+			return insertErrProperties, insertError
 		}
 		wg.Add(1)
 		pkg.Background(func() {
 			defer wg.Done()
-			insertRows, errProperties, err = dsConn.execute(queryString)
+			insertRows, insertErrProperties, insertError = dsConn.execute(queryString)
 			if insertError != nil {
 				return
 			}
@@ -342,7 +342,7 @@ func sqlInsert(
 	}
 	wg.Wait()
 	if insertError != nil {
-		return errProperties, insertError
+		return insertErrProperties, insertError
 	}
 
 	return nil, nil

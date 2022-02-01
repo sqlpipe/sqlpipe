@@ -23,6 +23,7 @@
                 <option value=50 {{if eq .Metadata.PageSize 50 }}selected{{end}}>50</option>
                 <option value=100 {{if eq .Metadata.PageSize 100 }}selected{{end}}>100</option>
             </select>
+            <input type='hidden' name='sort' value='-id'>
         </form>
     </div>
 </div>
