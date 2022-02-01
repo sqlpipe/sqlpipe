@@ -51,10 +51,6 @@ func getNewMSSQL(
 		return dsConn, errProperties, err
 	}
 
-	mssql.SetMaxIdleConns(5)
-	duration, _ := time.ParseDuration("10s")
-	mssql.SetConnMaxIdleTime(duration)
-
 	dsConn = MSSQL{
 		"mssql",
 		"mssql",

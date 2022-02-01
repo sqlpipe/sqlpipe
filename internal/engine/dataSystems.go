@@ -277,9 +277,9 @@ func sqlInsert(
 
 	var insertError error
 	var insertErrProperties map[string]string
+	var insertRows *sql.Rows
 
 	for i := 1; rows.Next(); i++ {
-
 		// scan incoming values into valueptrs, which in turn points to values
 		rows.Scan(valuePtrs...)
 
@@ -302,6 +302,7 @@ func sqlInsert(
 		// length or number of rows)
 		if dsConn.insertChecker(queryBuilder.Len(), i) {
 			noUnionAll := strings.TrimSuffix(queryBuilder.String(), " UNION ALL ")
+			queryBuilder.Reset()
 			withQueryEnder := fmt.Sprintf("%s%s", noUnionAll, dsConn.getQueryEnder(targetTable))
 			queryString := sqlEndStringNilReplacer.Replace(withQueryEnder)
 			wg.Wait()
@@ -311,16 +312,14 @@ func sqlInsert(
 			wg.Add(1)
 			pkg.Background(func() {
 				defer wg.Done()
-				rows, insertErrProperties, insertError = dsConn.execute(queryString)
+				insertRows, insertErrProperties, insertError = dsConn.execute(queryString)
 				if insertError != nil {
 					return
 				}
-				defer rows.Close()
+				defer insertRows.Close()
 			})
 			isFirst = true
-			queryBuilder.Reset()
 		}
-
 	}
 	// if we still have some leftovers, add those too.
 	if !isFirst {
@@ -334,11 +333,11 @@ func sqlInsert(
 		wg.Add(1)
 		pkg.Background(func() {
 			defer wg.Done()
-			rows, insertErrProperties, insertError = dsConn.execute(queryString)
+			insertRows, errProperties, err = dsConn.execute(queryString)
 			if insertError != nil {
 				return
 			}
-			defer rows.Close()
+			defer insertRows.Close()
 		})
 	}
 	wg.Wait()

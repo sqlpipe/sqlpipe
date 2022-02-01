@@ -51,10 +51,6 @@ func getNewOracle(
 		return dsConn, errProperties, err
 	}
 
-	oracle.SetMaxIdleConns(5)
-	duration, _ := time.ParseDuration("10s")
-	oracle.SetConnMaxIdleTime(duration)
-
 	dsConn = Oracle{
 		"oracle",
 		"oracle",

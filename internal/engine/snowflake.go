@@ -55,10 +55,6 @@ func getNewSnowflake(
 		return dsConn, errProperties, err
 	}
 
-	snowflake.SetMaxIdleConns(5)
-	duration, _ := time.ParseDuration("10s")
-	snowflake.SetConnMaxIdleTime(duration)
-
 	dsConn = Snowflake{
 		"snowflake",
 		"snowflake",

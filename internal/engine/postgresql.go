@@ -51,10 +51,6 @@ func getNewPostgreSQL(
 		return dsConn, errProperties, err
 	}
 
-	postgresql.SetMaxIdleConns(5)
-	duration, _ := time.ParseDuration("10s")
-	postgresql.SetConnMaxIdleTime(duration)
-
 	dsConn = PostgreSQL{
 		"postgresql",
 		"pgx",

@@ -8,6 +8,66 @@ import (
 	"github.com/calmitchell617/sqlpipe/internal/data"
 )
 
+// Test connections
+var (
+	postgresqlTestConnection = data.Connection{
+		DsType:   "postgresql",
+		Username: os.Getenv("postgresqlUsername"),
+		Password: os.Getenv("postgresqlPassword"),
+		Hostname: os.Getenv("postgresqlHostname"),
+		DbName:   os.Getenv("postgresqlDbName"),
+		Port:     5432,
+	}
+	mysqlTestConnection = data.Connection{
+		DsType:   "mysql",
+		Username: os.Getenv("mysqlUsername"),
+		Password: os.Getenv("mysqlPassword"),
+		Hostname: os.Getenv("mysqlHostname"),
+		DbName:   os.Getenv("mysqlDbName"),
+		Port:     3306,
+	}
+	mssqlMasterTestConnection = data.Connection{
+		DsType:   "mssql",
+		Username: os.Getenv("mssqlUsername"),
+		Password: os.Getenv("mssqlPassword"),
+		Hostname: os.Getenv("mssqlHostname"),
+		DbName:   "master",
+		Port:     1433,
+	}
+	mssqlTestConnection = data.Connection{
+		DsType:   "mssql",
+		Username: os.Getenv("mssqlUsername"),
+		Password: os.Getenv("mssqlPassword"),
+		Hostname: os.Getenv("mssqlHostname"),
+		DbName:   os.Getenv("mssqlDbName"),
+		Port:     1433,
+	}
+	oracleTestConnection = data.Connection{
+		DsType:   "oracle",
+		Username: os.Getenv("oracleUsername"),
+		Password: os.Getenv("oraclePassword"),
+		Hostname: os.Getenv("oracleHostname"),
+		DbName:   os.Getenv("oracleDbName"),
+		Port:     1521,
+	}
+	redshiftTestConnection = data.Connection{
+		DsType:   "redshift",
+		Username: os.Getenv("redshiftUsername"),
+		Password: os.Getenv("redshiftPassword"),
+		Hostname: os.Getenv("redshiftHostname"),
+		DbName:   os.Getenv("redshiftDbName"),
+		Port:     5439,
+	}
+
+	snowflakeTestConnection = data.Connection{
+		DsType:    "snowflake",
+		Username:  os.Getenv("snowflakeUsername"),
+		Password:  os.Getenv("snowflakePassword"),
+		AccountId: os.Getenv("snowflakeAccountId"),
+		DbName:    os.Getenv("snowflakeDbName"),
+	}
+)
+
 type queryTest struct {
 	name                  string
 	connection            data.Connection
@@ -32,7 +92,7 @@ type transferTest struct {
 	expectedErrProperties map[string]string
 }
 
-var queryTests = []queryTest{
+var postgresqlSetupTests = []queryTest{
 	// PostgreSQL Setup
 	{
 		name:                  "postgresqlWideTableDrop",
@@ -56,6 +116,31 @@ var queryTests = []queryTest{
 		checkQuery:  "select * from wide_table",
 		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "INT8", "mybit": "BIT", "mybitvarying": "VARBIT", "myboolean": "BOOL", "mybox": "BOX", "mybytea": "BYTEA", "mychar": "BPCHAR", "mycidr": "CIDR", "mycircle": "CIRCLE", "mydate": "DATE", "mydoubleprecision": "FLOAT8", "myinet": "INET", "myinteger": "INT4", "myinterval": "INTERVAL", "myjson": "JSON", "myjsonb": "JSONB", "myline": "LINE", "mylseg": "LSEG", "mymacaddr": "MACADDR", "mymoney": "790", "mynumeric": "NUMERIC", "mypath": "PATH", "mypg_lsn": "3220", "mypoint": "POINT", "mypolygon": "POLYGON", "myreal": "FLOAT4", "mysmallint": "INT2", "mytext": "TEXT", "mytime": "TIME", "mytimestamp": "TIMESTAMP", "mytimestamptz": "TIMESTAMPTZ", "mytimetz": "1266", "mytsquery": "3615", "mytsvector": "3614", "myuuid": "UUID", "myvarchar": "VARCHAR", "myxml": "142"}, Rows: []interface{}{"6514798382812790784", "'10001'", "'1001'", "true", "'(8,9),(1,3)'", "'\\xaaaabbbb'", "'abc'", "'\"my\"varch''ar,123@gmail.com'", "'192.168.100.128/25'", "'<(1,5),5>'", "'2014-01-10 00:00:00.000000 +0000'", "529.5621898337544", "'192.168.100.128'", "745910651", "'10 days 10:00:00'", "'{\"mykey\": \"this\\\"  ''is'' m,y val\"}'", "'{\"mykey\": \"this is my val\"}'", "'{1,5,20}'", "'[(5,4),(2,1)]'", "'08:00:2b:01:02:03'", "'$35,244.33'", "449.82115", "'[(1,4),(8,7)]'", "'16/B374D848'", "'(5,7)'", "'((5,8),(6,10),(7,20))'", "9673.109375", "24345", "'myte\",xt123@gmail.com'", "'03:46:38.765594'", "'03:46:38.765594+05'", "'2014-01-10 10:05:04.000000 +0000'", "'2014-01-10 18:05:04.000000 +0000'", "'''fat'' & ''rat'''", "'''a'' ''and'' ''ate'' ''cat'' ''fat'' ''mat'' ''on'' ''rat'' ''sat'''", "'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'", "'<foo>bar</foo>'", "%!d(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!t(<nil>)", "'%!s(<nil>)'", "'\\x%!x(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "%!g(<nil>)", "'%!s(<nil>)'", "%!d(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!g(<nil>)", "%!d(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "null", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'"}},
 	},
+	{
+		name:                  "postgresqlLoadTableDrop",
+		connection:            postgresqlTestConnection,
+		testQuery:             "drop table if exists load_table;",
+		checkQuery:            "select * from load_table",
+		expectedErr:           "db.Query() threw an error",
+		expectedErrProperties: map[string]string{"dsType": "postgresql", "error": `ERROR: relation "load_table" does not exist (SQLSTATE 42P01)`, "query": "select * from load_table"},
+	},
+	{
+		name:        "postgresqlLoadTableCreate",
+		connection:  postgresqlTestConnection,
+		testQuery:   `create table load_table(mybigint bigint, mybit bit(5), mybitvarying varbit, myboolean boolean, mybox box, mybytea bytea, mychar char(3), myvarchar varchar(100), mycidr cidr, mycircle circle, mydate date, mydoubleprecision double precision, myinet inet, myinteger integer, myinterval interval, myjson json, myjsonb jsonb, myline line, mylseg lseg, mymacaddr macaddr, mymoney money, mynumeric numeric(10,5), mypath path, mypg_lsn pg_lsn, mypoint point, mypolygon polygon, myreal real, mysmallint smallint, mytext text, mytime time, mytimetz timetz, mytimestamp timestamp, mytimestamptz timestamptz, mytsquery tsquery, mytsvector tsvector, myuuid uuid, myxml xml);`,
+		checkQuery:  "select * from wide_table",
+		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "INT8", "mybit": "BIT", "mybitvarying": "VARBIT", "myboolean": "BOOL", "mybox": "BOX", "mybytea": "BYTEA", "mychar": "BPCHAR", "mycidr": "CIDR", "mycircle": "CIRCLE", "mydate": "DATE", "mydoubleprecision": "FLOAT8", "myinet": "INET", "myinteger": "INT4", "myinterval": "INTERVAL", "myjson": "JSON", "myjsonb": "JSONB", "myline": "LINE", "mylseg": "LSEG", "mymacaddr": "MACADDR", "mymoney": "790", "mynumeric": "NUMERIC", "mypath": "PATH", "mypg_lsn": "3220", "mypoint": "POINT", "mypolygon": "POLYGON", "myreal": "FLOAT4", "mysmallint": "INT2", "mytext": "TEXT", "mytime": "TIME", "mytimestamp": "TIMESTAMP", "mytimestamptz": "TIMESTAMPTZ", "mytimetz": "1266", "mytsquery": "3615", "mytsvector": "3614", "myuuid": "UUID", "myvarchar": "VARCHAR", "myxml": "142"}, Rows: []interface{}{"6514798382812790784", "'10001'", "'1001'", "true", "'(8,9),(1,3)'", "'\\xaaaabbbb'", "'abc'", "'\"my\"varch''ar,123@gmail.com'", "'192.168.100.128/25'", "'<(1,5),5>'", "'2014-01-10 00:00:00.000000 +0000'", "529.5621898337544", "'192.168.100.128'", "745910651", "'10 days 10:00:00'", "'{\"mykey\": \"this\\\"  ''is'' m,y val\"}'", "'{\"mykey\": \"this is my val\"}'", "'{1,5,20}'", "'[(5,4),(2,1)]'", "'08:00:2b:01:02:03'", "'$35,244.33'", "449.82115", "'[(1,4),(8,7)]'", "'16/B374D848'", "'(5,7)'", "'((5,8),(6,10),(7,20))'", "9673.109375", "24345", "'myte\",xt123@gmail.com'", "'03:46:38.765594'", "'03:46:38.765594+05'", "'2014-01-10 10:05:04.000000 +0000'", "'2014-01-10 18:05:04.000000 +0000'", "'''fat'' & ''rat'''", "'''a'' ''and'' ''ate'' ''cat'' ''fat'' ''mat'' ''on'' ''rat'' ''sat'''", "'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'", "'<foo>bar</foo>'", "%!d(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!t(<nil>)", "'%!s(<nil>)'", "'\\x%!x(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "%!g(<nil>)", "'%!s(<nil>)'", "%!d(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!g(<nil>)", "%!d(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "null", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'"}},
+	},
+	{
+		name:        "postgresqlLoadTableInsert",
+		connection:  postgresqlTestConnection,
+		testQuery:   `INSERT INTO load_table(mybigint, mybit, mybitvarying, myboolean, mybox, mybytea, mychar, myvarchar, mycidr, mycircle, mydate, mydoubleprecision, myinet, myinteger, myinterval, myjson, myjsonb, myline, mylseg, mymacaddr, mymoney , mynumeric, mypath, mypg_lsn, mypoint, mypolygon, myreal, mysmallint, mytext, mytime, mytimetz, mytimestamp, mytimestamptz, mytsquery, mytsvector, myuuid, myxml) select 6514798382812790784, B'10001', B'1001', true, '(8,9), (1,3)', '\xAAAABBBB', 'abc', '"my"varch''ar,123@gmail.com', '192.168.100.128/25', '(( 1 , 5 ), 5)', '2014-01-10 20:14:54.140332'::date, 529.56218983375436, '192.168.100.128', 745910651, (timestamptz '2014-01-20 20:00:00 PST' - timestamptz '2014-01-10 10:00:00 PST'), '{"mykey": "this\"  ''is'' m,y val"}', '{"mykey": "this is my val"}', '{1, 5, 20}', '[(5, 4), (2, 1)]', '08:00:2b:01:02:03', '$35,244.33'::money, 449.82115, '[( 1, 4), (8, 7)]', '16/B374D848'::pg_lsn, '(5, 7)', '((5, 8), (6, 10), (7, 20))', 9673.1094, 24345, 'myte",xt123@gmail.com', '03:46:38.765594+05', '03:46:38.765594+05', '2014-01-10 10:05:04 PST', '2014-01-10 10:05:04 PST', 'fat & rat'::tsquery, 'a fat cat sat on a mat and ate a fat rat'::tsvector, 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid, '<foo>bar</foo>' from generate_series(1, 100000) seq;`,
+		checkQuery:  "select count(*) from load_table",
+		checkResult: QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"100000"}},
+	},
+}
+
+var mysqlSetupTests = []queryTest{
 	// MySQL Setup
 	{
 		name:                  "mysqlWideTableDrop",
@@ -79,6 +164,9 @@ var queryTests = []queryTest{
 		checkQuery:  "select * from wide_table",
 		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "BIGINT", "mybinary": "BINARY", "mybit": "BIT", "mybit5": "BIT", "mybit64": "BIT", "myblob": "BLOB", "mychar": "CHAR", "mydate": "DATE", "mydatetime": "DATETIME", "mydecimal": "DECIMAL", "mydouble": "DOUBLE", "myenum": "CHAR", "myfloat": "FLOAT", "mygeometry": "GEOMETRY", "mygeometrycollection": "GEOMETRY", "myint": "INT", "myjson": "JSON", "mylinestring": "GEOMETRY", "mylongblob": "BLOB", "mylongtext": "TEXT", "mymediumblob": "BLOB", "mymediumint": "MEDIUMINT", "mymediumtext": "TEXT", "mymultilinestring": "GEOMETRY", "mymultipoint": "GEOMETRY", "mymultipolygon": "GEOMETRY", "mynchar": "CHAR", "mynvarchar": "VARCHAR", "mypoint": "GEOMETRY", "mypolygon": "GEOMETRY", "myserial": "BIGINT", "myset": "CHAR", "mysmallint": "SMALLINT", "mytext": "TEXT", "mytime": "TIME", "mytimestamp": "TIMESTAMP", "mytinyblob": "BLOB", "mytinyint": "TINYINT", "mytinytext": "TEXT", "myvarbinary": "VARBINARY", "myvarchar": "VARCHAR", "myyear": "YEAR"}, Rows: []interface{}{"1", "x'01'", "x'0a'", "x'ffffffffffffffff'", "2", "5", "50", "4595435", "392809438543", "30.50000", "45.9", "54.3", "'2009-05-28'", "'14:23:54'", "'2010-10-24 20:52:52'", "'1989-02-22 03:17:21'", "1905", "'chr'", "'my varchar ''st\"ri,ng wheeeee'", "'ncr'", "'my nvarchar string wheeeee'", "x'626e72'", "x'6d792062696e61727920737472696e67207761686f6f6f6f6f'", "x'626c6f622063697479206262'", "x'626c6f622063697479206262'", "x'626c6f622063697479206262'", "x'626c6f622063697479206262'", "'text city bb'", "'text city bb'", "'text city bb'", "'text city bb'", "'enumval1'", "'setval1'", "'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?'", "'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?'", "'\x00\x00\x00\x00\x01\x02\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@'", "'\x00\x00\x00\x00\x01\x03\x00\x00\x00\x02\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@'", "'\x00\x00\x00\x00\x01\x04\x00\x00\x00\n\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\b@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x00@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\"@\x00\x00\x00\x00\x00\x00\b@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00 @\x00\x00\x00\x00\x00\x00\x10@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x18@\x00\x00\x00\x00\x00\x00\x18@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x18@\x00\x00\x00\x00\x00\x00\"@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10@\x00\x00\x00\x00\x00\x00\"@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x14@'", "'\x00\x00\x00\x00\x01\x05\x00\x00\x00\x02\x00\x00\x00\x01\x02\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x01\x02\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10@\x00\x00\x00\x00\x00\x00\x10@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@'", "'\x00\x00\x00\x00\x01\x06\x00\x00\x00\x01\x00\x00\x00\x01\x03\x00\x00\x00\x02\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?'", "'\x00\x00\x00\x00\x01\x06\x00\x00\x00\x01\x00\x00\x00\x01\x03\x00\x00\x00\x02\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?'", "'{\"mykey\": \"this is\\\\\" m\\\\\"y, ''val''\"}'", "2", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'"}},
 	},
+}
+
+var mssqlSetupTests = []queryTest{
 	// MSSQL setup
 	{
 		name:                  "mssqlTestingDbDrop",
@@ -116,7 +204,9 @@ var queryTests = []queryTest{
 		checkQuery:  "select * from wide_table",
 		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "BIGINT", "mybinary": "BINARY", "mybit": "BIT", "mychar": "CHAR", "mydate": "DATE", "mydatetime": "DATETIME", "mydatetime2": "DATETIME2", "mydatetimeoffset": "DATETIMEOFFSET", "mydecimal": "DECIMAL", "myfloat": "FLOAT", "myint": "INT", "mymoney": "MONEY", "mynchar": "NCHAR", "myntext": "NTEXT", "mynumeric": "DECIMAL", "mynvarchar": "NVARCHAR", "myreal": "REAL", "mysmalldatetime": "SMALLDATETIME", "mysmallint": "SMALLINT", "mysmallmoney": "SMALLMONEY", "mytext": "TEXT", "mytime": "TIME", "mytinyint": "TINYINT", "myuniqueidentifier": "UNIQUEIDENTIFIER", "myvarbinary": "VARBINARY", "myvarchar": "VARCHAR", "myxml": "XML"}, Rows: []interface{}{"435345", "1", "324.43000", "54", "'43.2100'", "54.3300000", "12", "'22.1000'", "4", "45.5", "47.70000076293945", "CONVERT(DATETIME2, '2013-10-12 00:00:00.0000000', 121)", "CONVERT(DATETIME2, '2005-06-12 11:40:17.6320000', 121)", "CONVERT(DATETIME2, '2005-06-12 11:40:17.6330000', 121)", "CONVERT(DATETIME2, '2005-06-12 11:40:17.6320000', 121)", "CONVERT(DATETIME2, '2005-06-12 11:40:00.0000000', 121)", "CONVERT(DATETIME2, '0001-01-01 11:40:12.5436540', 121)", "'yoo'", "'gday guvna'", "'omg have you hea''rd\" a,bout the latest craze that the people are talking about?'", "'yoo'", "'gday guvna'", "'omg have you heard about the latest craze that the people are talking about?'", "CONVERT(VARBINARY(8000), '0x000065', 1)", "CONVERT(VARBINARY(8000), '0x000186a1', 1)", "N'6F9619FF-8B86-D011-B42D-00C04FC964FF'", "'<foo>bar</foo>'", "%!d(<nil>)", "null", "%!s(<nil>)", "%!d(<nil>)", "'%!s(<nil>)'", "%!s(<nil>)", "%!d(<nil>)", "'%!s(<nil>)'", "%!d(<nil>)", "%!g(<nil>)", "%!g(<nil>)", "null", "null", "null", "null", "null", "null", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "CONVERT(VARBINARY(8000), '0x%!x(<nil>)', 1)", "CONVERT(VARBINARY(8000), '0x%!x(<nil>)', 1)", "null", "'%!s(<nil>)'"}},
 	},
+}
 
+var oracleSetupTests = []queryTest{
 	// Oracle Setup
 	{
 		name:                  "oracleWideTableDrop",
@@ -139,6 +229,9 @@ var queryTests = []queryTest{
 		checkQuery:  "select * from wide_table",
 		checkResult: QueryResult{ColumnTypes: map[string]string{"MYBINARY_DOUBLE": "IBDouble", "MYBINARY_FLOAT": "IBFloat", "MYBLOB": "OCIBlobLocator", "MYCHAR": "CHAR", "MYCLOB": "OCIClobLocator", "MYDATE": "DATE", "MYLONG": "LONG", "MYNCHAR": "CHAR", "MYNUMBER": "NUMBER", "MYNVARCHAR2": "NCHAR", "MYTIMESTAMP": "TimeStampDTY", "MYTIMESTAMPTZ": "TimeStampTZ_DTY", "MYTIMESTAMPWITHLOCALTZ": "TimeStampLTZ_DTY", "MYVARCHAR": "NCHAR", "MYVARCHAR2": "NCHAR"}, Rows: []interface{}{"'chr'", "'my vr''c\",hr'", "'my vrchr2'", "'ncr'", "'mynvarch2'", "'myclob'", "'wow such long text wow'", "12.5", "47.5", "900.2", "TO_DATE('2005-09-16', 'YYYY-MM-DD')", "TO_TIMESTAMP('2021-07-22 10:18:59.194681', 'YYYY-MM-DD HH24:MI:SS.FF')", "TO_TIMESTAMP('2021-07-25 03:18:59.194681', 'YYYY-MM-DD HH24:MI:SS.FF')", "TO_TIMESTAMP('2021-07-22 09:18:59.194681', 'YYYY-MM-DD HH24:MI:SS.FF')", "hextoraw('111a')", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "<nil>", "<nil>", "<nil>", "null", "null", "null", "null", "hextoraw('%!x(<nil>)')"}},
 	},
+}
+
+var redshiftSetupTests = []queryTest{
 	// Redshift Setup
 	{
 		name:                  "redshiftWideTableDrop",
@@ -162,6 +255,9 @@ var queryTests = []queryTest{
 		checkQuery:  "select * from wide_table",
 		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "INT8", "myboolean": "BOOL", "mychar": "BPCHAR", "mydate": "DATE", "mydoubleprecision": "FLOAT8", "myinteger": "INT4", "mynumeric": "NUMERIC", "myreal": "FLOAT4", "mysmallint": "INT2", "mytext": "VARCHAR", "mytime": "TIME", "mytimestamp": "TIMESTAMP", "mytimestamptz": "TIMESTAMPTZ", "mytimetz": "1266", "myvarchar": "VARCHAR"}, Rows: []interface{}{"9223372036854775800", "true", "'car'", "'hey its ''  \"varchar\",'", "'2014-01-10 00:00:00.000000 +0000'", "435.544", "435345", "5466.45300", "45.220001220703125", "3", "'helloooooo san diego'", "'03:46:38.765594'", "'22:46:38.765594+00'", "'2014-01-10 10:05:04.000000 +0000'", "'2014-01-10 18:05:04.000000 +0000'", "%!d(<nil>)", "%!t(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "%!g(<nil>)", "%!d(<nil>)", "%!s(<nil>)", "%!g(<nil>)", "%!d(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "null"}},
 	},
+}
+
+var snowflakeSetupTests = []queryTest{
 	// Snowflake Setup
 	{
 		name:                  "snowflakeWideTableDrop",
@@ -187,7 +283,7 @@ var queryTests = []queryTest{
 	},
 }
 
-var transferTests = []transferTest{
+var postgresqlTransferTests = []transferTest{
 	// PostgreSQL Transfers
 	{
 		name:          "postgresql2postgresql_wide",
@@ -252,6 +348,72 @@ var transferTests = []transferTest{
 		checkQuery:    "select * from postgresql_wide_table",
 		checkResult:   QueryResult{ColumnTypes: map[string]string{"MYBIGINT": "FIXED", "MYBIT": "TEXT", "MYBITVARYING": "TEXT", "MYBOOLEAN": "BOOLEAN", "MYBOX": "TEXT", "MYBYTEA": "BINARY", "MYCHAR": "TEXT", "MYCIDR": "TEXT", "MYCIRCLE": "TEXT", "MYDATE": "TIMESTAMP_NTZ", "MYDOUBLEPRECISION": "REAL", "MYINET": "TEXT", "MYINTEGER": "FIXED", "MYINTERVAL": "TEXT", "MYJSON": "VARIANT", "MYJSONB": "VARIANT", "MYLINE": "TEXT", "MYLSEG": "TEXT", "MYMACADDR": "TEXT", "MYMONEY": "TEXT", "MYNUMERIC": "REAL", "MYPATH": "TEXT", "MYPG_LSN": "TEXT", "MYPOINT": "TEXT", "MYPOLYGON": "TEXT", "MYREAL": "REAL", "MYSMALLINT": "FIXED", "MYTEXT": "TEXT", "MYTIME": "TIME", "MYTIMESTAMP": "TIMESTAMP_NTZ", "MYTIMESTAMPTZ": "TIMESTAMP_NTZ", "MYTIMETZ": "TEXT", "MYTSQUERY": "TEXT", "MYTSVECTOR": "TEXT", "MYUUID": "TEXT", "MYVARCHAR": "TEXT", "MYXML": "TEXT"}, Rows: []interface{}{"6514798382812790784", "'10001'", "'1001'", "true", "'(8,9),(1,3)'", "to_binary('aaaabbbb')", "'abc'", "'\"my\"varch''ar,123@gmail.com'", "'192.168.100.128/25'", "'<(1,5),5>'", "'2014-01-10 00:00:00.000000'", "529.562190", "'192.168.100.128'", "745910651", "'10 days 10:00:00'", "'{\n  \"mykey\": \"this\\\\\"  ''is'' m,y val\"\n}'", "'{\n  \"mykey\": \"this is my val\"\n}'", "'{1,5,20}'", "'[(5,4),(2,1)]'", "'08:00:2b:01:02:03'", "'$35,244.33'", "449.821150", "'[(1,4),(8,7)]'", "'16/B374D848'", "'(5,7)'", "'((5,8),(6,10),(7,20))'", "9673.109375", "24345", "'myte\",xt123@gmail.com'", "'0001-01-01 03:46:38.765594'", "'03:46:38.765594+05'", "'2014-01-10 10:05:04.000000'", "'2014-01-10 18:05:04.000000'", "'''fat'' & ''rat'''", "'''a'' ''and'' ''ate'' ''cat'' ''fat'' ''mat'' ''on'' ''rat'' ''sat'''", "'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'", "'<foo>bar</foo>'", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!t(<nil>)", "'%!s(<nil>)'", "to_binary('%!x(<nil>)')", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "%!s(<nil>)", "'%!s(<nil>)'", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!s(<nil>)", "%!s(<nil>)", "'%!s(<nil>)'", "null", "'%!s(<nil>)'", "null", "null", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'"}},
 	},
+	{
+		name:          "postgresql2postgresql_load",
+		source:        postgresqlTestConnection,
+		target:        postgresqlTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "postgresql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from postgresql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"100000"}},
+	},
+	{
+		name:          "postgresql2mysql_load",
+		source:        postgresqlTestConnection,
+		target:        mysqlTestConnection,
+		overwrite:     true,
+		targetTable:   "postgresql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from postgresql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count(*)": "BIGINT"}, Rows: []interface{}{"100000"}},
+	},
+	{
+		name:          "postgresql2mssql_load",
+		source:        postgresqlTestConnection,
+		target:        mssqlTestConnection,
+		overwrite:     true,
+		targetTable:   "postgresql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from postgresql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"": "INT"}, Rows: []interface{}{"100000"}},
+	},
+	{
+		name:          "postgresql2oracle_load",
+		source:        postgresqlTestConnection,
+		target:        oracleTestConnection,
+		overwrite:     true,
+		targetTable:   "postgresql_load_table",
+		transferQuery: "select * from load_table limit 10000",
+		checkQuery:    "select count(*) from postgresql_load_table",
+		checkResult:   QueryResult{},
+	},
+	{
+		name:          "postgresql2redshift_load",
+		source:        postgresqlTestConnection,
+		target:        redshiftTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "postgresql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from postgresql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"100000"}},
+	},
+	{
+		name:          "postgresql2snowflake_load",
+		source:        postgresqlTestConnection,
+		target:        snowflakeTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "postgresql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from postgresql_load_table",
+		checkResult:   QueryResult{},
+	},
+}
+
+var mysqlTransferTests = []transferTest{
 	// MySQL Transfers
 	{
 		name:          "mysql2postgresql_wide",
@@ -316,6 +478,9 @@ var transferTests = []transferTest{
 		checkQuery:    "select * from mysql_wide_table",
 		checkResult:   QueryResult{ColumnTypes: map[string]string{"MYBIGINT": "FIXED", "MYBINARY": "BINARY", "MYBIT": "BINARY", "MYBIT5": "BINARY", "MYBIT64": "BINARY", "MYBLOB": "BINARY", "MYCHAR": "TEXT", "MYDATE": "DATE", "MYDATETIME": "TIMESTAMP_NTZ", "MYDECIMAL": "FIXED", "MYDOUBLE": "REAL", "MYENUM": "TEXT", "MYFLOAT": "REAL", "MYGEOMETRY": "BINARY", "MYGEOMETRYCOLLECTION": "BINARY", "MYINT": "FIXED", "MYJSON": "VARIANT", "MYLINESTRING": "BINARY", "MYLONGBLOB": "BINARY", "MYLONGTEXT": "TEXT", "MYMEDIUMBLOB": "BINARY", "MYMEDIUMINT": "FIXED", "MYMEDIUMTEXT": "TEXT", "MYMULTILINESTRING": "BINARY", "MYMULTIPOINT": "BINARY", "MYMULTIPOLYGON": "BINARY", "MYNCHAR": "TEXT", "MYNVARCHAR": "TEXT", "MYPOINT": "BINARY", "MYPOLYGON": "BINARY", "MYSERIAL": "FIXED", "MYSET": "TEXT", "MYSMALLINT": "FIXED", "MYTEXT": "TEXT", "MYTIME": "TIME", "MYTIMESTAMP": "TIMESTAMP_NTZ", "MYTINYBLOB": "BINARY", "MYTINYINT": "FIXED", "MYTINYTEXT": "TEXT", "MYVARBINARY": "BINARY", "MYVARCHAR": "TEXT", "MYYEAR": "FIXED"}, Rows: []interface{}{"1", "to_binary('01')", "to_binary('0a')", "to_binary('ffffffffffffffff')", "2", "5", "50", "4595435", "392809438543", "30.500000", "45.900000", "54.300000", "'2009-05-28 00:00:00.000000'", "'0001-01-01 14:23:54.000000'", "'2010-10-24 20:52:52.000000'", "'1989-02-22 03:17:21.000000'", "1905", "'chr'", "'my varchar ''st\"ri,ng wheeeee'", "'ncr'", "'my nvarchar string wheeeee'", "to_binary('626e72')", "to_binary('6d792062696e61727920737472696e67207761686f6f6f6f6f')", "to_binary('626c6f622063697479206262')", "to_binary('626c6f622063697479206262')", "to_binary('626c6f622063697479206262')", "to_binary('626c6f622063697479206262')", "'text city bb'", "'text city bb'", "'text city bb'", "'text city bb'", "'enumval1'", "'setval1'", "to_binary('000000000101000000000000000000f03f000000000000f03f')", "to_binary('000000000101000000000000000000f03f000000000000f03f')", "to_binary('0000000001020000000300000000000000000000000000000000000000000000000000f03f000000000000f03f00000000000000400000000000000040')", "to_binary('0000000001030000000200000005000000000000000000000000000000000000000000000000002440000000000000000000000000000024400000000000002440000000000000000000000000000024400000000000000000000000000000000005000000000000000000144000000000000014400000000000001c4000000000000014400000000000001c400000000000001c4000000000000014400000000000001c4000000000000014400000000000001440')", "to_binary('0000000001040000000a0000000101000000000000000000f03f000000000000f03f01010000000000000000000040000000000000004001010000000000000000001440000000000000084001010000000000000000001c4000000000000000400101000000000000000000224000000000000008400101000000000000000000204000000000000010400101000000000000000000184000000000000018400101000000000000000000184000000000000022400101000000000000000000104000000000000022400101000000000000000000f03f0000000000001440')", "to_binary('00000000010500000002000000010200000003000000000000000000f03f000000000000f03f00000000000000400000000000000040000000000000084000000000000008400102000000020000000000000000001040000000000000104000000000000014400000000000001440')", "to_binary('0000000001060000000100000001030000000200000005000000000000000000000000000000000000000000000000000000000000000000084000000000000008400000000000000840000000000000084000000000000000000000000000000000000000000000000005000000000000000000f03f000000000000f03f000000000000f03f0000000000000040000000000000004000000000000000400000000000000040000000000000f03f000000000000f03f000000000000f03f')", "to_binary('0000000001060000000100000001030000000200000005000000000000000000000000000000000000000000000000000000000000000000084000000000000008400000000000000840000000000000084000000000000000000000000000000000000000000000000005000000000000000000f03f000000000000f03f000000000000f03f0000000000000040000000000000004000000000000000400000000000000040000000000000f03f000000000000f03f000000000000f03f')", "'{\n  \"mykey\": \"this is\\\\\" m\\\\\"y, ''val''\"\n}'", "2", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "null", "null", "null", "null", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "'%!s(<nil>)'"}},
 	},
+}
+
+var mssqlTransferTests = []transferTest{
 	// MSSQL Transfers
 	{
 		name:          "mssql2postgresql_wide",
@@ -380,6 +545,9 @@ var transferTests = []transferTest{
 		checkQuery:    "select * from mssql_wide_table",
 		checkResult:   QueryResult{ColumnTypes: map[string]string{"MYBIGINT": "FIXED", "MYBINARY": "BINARY", "MYBIT": "BOOLEAN", "MYCHAR": "TEXT", "MYDATE": "TIMESTAMP_NTZ", "MYDATETIME": "TIMESTAMP_NTZ", "MYDATETIME2": "TIMESTAMP_NTZ", "MYDATETIMEOFFSET": "TIMESTAMP_NTZ", "MYDECIMAL": "FIXED", "MYFLOAT": "REAL", "MYINT": "FIXED", "MYMONEY": "TEXT", "MYNCHAR": "TEXT", "MYNTEXT": "TEXT", "MYNUMERIC": "FIXED", "MYNVARCHAR": "TEXT", "MYREAL": "REAL", "MYSMALLDATETIME": "TIMESTAMP_NTZ", "MYSMALLINT": "FIXED", "MYSMALLMONEY": "TEXT", "MYTEXT": "TEXT", "MYTIME": "TIMESTAMP_NTZ", "MYTINYINT": "FIXED", "MYUNIQUEIDENTIFIER": "TEXT", "MYVARBINARY": "BINARY", "MYVARCHAR": "TEXT", "MYXML": "TEXT"}, Rows: []interface{}{"435345", "true", "324.430000", "54", "'43.2100'", "54.330000", "12", "'22.1000'", "4", "45.500000", "47.700001", "'2013-10-12 00:00:00.000000'", "'2005-06-12 11:40:17.632000'", "'2005-06-12 11:40:17.633000'", "'2005-06-12 11:40:17.632000'", "'2005-06-12 11:40:00.000000'", "'0001-01-01 11:40:12.543654'", "'yoo'", "'gday guvna'", "'omg have you hea''rd\" a,bout the latest craze that the people are talking about?'", "'yoo'", "'gday guvna'", "'omg have you heard about the latest craze that the people are talking about?'", "to_binary('000065')", "to_binary('000186a1')", "'6F9619FF8B86D011B42D00C04FC964FF'", "'<foo>bar</foo>'", "%!s(<nil>)", "%!t(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "'%!s(<nil>)'", "%!s(<nil>)", "%!s(<nil>)", "'%!s(<nil>)'", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "null", "null", "null", "null", "null", "null", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "'%!s(<nil>)'", "'%!s(<nil>)'"}},
 	},
+}
+
+var oracleTransferTests = []transferTest{
 	// Oracle Transfers
 	{
 		name:          "oracle2postgresql_wide",
@@ -444,6 +612,9 @@ var transferTests = []transferTest{
 		checkQuery:    "select * from oracle_wide_table",
 		checkResult:   QueryResult{ColumnTypes: map[string]string{"MYBINARY_DOUBLE": "REAL", "MYBINARY_FLOAT": "REAL", "MYBLOB": "BINARY", "MYCHAR": "TEXT", "MYCLOB": "TEXT", "MYDATE": "DATE", "MYLONG": "TEXT", "MYNCHAR": "TEXT", "MYNUMBER": "REAL", "MYNVARCHAR2": "TEXT", "MYTIMESTAMP": "TIMESTAMP_NTZ", "MYTIMESTAMPTZ": "TIMESTAMP_NTZ", "MYTIMESTAMPWITHLOCALTZ": "TIMESTAMP_NTZ", "MYVARCHAR": "TEXT", "MYVARCHAR2": "TEXT"}, Rows: []interface{}{"'chr'", "'my vr''c\",hr'", "'my vrchr2'", "'ncr'", "'mynvarch2'", "'myclob'", "'wow such long text wow'", "12.500000", "47.500000", "900.200000", "'2005-09-16 00:00:00.000000'", "'2021-07-22 10:18:59.194681'", "'2021-07-22 10:18:59.194681'", "'2021-07-22 09:18:59.194681'", "to_binary('111a')", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "null", "null", "null", "null", "to_binary('%!x(<nil>)')"}},
 	},
+}
+
+var redshiftTransferTests = []transferTest{
 	// Redshift Transfers
 	{
 		name:          "redshift2postgresql_wide",
@@ -508,6 +679,9 @@ var transferTests = []transferTest{
 		checkQuery:    "select * from redshift_wide_table",
 		checkResult:   QueryResult{ColumnTypes: map[string]string{"MYBIGINT": "FIXED", "MYBOOLEAN": "BOOLEAN", "MYCHAR": "TEXT", "MYDATE": "TIMESTAMP_NTZ", "MYDOUBLEPRECISION": "REAL", "MYINTEGER": "FIXED", "MYNUMERIC": "REAL", "MYREAL": "REAL", "MYSMALLINT": "FIXED", "MYTEXT": "TEXT", "MYTIME": "TEXT", "MYTIMESTAMP": "TIMESTAMP_NTZ", "MYTIMESTAMPTZ": "TIMESTAMP_NTZ", "MYTIMETZ": "TEXT", "MYVARCHAR": "TEXT"}, Rows: []interface{}{"9223372036854775800", "true", "'car'", "'hey its ''  \"varchar\",'", "'2014-01-10 00:00:00.000000'", "435.544000", "435345", "5466.453000", "45.220001", "3", "'helloooooo san diego'", "'03:46:38.765594'", "'22:46:38.765594+00'", "'2014-01-10 10:05:04.000000'", "'2014-01-10 18:05:04.000000'", "%!s(<nil>)", "%!t(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "null", "null"}},
 	},
+}
+
+var snowflakeTransferTests = []transferTest{
 	// Snowflake Transfers
 	{
 		name:          "snowflake2postgresql_wide",
@@ -574,10 +748,12 @@ var transferTests = []transferTest{
 	},
 }
 
-func TestRunQuery(t *testing.T) {
+func TestPostgresqlSetup(t *testing.T) {
+	t.Parallel()
 
 	// Loop over the test cases.
-	for _, tt := range queryTests {
+	for _, tt := range postgresqlSetupTests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			errProperties, err := RunQuery(
 				&data.Query{
@@ -614,12 +790,225 @@ func TestRunQuery(t *testing.T) {
 	}
 }
 
-func TestRunTransfer(t *testing.T) {
+func TestMysqlSetup(t *testing.T) {
+	t.Parallel()
 
 	// Loop over the test cases.
-	for _, tt := range transferTests {
-
+	for _, tt := range mysqlSetupTests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			errProperties, err := RunQuery(
+				&data.Query{
+					Query:      tt.testQuery,
+					Connection: tt.connection,
+				},
+			)
+
+			if err != nil && (err.Error() != tt.expectedErr || !reflect.DeepEqual(errProperties, tt.expectedErrProperties)) {
+
+				t.Fatalf("unable to run test query. err:\n\n%v\n\nerrProperties:\n%#v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.connection)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}
+
+func TestMssqlSetup(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range mssqlSetupTests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			errProperties, err := RunQuery(
+				&data.Query{
+					Query:      tt.testQuery,
+					Connection: tt.connection,
+				},
+			)
+
+			if err != nil && (err.Error() != tt.expectedErr || !reflect.DeepEqual(errProperties, tt.expectedErrProperties)) {
+
+				t.Fatalf("unable to run test query. err:\n\n%v\n\nerrProperties:\n%#v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.connection)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}
+
+func TestOracleSetup(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range oracleSetupTests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			errProperties, err := RunQuery(
+				&data.Query{
+					Query:      tt.testQuery,
+					Connection: tt.connection,
+				},
+			)
+
+			if err != nil && (err.Error() != tt.expectedErr || !reflect.DeepEqual(errProperties, tt.expectedErrProperties)) {
+
+				t.Fatalf("unable to run test query. err:\n\n%v\n\nerrProperties:\n%#v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.connection)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}
+
+func TestRedshiftSetup(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range redshiftSetupTests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			errProperties, err := RunQuery(
+				&data.Query{
+					Query:      tt.testQuery,
+					Connection: tt.connection,
+				},
+			)
+
+			if err != nil && (err.Error() != tt.expectedErr || !reflect.DeepEqual(errProperties, tt.expectedErrProperties)) {
+
+				t.Fatalf("unable to run test query. err:\n\n%v\n\nerrProperties:\n%#v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.connection)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}
+
+func TestSnowflakeSetup(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range snowflakeSetupTests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			errProperties, err := RunQuery(
+				&data.Query{
+					Query:      tt.testQuery,
+					Connection: tt.connection,
+				},
+			)
+
+			if err != nil && (err.Error() != tt.expectedErr || !reflect.DeepEqual(errProperties, tt.expectedErrProperties)) {
+
+				t.Fatalf("unable to run test query. err:\n\n%v\n\nerrProperties:\n%#v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.connection)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}
+
+func TestPostgresqlTransfers(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range postgresqlTransferTests {
+
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			errProperties, err := RunTransfer(
 				&data.Transfer{
 					Query:        tt.transferQuery,
@@ -659,62 +1048,242 @@ func TestRunTransfer(t *testing.T) {
 	}
 }
 
-// Test connections
-var (
-	postgresqlTestConnection = data.Connection{
-		DsType:   "postgresql",
-		Username: os.Getenv("postgresqlUsername"),
-		Password: os.Getenv("postgresqlPassword"),
-		Hostname: os.Getenv("postgresqlHostname"),
-		DbName:   os.Getenv("postgresqlDbName"),
-		Port:     5432,
-	}
-	mysqlTestConnection = data.Connection{
-		DsType:   "mysql",
-		Username: os.Getenv("mysqlUsername"),
-		Password: os.Getenv("mysqlPassword"),
-		Hostname: os.Getenv("mysqlHostname"),
-		DbName:   os.Getenv("mysqlDbName"),
-		Port:     3306,
-	}
-	mssqlMasterTestConnection = data.Connection{
-		DsType:   "mssql",
-		Username: os.Getenv("mssqlUsername"),
-		Password: os.Getenv("mssqlPassword"),
-		Hostname: os.Getenv("mssqlHostname"),
-		DbName:   "master",
-		Port:     1433,
-	}
-	mssqlTestConnection = data.Connection{
-		DsType:   "mssql",
-		Username: os.Getenv("mssqlUsername"),
-		Password: os.Getenv("mssqlPassword"),
-		Hostname: os.Getenv("mssqlHostname"),
-		DbName:   os.Getenv("mssqlDbName"),
-		Port:     1433,
-	}
-	oracleTestConnection = data.Connection{
-		DsType:   "oracle",
-		Username: os.Getenv("oracleUsername"),
-		Password: os.Getenv("oraclePassword"),
-		Hostname: os.Getenv("oracleHostname"),
-		DbName:   os.Getenv("oracleDbName"),
-		Port:     1521,
-	}
-	redshiftTestConnection = data.Connection{
-		DsType:   "redshift",
-		Username: os.Getenv("redshiftUsername"),
-		Password: os.Getenv("redshiftPassword"),
-		Hostname: os.Getenv("redshiftHostname"),
-		DbName:   os.Getenv("redshiftDbName"),
-		Port:     5439,
-	}
+func TestMysqlTransfers(t *testing.T) {
+	t.Parallel()
 
-	snowflakeTestConnection = data.Connection{
-		DsType:    "snowflake",
-		Username:  os.Getenv("snowflakeUsername"),
-		Password:  os.Getenv("snowflakePassword"),
-		AccountId: os.Getenv("snowflakeAccountId"),
-		DbName:    os.Getenv("snowflakeDbName"),
+	// Loop over the test cases.
+	for _, tt := range mysqlTransferTests {
+
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			errProperties, err := RunTransfer(
+				&data.Transfer{
+					Query:        tt.transferQuery,
+					Overwrite:    tt.overwrite,
+					TargetSchema: tt.targetSchema,
+					TargetTable:  tt.targetTable,
+					Source:       tt.source,
+					Target:       tt.target,
+				},
+			)
+
+			if err != nil {
+				t.Fatalf("unable to run transfer. err:\n\n%v\n\nerrProperties:\n%v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.target)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					// t.Error(errProperties)
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
 	}
-)
+}
+
+func TestMssqlTransfers(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range mssqlTransferTests {
+
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			errProperties, err := RunTransfer(
+				&data.Transfer{
+					Query:        tt.transferQuery,
+					Overwrite:    tt.overwrite,
+					TargetSchema: tt.targetSchema,
+					TargetTable:  tt.targetTable,
+					Source:       tt.source,
+					Target:       tt.target,
+				},
+			)
+
+			if err != nil {
+				t.Fatalf("unable to run transfer. err:\n\n%v\n\nerrProperties:\n%v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.target)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					// t.Error(errProperties)
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}
+
+func TestOracleTransfers(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range oracleTransferTests {
+
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			errProperties, err := RunTransfer(
+				&data.Transfer{
+					Query:        tt.transferQuery,
+					Overwrite:    tt.overwrite,
+					TargetSchema: tt.targetSchema,
+					TargetTable:  tt.targetTable,
+					Source:       tt.source,
+					Target:       tt.target,
+				},
+			)
+
+			if err != nil {
+				t.Fatalf("unable to run transfer. err:\n\n%v\n\nerrProperties:\n%v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.target)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					// t.Error(errProperties)
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}
+
+func TestRedshiftTransfers(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range redshiftTransferTests {
+
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			errProperties, err := RunTransfer(
+				&data.Transfer{
+					Query:        tt.transferQuery,
+					Overwrite:    tt.overwrite,
+					TargetSchema: tt.targetSchema,
+					TargetTable:  tt.targetTable,
+					Source:       tt.source,
+					Target:       tt.target,
+				},
+			)
+
+			if err != nil {
+				t.Fatalf("unable to run transfer. err:\n\n%v\n\nerrProperties:\n%v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.target)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					// t.Error(errProperties)
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}
+
+func TestSnowflakeTransfers(t *testing.T) {
+	t.Parallel()
+
+	// Loop over the test cases.
+	for _, tt := range snowflakeTransferTests {
+
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			errProperties, err := RunTransfer(
+				&data.Transfer{
+					Query:        tt.transferQuery,
+					Overwrite:    tt.overwrite,
+					TargetSchema: tt.targetSchema,
+					TargetTable:  tt.targetTable,
+					Source:       tt.source,
+					Target:       tt.target,
+				},
+			)
+
+			if err != nil {
+				t.Fatalf("unable to run transfer. err:\n\n%v\n\nerrProperties:\n%v", err, errProperties)
+			}
+
+			if tt.checkQuery != "" {
+				dsConn, _, err := GetDs(tt.target)
+				if err != nil {
+					t.Fatalf("Couldn't get DsConn")
+				}
+				queryResult, errProperties, err := standardGetFormattedResults(dsConn, tt.checkQuery)
+
+				if err != nil && err.Error() != tt.expectedErr {
+					// t.Error(errProperties)
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err)
+				}
+
+				if err != nil && !reflect.DeepEqual(errProperties, tt.expectedErrProperties) {
+					t.Fatalf("\nwanted errProperties:\n%#v\n\ngot:\n%#v", tt.expectedErrProperties, errProperties)
+				}
+
+				if !reflect.DeepEqual(queryResult, tt.checkResult) {
+					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, queryResult)
+				}
+			}
+		})
+	}
+}

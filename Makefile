@@ -28,11 +28,14 @@ run/serve: build
 
 ## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server
 .PHONY: run/init
-run/init: db/init build
-	go run ./cmd serve \
+run/init: db/init
+	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd;
+	./bin/sqlpipe serve \
+		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
 		--admin-username=sqlpipe \
 		--admin-password=${SQLPIPE-PASSWORD} \
-		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
+		--secret "8i.(LBH4JZSv#Z@$qKBUcNlUk*C&y}$p" \
+		--max-concurrency 20 \
 		--create-admin
 
 ## db/init: Initialize a fresh instance of postgresql
@@ -59,9 +62,7 @@ docker/prune:
 .PHONY: env/insert
 env/insert:
 	@echo 'inserting a few records in each table'
-	# insert a non admin user
-	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"username": "normalUser", "password": "${SQLPIPE-PASSWORD}", "admin": false}' https://localhost:9000/api/v1/users
-	# insert a connection
+	# insert connections
 	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "prod", "dsType": "postgresql", "hostname": "localhost", "port": 5432, "dbName": "sqlpipe", "username": "postgres", "password": "${SQLPIPE-PASSWORD}", "skipTest": true}' https://localhost:9000/api/v1/connections
 	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "postgresql", "dsType": "postgresql", "hostname": "${postgresqlHostname}", "port": 5432, "dbName": "testing", "username": "sqlpipe", "password": "${SQLPIPE-PASSWORD}"}' https://localhost:9000/api/v1/connections;
 	curl -u sqlpipe:${SQLPIPE-PASSWORD} -k -i -d '{"name": "mysql", "dsType": "mysql", "hostname": "${mysqlHostname}", "port": 3306, "dbName": "testing", "username": "sqlpipe", "password": "${SQLPIPE-PASSWORD}"}' https://localhost:9000/api/v1/connections;
@@ -176,7 +177,14 @@ db/mssql:
 # test: Test stuff
 .PHONY: test
 test:
-	go test -v -count=1 ./...
+	go test -v -count=1 -run Setup ./...
+	go test -v -count=1 -run Transfers ./...
+
+
+# loadtest: Test load
+.PHONY: loadtest
+loadtest:
+	curl -u sqlpipe:Mypass123 -k -i -d '{"sourceId": 2, "targetId": 2, "overwrite": true, "targetSchema": "public", "targetTable":  "postgresql_load_table", "query": "select * from load_table"}' https://localhost:9000/api/v1/transfers;
 
 # ==================================================================================== #
 # QUALITY CONTROL
@@ -215,6 +223,6 @@ linker_flags = '-s -X main.buildVersion=${git_description}'
 build:
 	@echo 'Building cmd/sqlpipe...'
 	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd
-	GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd
-	GOOS=darwin GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/darwin_arm64/sqlpipe ./cmd
-	GOOS=windows GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/windows_arm64/sqlpipe ./cmd
+	# GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd
+	# GOOS=darwin GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/darwin_arm64/sqlpipe ./cmd
+	# GOOS=windows GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/windows_arm64/sqlpipe ./cmd

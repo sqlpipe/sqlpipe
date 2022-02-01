@@ -52,10 +52,6 @@ func getNewMySQL(
 		return dsConn, errProperties, err
 	}
 
-	mysql.SetMaxIdleConns(5)
-	duration, _ := time.ParseDuration("10s")
-	mysql.SetConnMaxIdleTime(duration)
-
 	dsConn = MySQL{
 		"mysql",
 		"mysql",

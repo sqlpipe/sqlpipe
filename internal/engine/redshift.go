@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -49,10 +48,6 @@ func getNewRedshift(
 	if err != nil {
 		return dsConn, errProperties, err
 	}
-
-	redshift.SetMaxIdleConns(5)
-	duration, _ := time.ParseDuration("10s")
-	redshift.SetConnMaxIdleTime(duration)
 
 	dsConn = Redshift{
 		"redshift",
