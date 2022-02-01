@@ -134,9 +134,9 @@ var postgresqlSetupTests = []queryTest{
 	{
 		name:        "postgresqlLoadTableInsert",
 		connection:  postgresqlTestConnection,
-		testQuery:   `INSERT INTO load_table(mybigint, mybit, mybitvarying, myboolean, mybox, mybytea, mychar, myvarchar, mycidr, mycircle, mydate, mydoubleprecision, myinet, myinteger, myinterval, myjson, myjsonb, myline, mylseg, mymacaddr, mymoney , mynumeric, mypath, mypg_lsn, mypoint, mypolygon, myreal, mysmallint, mytext, mytime, mytimetz, mytimestamp, mytimestamptz, mytsquery, mytsvector, myuuid, myxml) select 6514798382812790784, B'10001', B'1001', true, '(8,9), (1,3)', '\xAAAABBBB', 'abc', '"my"varch''ar,123@gmail.com', '192.168.100.128/25', '(( 1 , 5 ), 5)', '2014-01-10 20:14:54.140332'::date, 529.56218983375436, '192.168.100.128', 745910651, (timestamptz '2014-01-20 20:00:00 PST' - timestamptz '2014-01-10 10:00:00 PST'), '{"mykey": "this\"  ''is'' m,y val"}', '{"mykey": "this is my val"}', '{1, 5, 20}', '[(5, 4), (2, 1)]', '08:00:2b:01:02:03', '$35,244.33'::money, 449.82115, '[( 1, 4), (8, 7)]', '16/B374D848'::pg_lsn, '(5, 7)', '((5, 8), (6, 10), (7, 20))', 9673.1094, 24345, 'myte",xt123@gmail.com', '03:46:38.765594+05', '03:46:38.765594+05', '2014-01-10 10:05:04 PST', '2014-01-10 10:05:04 PST', 'fat & rat'::tsquery, 'a fat cat sat on a mat and ate a fat rat'::tsvector, 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid, '<foo>bar</foo>' from generate_series(1, 100000) seq;`,
+		testQuery:   `INSERT INTO load_table(mybigint, mybit, mybitvarying, myboolean, mybox, mybytea, mychar, myvarchar, mycidr, mycircle, mydate, mydoubleprecision, myinet, myinteger, myinterval, myjson, myjsonb, myline, mylseg, mymacaddr, mymoney , mynumeric, mypath, mypg_lsn, mypoint, mypolygon, myreal, mysmallint, mytext, mytime, mytimetz, mytimestamp, mytimestamptz, mytsquery, mytsvector, myuuid, myxml) select 6514798382812790784, B'10001', B'1001', true, '(8,9), (1,3)', '\xAAAABBBB', 'abc', '"my"varch''ar,123@gmail.com', '192.168.100.128/25', '(( 1 , 5 ), 5)', '2014-01-10 20:14:54.140332'::date, 529.56218983375436, '192.168.100.128', 745910651, (timestamptz '2014-01-20 20:00:00 PST' - timestamptz '2014-01-10 10:00:00 PST'), '{"mykey": "this\"  ''is'' m,y val"}', '{"mykey": "this is my val"}', '{1, 5, 20}', '[(5, 4), (2, 1)]', '08:00:2b:01:02:03', '$35,244.33'::money, 449.82115, '[( 1, 4), (8, 7)]', '16/B374D848'::pg_lsn, '(5, 7)', '((5, 8), (6, 10), (7, 20))', 9673.1094, 24345, 'myte",xt123@gmail.com', '03:46:38.765594+05', '03:46:38.765594+05', '2014-01-10 10:05:04 PST', '2014-01-10 10:05:04 PST', 'fat & rat'::tsquery, 'a fat cat sat on a mat and ate a fat rat'::tsvector, 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid, '<foo>bar</foo>' from generate_series(1, 10000) seq;`,
 		checkQuery:  "select count(*) from load_table",
-		checkResult: QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"100000"}},
+		checkResult: QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"10000"}},
 	},
 }
 
@@ -163,6 +163,47 @@ var mysqlSetupTests = []queryTest{
 		testQuery:   `insert into wide_table (mybit, mybit5, mybit64, mytinyint, mysmallint, mymediumint, myint, mybigint, mydecimal, myfloat, mydouble, mydate, mytime, mydatetime, mytimestamp, myyear, mychar, myvarchar, mynchar, mynvarchar, mybinary, myvarbinary, mytinyblob, mymediumblob, myblob, mylongblob, mytinytext, mytext, mymediumtext, mylongtext, myenum, myset, mygeometry, mypoint, mylinestring, mypolygon, mymultipoint, mymultilinestring, mymultipolygon, mygeometrycollection, myjson) VALUES (1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);`,
 		checkQuery:  "select * from wide_table",
 		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "BIGINT", "mybinary": "BINARY", "mybit": "BIT", "mybit5": "BIT", "mybit64": "BIT", "myblob": "BLOB", "mychar": "CHAR", "mydate": "DATE", "mydatetime": "DATETIME", "mydecimal": "DECIMAL", "mydouble": "DOUBLE", "myenum": "CHAR", "myfloat": "FLOAT", "mygeometry": "GEOMETRY", "mygeometrycollection": "GEOMETRY", "myint": "INT", "myjson": "JSON", "mylinestring": "GEOMETRY", "mylongblob": "BLOB", "mylongtext": "TEXT", "mymediumblob": "BLOB", "mymediumint": "MEDIUMINT", "mymediumtext": "TEXT", "mymultilinestring": "GEOMETRY", "mymultipoint": "GEOMETRY", "mymultipolygon": "GEOMETRY", "mynchar": "CHAR", "mynvarchar": "VARCHAR", "mypoint": "GEOMETRY", "mypolygon": "GEOMETRY", "myserial": "BIGINT", "myset": "CHAR", "mysmallint": "SMALLINT", "mytext": "TEXT", "mytime": "TIME", "mytimestamp": "TIMESTAMP", "mytinyblob": "BLOB", "mytinyint": "TINYINT", "mytinytext": "TEXT", "myvarbinary": "VARBINARY", "myvarchar": "VARCHAR", "myyear": "YEAR"}, Rows: []interface{}{"1", "x'01'", "x'0a'", "x'ffffffffffffffff'", "2", "5", "50", "4595435", "392809438543", "30.50000", "45.9", "54.3", "'2009-05-28'", "'14:23:54'", "'2010-10-24 20:52:52'", "'1989-02-22 03:17:21'", "1905", "'chr'", "'my varchar ''st\"ri,ng wheeeee'", "'ncr'", "'my nvarchar string wheeeee'", "x'626e72'", "x'6d792062696e61727920737472696e67207761686f6f6f6f6f'", "x'626c6f622063697479206262'", "x'626c6f622063697479206262'", "x'626c6f622063697479206262'", "x'626c6f622063697479206262'", "'text city bb'", "'text city bb'", "'text city bb'", "'text city bb'", "'enumval1'", "'setval1'", "'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?'", "'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?'", "'\x00\x00\x00\x00\x01\x02\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@'", "'\x00\x00\x00\x00\x01\x03\x00\x00\x00\x02\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00$@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@'", "'\x00\x00\x00\x00\x01\x04\x00\x00\x00\n\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\b@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x00@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\"@\x00\x00\x00\x00\x00\x00\b@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00 @\x00\x00\x00\x00\x00\x00\x10@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x18@\x00\x00\x00\x00\x00\x00\x18@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x18@\x00\x00\x00\x00\x00\x00\"@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10@\x00\x00\x00\x00\x00\x00\"@\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x14@'", "'\x00\x00\x00\x00\x01\x05\x00\x00\x00\x02\x00\x00\x00\x01\x02\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x01\x02\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10@\x00\x00\x00\x00\x00\x00\x10@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@'", "'\x00\x00\x00\x00\x01\x06\x00\x00\x00\x01\x00\x00\x00\x01\x03\x00\x00\x00\x02\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?'", "'\x00\x00\x00\x00\x01\x06\x00\x00\x00\x01\x00\x00\x00\x01\x03\x00\x00\x00\x02\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\b@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?'", "'{\"mykey\": \"this is\\\\\" m\\\\\"y, ''val''\"}'", "2", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "x'%!x(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'"}},
+	},
+	{
+		name:                  "mysqlLoadTableDrop",
+		connection:            mysqlTestConnection,
+		testQuery:             "drop table if exists load_table;",
+		checkQuery:            "select * from load_table",
+		expectedErr:           "db.Query() threw an error",
+		expectedErrProperties: map[string]string{"dsType": "mysql", "error": "Error 1146: Table 'testing.load_table' doesn't exist", "query": "select * from load_table"},
+	},
+	{
+		name:        "mysqlLoadTableCreate",
+		connection:  mysqlTestConnection,
+		testQuery:   `create table load_table(myserial serial, mybit bit, mybit5 bit(5), mybit64 bit(64), mytinyint tinyint, mysmallint smallint, mymediumint mediumint, myint int, mybigint bigint, mydecimal decimal(10, 5), myfloat float, mydouble double, mydate date, mytime time, mydatetime datetime, mytimestamp timestamp, myyear year, mychar char(3), myvarchar varchar(200), mynchar nchar(3), mynvarchar nvarchar(200), mybinary binary(3), myvarbinary varbinary(200), mytinyblob tinyblob, mymediumblob mediumblob, myblob blob, mylongblob longblob, mytinytext tinytext, mytext text, mymediumtext mediumtext, mylongtext longtext, myenum ENUM('enumval1', 'enumval2'), myset SET('setval1', 'setval2'), mygeometry geometry, mypoint point, mylinestring linestring, mypolygon polygon, mymultipoint multipoint, mymultilinestring multilinestring, mymultipolygon multipolygon, mygeometrycollection geometrycollection, myjson json);`,
+		checkQuery:  "select * from load_table",
+		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "BIGINT", "mybinary": "BINARY", "mybit": "BIT", "mybit5": "BIT", "mybit64": "BIT", "myblob": "BLOB", "mychar": "CHAR", "mydate": "DATE", "mydatetime": "DATETIME", "mydecimal": "DECIMAL", "mydouble": "DOUBLE", "myenum": "CHAR", "myfloat": "FLOAT", "mygeometry": "GEOMETRY", "mygeometrycollection": "GEOMETRY", "myint": "INT", "myjson": "JSON", "mylinestring": "GEOMETRY", "mylongblob": "BLOB", "mylongtext": "TEXT", "mymediumblob": "BLOB", "mymediumint": "MEDIUMINT", "mymediumtext": "TEXT", "mymultilinestring": "GEOMETRY", "mymultipoint": "GEOMETRY", "mymultipolygon": "GEOMETRY", "mynchar": "CHAR", "mynvarchar": "VARCHAR", "mypoint": "GEOMETRY", "mypolygon": "GEOMETRY", "myserial": "BIGINT", "myset": "CHAR", "mysmallint": "SMALLINT", "mytext": "TEXT", "mytime": "TIME", "mytimestamp": "TIMESTAMP", "mytinyblob": "BLOB", "mytinyint": "TINYINT", "mytinytext": "TEXT", "myvarbinary": "VARBINARY", "myvarchar": "VARCHAR", "myyear": "YEAR"}, Rows: []interface{}{}},
+	},
+	{
+		name:       "mysqlLoadTableDropProc",
+		connection: mysqlTestConnection,
+		testQuery:  `DROP PROCEDURE IF EXISTS insertRows;`,
+	},
+	{
+		name:       "mysqlLoadTableCreateProc",
+		connection: mysqlTestConnection,
+		testQuery: `
+CREATE PROCEDURE insertRows()   
+BEGIN
+DECLARE i INT DEFAULT 1; 
+WHILE (i <= 1000) DO
+insert into load_table (mybit, mybit5, mybit64, mytinyint, mysmallint, mymediumint, myint, mybigint, mydecimal, myfloat, mydouble, mydate, mytime, mydatetime, mytimestamp, myyear, mychar, myvarchar, mynchar, mynvarchar, mybinary, myvarbinary, mytinyblob, mymediumblob, myblob, mylongblob, mytinytext, mytext, mymediumtext, mylongtext, myenum, myset, mygeometry, mypoint, mylinestring, mypolygon, mymultipoint, mymultilinestring, mymultipolygon, mygeometrycollection, myjson) VALUES (1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}'),(1, b'01010', b'1111111111111111111111111111111111111111111111111111111111111111', 2, 5, 50, 4595435, 392809438543, 30.5, 45.9, 54.3, '2009-05-28', '14:23:54.105302', '2010-10-24 20:52:51.969491', '1989-02-22 3:17:21.243061', 1905, 'chr', 'my varchar ''st"ri,ng wheeeee', 'ncr', 'my nvarchar string wheeeee', 'bnr', 'my binary string wahooooo', 'blob city bb', 'blob city bb', 'blob city bb', 'blob city bb', 'text city bb', 'text city bb', 'text city bb', 'text city bb', 'enumval1', 'setval1', ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('POINT(1 1)'), ST_GeomFromText('LINESTRING(0 0,1 1,2 2)'), ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'), ST_GEOMFROMTEXT('MultiPoint( 1 1, 2 2, 5 3, 7 2, 9 3, 8 4, 6 6, 6 9, 4 9, 1 5 )'), ST_GEOMFROMTEXT('MultiLineString((1 1,2 2,3 3),(4 4,5 5))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), ST_GEOMFROMTEXT('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(1 1,1 2,2 2,2 1,1 1)))'), '{"mykey": "this is\\" m\\"y, ''val''"}');
+SET i = i+1;
+END WHILE;
+END;
+`,
+	},
+	{
+		name:        "mysqlLoadTableInsert",
+		connection:  mysqlTestConnection,
+		testQuery:   `call insertRows();`,
+		checkQuery:  "select count(*) from load_table",
+		checkResult: QueryResult{ColumnTypes: map[string]string{"count(*)": "BIGINT"}, Rows: []interface{}{"10000"}},
 	},
 }
 
@@ -203,6 +244,35 @@ var mssqlSetupTests = []queryTest{
 		testQuery:   `insert into wide_table (mybigint, mybit, mydecimal, myint, mymoney, mynumeric, mysmallint, mysmallmoney, mytinyint, myfloat, myreal, mydate, mydatetime2, mydatetime, mydatetimeoffset, mysmalldatetime, mytime, mychar, myvarchar, mytext, mynchar, mynvarchar, myntext, mybinary, myvarbinary, myuniqueidentifier, myxml) values(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);`,
 		checkQuery:  "select * from wide_table",
 		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "BIGINT", "mybinary": "BINARY", "mybit": "BIT", "mychar": "CHAR", "mydate": "DATE", "mydatetime": "DATETIME", "mydatetime2": "DATETIME2", "mydatetimeoffset": "DATETIMEOFFSET", "mydecimal": "DECIMAL", "myfloat": "FLOAT", "myint": "INT", "mymoney": "MONEY", "mynchar": "NCHAR", "myntext": "NTEXT", "mynumeric": "DECIMAL", "mynvarchar": "NVARCHAR", "myreal": "REAL", "mysmalldatetime": "SMALLDATETIME", "mysmallint": "SMALLINT", "mysmallmoney": "SMALLMONEY", "mytext": "TEXT", "mytime": "TIME", "mytinyint": "TINYINT", "myuniqueidentifier": "UNIQUEIDENTIFIER", "myvarbinary": "VARBINARY", "myvarchar": "VARCHAR", "myxml": "XML"}, Rows: []interface{}{"435345", "1", "324.43000", "54", "'43.2100'", "54.3300000", "12", "'22.1000'", "4", "45.5", "47.70000076293945", "CONVERT(DATETIME2, '2013-10-12 00:00:00.0000000', 121)", "CONVERT(DATETIME2, '2005-06-12 11:40:17.6320000', 121)", "CONVERT(DATETIME2, '2005-06-12 11:40:17.6330000', 121)", "CONVERT(DATETIME2, '2005-06-12 11:40:17.6320000', 121)", "CONVERT(DATETIME2, '2005-06-12 11:40:00.0000000', 121)", "CONVERT(DATETIME2, '0001-01-01 11:40:12.5436540', 121)", "'yoo'", "'gday guvna'", "'omg have you hea''rd\" a,bout the latest craze that the people are talking about?'", "'yoo'", "'gday guvna'", "'omg have you heard about the latest craze that the people are talking about?'", "CONVERT(VARBINARY(8000), '0x000065', 1)", "CONVERT(VARBINARY(8000), '0x000186a1', 1)", "N'6F9619FF-8B86-D011-B42D-00C04FC964FF'", "'<foo>bar</foo>'", "%!d(<nil>)", "null", "%!s(<nil>)", "%!d(<nil>)", "'%!s(<nil>)'", "%!s(<nil>)", "%!d(<nil>)", "'%!s(<nil>)'", "%!d(<nil>)", "%!g(<nil>)", "%!g(<nil>)", "null", "null", "null", "null", "null", "null", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "CONVERT(VARBINARY(8000), '0x%!x(<nil>)', 1)", "CONVERT(VARBINARY(8000), '0x%!x(<nil>)', 1)", "null", "'%!s(<nil>)'"}},
+	},
+	{
+		name:                  "mssqlLoadTableDrop",
+		connection:            mssqlTestConnection,
+		testQuery:             "drop table if exists load_table;",
+		checkQuery:            "select * from load_table",
+		expectedErr:           "db.Query() threw an error",
+		expectedErrProperties: map[string]string{"dsType": "mssql", "error": "mssql: Invalid object name 'load_table'.", "query": "select * from load_table"},
+	},
+	{
+		name:        "mssqlLoadTableCreate",
+		connection:  mssqlTestConnection,
+		testQuery:   `create table load_table (mybigint bigint, mybit bit, mydecimal decimal(10,5), myint int, mymoney money, mynumeric numeric(11,7), mysmallint smallint, mysmallmoney smallmoney, mytinyint tinyint, myfloat float, myreal real, mydate date, mydatetime2 datetime2, mydatetime datetime, mydatetimeoffset datetimeoffset, mysmalldatetime smalldatetime, mytime time, mychar char(3), myvarchar varchar(20), mytext text, mynchar nchar(3), mynvarchar nvarchar(20), myntext ntext, mybinary binary(3), myvarbinary varbinary(30), myuniqueidentifier uniqueidentifier, myxml xml);`,
+		checkQuery:  "select * from load_table",
+		checkResult: QueryResult{ColumnTypes: map[string]string{"mybigint": "BIGINT", "mybinary": "BINARY", "mybit": "BIT", "mychar": "CHAR", "mydate": "DATE", "mydatetime": "DATETIME", "mydatetime2": "DATETIME2", "mydatetimeoffset": "DATETIMEOFFSET", "mydecimal": "DECIMAL", "myfloat": "FLOAT", "myint": "INT", "mymoney": "MONEY", "mynchar": "NCHAR", "myntext": "NTEXT", "mynumeric": "DECIMAL", "mynvarchar": "NVARCHAR", "myreal": "REAL", "mysmalldatetime": "SMALLDATETIME", "mysmallint": "SMALLINT", "mysmallmoney": "SMALLMONEY", "mytext": "TEXT", "mytime": "TIME", "mytinyint": "TINYINT", "myuniqueidentifier": "UNIQUEIDENTIFIER", "myvarbinary": "VARBINARY", "myvarchar": "VARCHAR", "myxml": "XML"}, Rows: []interface{}{}},
+	},
+	{
+		name:       "mssqlLoadTableInsert",
+		connection: mssqlTestConnection,
+		testQuery: `
+DECLARE @i int = 0
+WHILE @i < 1000
+BEGIN
+	SET @i = @i + 1
+insert into load_table (mybigint, mybit, mydecimal, myint, mymoney, mynumeric, mysmallint, mysmallmoney, mytinyint, myfloat, myreal, mydate, mydatetime2, mydatetime, mydatetimeoffset, mysmalldatetime, mytime, mychar, myvarchar, mytext, mynchar, mynvarchar, myntext, mybinary, myvarbinary, myuniqueidentifier, myxml) values (435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>');
+END	
+	`,
+		checkQuery:  "select count(*) from load_table",
+		checkResult: QueryResult{ColumnTypes: map[string]string{"": "INT"}, Rows: []interface{}{"10000"}},
 	},
 }
 
@@ -357,7 +427,7 @@ var postgresqlTransferTests = []transferTest{
 		targetTable:   "postgresql_load_table",
 		transferQuery: "select * from load_table",
 		checkQuery:    "select count(*) from postgresql_load_table",
-		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"100000"}},
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"10000"}},
 	},
 	{
 		name:          "postgresql2mysql_load",
@@ -367,7 +437,7 @@ var postgresqlTransferTests = []transferTest{
 		targetTable:   "postgresql_load_table",
 		transferQuery: "select * from load_table",
 		checkQuery:    "select count(*) from postgresql_load_table",
-		checkResult:   QueryResult{ColumnTypes: map[string]string{"count(*)": "BIGINT"}, Rows: []interface{}{"100000"}},
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count(*)": "BIGINT"}, Rows: []interface{}{"10000"}},
 	},
 	{
 		name:          "postgresql2mssql_load",
@@ -377,7 +447,7 @@ var postgresqlTransferTests = []transferTest{
 		targetTable:   "postgresql_load_table",
 		transferQuery: "select * from load_table",
 		checkQuery:    "select count(*) from postgresql_load_table",
-		checkResult:   QueryResult{ColumnTypes: map[string]string{"": "INT"}, Rows: []interface{}{"100000"}},
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"": "INT"}, Rows: []interface{}{"10000"}},
 	},
 	{
 		name:          "postgresql2oracle_load",
@@ -385,9 +455,9 @@ var postgresqlTransferTests = []transferTest{
 		target:        oracleTestConnection,
 		overwrite:     true,
 		targetTable:   "postgresql_load_table",
-		transferQuery: "select * from load_table limit 10000",
+		transferQuery: "select * from load_table limit 100",
 		checkQuery:    "select count(*) from postgresql_load_table",
-		checkResult:   QueryResult{},
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"COUNT(*)": "NUMBER"}, Rows: []interface{}{"100"}},
 	},
 	{
 		name:          "postgresql2redshift_load",
@@ -398,7 +468,7 @@ var postgresqlTransferTests = []transferTest{
 		targetTable:   "postgresql_load_table",
 		transferQuery: "select * from load_table",
 		checkQuery:    "select count(*) from postgresql_load_table",
-		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"100000"}},
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"10000"}},
 	},
 	{
 		name:          "postgresql2snowflake_load",
@@ -409,7 +479,7 @@ var postgresqlTransferTests = []transferTest{
 		targetTable:   "postgresql_load_table",
 		transferQuery: "select * from load_table",
 		checkQuery:    "select count(*) from postgresql_load_table",
-		checkResult:   QueryResult{},
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"COUNT(*)": "FIXED"}, Rows: []interface{}{"10000"}},
 	},
 }
 
@@ -478,6 +548,69 @@ var mysqlTransferTests = []transferTest{
 		checkQuery:    "select * from mysql_wide_table",
 		checkResult:   QueryResult{ColumnTypes: map[string]string{"MYBIGINT": "FIXED", "MYBINARY": "BINARY", "MYBIT": "BINARY", "MYBIT5": "BINARY", "MYBIT64": "BINARY", "MYBLOB": "BINARY", "MYCHAR": "TEXT", "MYDATE": "DATE", "MYDATETIME": "TIMESTAMP_NTZ", "MYDECIMAL": "FIXED", "MYDOUBLE": "REAL", "MYENUM": "TEXT", "MYFLOAT": "REAL", "MYGEOMETRY": "BINARY", "MYGEOMETRYCOLLECTION": "BINARY", "MYINT": "FIXED", "MYJSON": "VARIANT", "MYLINESTRING": "BINARY", "MYLONGBLOB": "BINARY", "MYLONGTEXT": "TEXT", "MYMEDIUMBLOB": "BINARY", "MYMEDIUMINT": "FIXED", "MYMEDIUMTEXT": "TEXT", "MYMULTILINESTRING": "BINARY", "MYMULTIPOINT": "BINARY", "MYMULTIPOLYGON": "BINARY", "MYNCHAR": "TEXT", "MYNVARCHAR": "TEXT", "MYPOINT": "BINARY", "MYPOLYGON": "BINARY", "MYSERIAL": "FIXED", "MYSET": "TEXT", "MYSMALLINT": "FIXED", "MYTEXT": "TEXT", "MYTIME": "TIME", "MYTIMESTAMP": "TIMESTAMP_NTZ", "MYTINYBLOB": "BINARY", "MYTINYINT": "FIXED", "MYTINYTEXT": "TEXT", "MYVARBINARY": "BINARY", "MYVARCHAR": "TEXT", "MYYEAR": "FIXED"}, Rows: []interface{}{"1", "to_binary('01')", "to_binary('0a')", "to_binary('ffffffffffffffff')", "2", "5", "50", "4595435", "392809438543", "30.500000", "45.900000", "54.300000", "'2009-05-28 00:00:00.000000'", "'0001-01-01 14:23:54.000000'", "'2010-10-24 20:52:52.000000'", "'1989-02-22 03:17:21.000000'", "1905", "'chr'", "'my varchar ''st\"ri,ng wheeeee'", "'ncr'", "'my nvarchar string wheeeee'", "to_binary('626e72')", "to_binary('6d792062696e61727920737472696e67207761686f6f6f6f6f')", "to_binary('626c6f622063697479206262')", "to_binary('626c6f622063697479206262')", "to_binary('626c6f622063697479206262')", "to_binary('626c6f622063697479206262')", "'text city bb'", "'text city bb'", "'text city bb'", "'text city bb'", "'enumval1'", "'setval1'", "to_binary('000000000101000000000000000000f03f000000000000f03f')", "to_binary('000000000101000000000000000000f03f000000000000f03f')", "to_binary('0000000001020000000300000000000000000000000000000000000000000000000000f03f000000000000f03f00000000000000400000000000000040')", "to_binary('0000000001030000000200000005000000000000000000000000000000000000000000000000002440000000000000000000000000000024400000000000002440000000000000000000000000000024400000000000000000000000000000000005000000000000000000144000000000000014400000000000001c4000000000000014400000000000001c400000000000001c4000000000000014400000000000001c4000000000000014400000000000001440')", "to_binary('0000000001040000000a0000000101000000000000000000f03f000000000000f03f01010000000000000000000040000000000000004001010000000000000000001440000000000000084001010000000000000000001c4000000000000000400101000000000000000000224000000000000008400101000000000000000000204000000000000010400101000000000000000000184000000000000018400101000000000000000000184000000000000022400101000000000000000000104000000000000022400101000000000000000000f03f0000000000001440')", "to_binary('00000000010500000002000000010200000003000000000000000000f03f000000000000f03f00000000000000400000000000000040000000000000084000000000000008400102000000020000000000000000001040000000000000104000000000000014400000000000001440')", "to_binary('0000000001060000000100000001030000000200000005000000000000000000000000000000000000000000000000000000000000000000084000000000000008400000000000000840000000000000084000000000000000000000000000000000000000000000000005000000000000000000f03f000000000000f03f000000000000f03f0000000000000040000000000000004000000000000000400000000000000040000000000000f03f000000000000f03f000000000000f03f')", "to_binary('0000000001060000000100000001030000000200000005000000000000000000000000000000000000000000000000000000000000000000084000000000000008400000000000000840000000000000084000000000000000000000000000000000000000000000000005000000000000000000f03f000000000000f03f000000000000f03f0000000000000040000000000000004000000000000000400000000000000040000000000000f03f000000000000f03f000000000000f03f')", "'{\n  \"mykey\": \"this is\\\\\" m\\\\\"y, ''val''\"\n}'", "2", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "null", "null", "null", "null", "%!s(<nil>)", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "'%!s(<nil>)'"}},
 	},
+	{
+		name:          "mysql2postgresql_load",
+		source:        mysqlTestConnection,
+		target:        postgresqlTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "mysql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mysql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"10000"}},
+	},
+	{
+		name:          "mysql2mysql_load",
+		source:        mysqlTestConnection,
+		target:        mysqlTestConnection,
+		overwrite:     true,
+		targetTable:   "mysql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mysql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count(*)": "BIGINT"}, Rows: []interface{}{"10000"}},
+	},
+	{
+		name:          "mysql2mssql_load",
+		source:        mysqlTestConnection,
+		target:        mssqlTestConnection,
+		overwrite:     true,
+		targetTable:   "mysql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mysql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"": "INT"}, Rows: []interface{}{"10000"}},
+	},
+	{
+		name:          "mysql2oracle_load",
+		source:        mysqlTestConnection,
+		target:        oracleTestConnection,
+		overwrite:     true,
+		targetTable:   "mysql_load_table",
+		transferQuery: "select * from load_table limit 100",
+		checkQuery:    "select count(*) from mysql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"COUNT(*)": "NUMBER"}, Rows: []interface{}{"100"}},
+	},
+	{
+		name:          "mysql2redshift_load",
+		source:        mysqlTestConnection,
+		target:        redshiftTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "mysql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mysql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"10000"}},
+	},
+	{
+		name:          "mysql2snowflake_load",
+		source:        mysqlTestConnection,
+		target:        snowflakeTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "mysql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mysql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"COUNT(*)": "FIXED"}, Rows: []interface{}{"10000"}},
+	},
 }
 
 var mssqlTransferTests = []transferTest{
@@ -544,6 +677,69 @@ var mssqlTransferTests = []transferTest{
 		transferQuery: "select * from wide_table",
 		checkQuery:    "select * from mssql_wide_table",
 		checkResult:   QueryResult{ColumnTypes: map[string]string{"MYBIGINT": "FIXED", "MYBINARY": "BINARY", "MYBIT": "BOOLEAN", "MYCHAR": "TEXT", "MYDATE": "TIMESTAMP_NTZ", "MYDATETIME": "TIMESTAMP_NTZ", "MYDATETIME2": "TIMESTAMP_NTZ", "MYDATETIMEOFFSET": "TIMESTAMP_NTZ", "MYDECIMAL": "FIXED", "MYFLOAT": "REAL", "MYINT": "FIXED", "MYMONEY": "TEXT", "MYNCHAR": "TEXT", "MYNTEXT": "TEXT", "MYNUMERIC": "FIXED", "MYNVARCHAR": "TEXT", "MYREAL": "REAL", "MYSMALLDATETIME": "TIMESTAMP_NTZ", "MYSMALLINT": "FIXED", "MYSMALLMONEY": "TEXT", "MYTEXT": "TEXT", "MYTIME": "TIMESTAMP_NTZ", "MYTINYINT": "FIXED", "MYUNIQUEIDENTIFIER": "TEXT", "MYVARBINARY": "BINARY", "MYVARCHAR": "TEXT", "MYXML": "TEXT"}, Rows: []interface{}{"435345", "true", "324.430000", "54", "'43.2100'", "54.330000", "12", "'22.1000'", "4", "45.500000", "47.700001", "'2013-10-12 00:00:00.000000'", "'2005-06-12 11:40:17.632000'", "'2005-06-12 11:40:17.633000'", "'2005-06-12 11:40:17.632000'", "'2005-06-12 11:40:00.000000'", "'0001-01-01 11:40:12.543654'", "'yoo'", "'gday guvna'", "'omg have you hea''rd\" a,bout the latest craze that the people are talking about?'", "'yoo'", "'gday guvna'", "'omg have you heard about the latest craze that the people are talking about?'", "to_binary('000065')", "to_binary('000186a1')", "'6F9619FF8B86D011B42D00C04FC964FF'", "'<foo>bar</foo>'", "%!s(<nil>)", "%!t(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "'%!s(<nil>)'", "%!s(<nil>)", "%!s(<nil>)", "'%!s(<nil>)'", "%!s(<nil>)", "%!s(<nil>)", "%!s(<nil>)", "null", "null", "null", "null", "null", "null", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "'%!s(<nil>)'", "to_binary('%!x(<nil>)')", "to_binary('%!x(<nil>)')", "'%!s(<nil>)'", "'%!s(<nil>)'"}},
+	},
+	{
+		name:          "mssql2postgresql_load",
+		source:        mssqlTestConnection,
+		target:        postgresqlTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "mssql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mssql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"10000"}},
+	},
+	{
+		name:          "mssql2mysql_load",
+		source:        mssqlTestConnection,
+		target:        mysqlTestConnection,
+		overwrite:     true,
+		targetTable:   "mssql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mssql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count(*)": "BIGINT"}, Rows: []interface{}{"10000"}},
+	},
+	{
+		name:          "mssql2mssql_load",
+		source:        mssqlTestConnection,
+		target:        mssqlTestConnection,
+		overwrite:     true,
+		targetTable:   "mssql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mssql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"": "INT"}, Rows: []interface{}{"10000"}},
+	},
+	{
+		name:          "mssql2oracle_load",
+		source:        mssqlTestConnection,
+		target:        oracleTestConnection,
+		overwrite:     true,
+		targetTable:   "mssql_load_table",
+		transferQuery: "select top 100 * from load_table",
+		checkQuery:    "select count(*) from mssql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"COUNT(*)": "NUMBER"}, Rows: []interface{}{"100"}},
+	},
+	{
+		name:          "mssql2redshift_load",
+		source:        mssqlTestConnection,
+		target:        redshiftTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "mssql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mssql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"count": "INT8"}, Rows: []interface{}{"10000"}},
+	},
+	{
+		name:          "mssql2snowflake_load",
+		source:        mssqlTestConnection,
+		target:        snowflakeTestConnection,
+		overwrite:     true,
+		targetSchema:  "public",
+		targetTable:   "mssql_load_table",
+		transferQuery: "select * from load_table",
+		checkQuery:    "select count(*) from mssql_load_table",
+		checkResult:   QueryResult{ColumnTypes: map[string]string{"COUNT(*)": "FIXED"}, Rows: []interface{}{"10000"}},
 	},
 }
 

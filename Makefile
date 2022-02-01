@@ -180,6 +180,11 @@ test:
 	go test -v -count=1 -run Setup ./...
 	go test -v -count=1 -run Transfers ./...
 
+# setup: setup stuff
+.PHONY: setup
+setup:
+	go test -v -count=1 -run Setup ./...
+
 
 # loadtest: Test load
 .PHONY: loadtest
