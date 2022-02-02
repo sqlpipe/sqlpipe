@@ -65,36 +65,13 @@ jobs:
           ref: main
       - name: Setup go cache
         run: mkdir gocache
-      - name: ls
-        run: ls /actions-runner/_work
-      - name: ls
-        run: ls /actions-runner/_work/sqlpipe
       - name: Run setup script
         run: sh build.sh
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
-      # - name: Build Linux ARM binary
-      #   run: cd sqlpipe && go build sqlpipe/ -o linux/sqlpipe
-      #   env:
-      #     GOOS: linux
-      #     GOARCH: arm64
-      #     GOPATH: /actions-runner/_work/sqlpipe/sqlpipe
-      #     GOCACHE: /actions-runner/_work/sqlpipe/sqlpipe/gocache
-      # - name: Build macOS ARM binary
-      #   run: cd go/src/sqlpipe && go build -o macos/sqlpipe
-      #   env:
-      #     GOOS: darwin
-      #     GOARCH: arm64
-      #     GOPATH: /actions-runner/_work/sqlpipe/sqlpipe
-      #     GOCACHE: /actions-runner/_work/sqlpipe/sqlpipe/gocache
-      # - name: Build Windows ARM binary
-      #   run: cd go/src/sqlpipe && go build -o windows/sqlpipe
-      #   env:
-      #     GOOS: windows
-      #     GOARCH: arm64
-      #     GOPATH: /actions-runner/_work/sqlpipe/sqlpipe
-      #     GOCACHE: /actions-runner/_work/sqlpipe/sqlpipe/gocache
+      - name: ls
+        run: ls ./bin
       # - name: Upload to s3
       #   uses: jakejarvis/s3-sync-action@master
       #   with:
@@ -105,7 +82,7 @@ jobs:
       #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       #     AWS_REGION: ${{ secrets.AWS_REGION }}
       #     SOURCE_DIR: 'go/src/sqlpipe/arm'
-      #     DEST_DIR: 'arm'
+      #     DEST_DIR: 'arm/v2'
   # build-x86-binaries:
   #   name: Build x86 binaries
   #   needs: start-x86-runner
