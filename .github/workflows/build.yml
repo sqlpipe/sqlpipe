@@ -70,6 +70,14 @@ jobs:
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
+      - name: ls
+        run: ls
+      - name: ls
+        run: ls sqlpipe
+      - name: ls
+        run: ls bin
+      - name: ls
+        run: ls sqlpipe/bin
       - name: Upload to s3
         uses: jakejarvis/s3-sync-action@master
         with:
