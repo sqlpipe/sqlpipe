@@ -63,8 +63,16 @@ jobs:
         uses: actions/checkout@v2
         with:
           ref: main
+      - name: Setup go cache
+        run: mkdir gocache
+      - name: ls
+        run: ls /actions-runner/_work
+      - name: ls
+        run: ls /actions-runner/_work/sqlpipe
       - name: Run setup script
         run: sh build.sh
+          GOPATH: /actions-runner/_work/sqlpipe/
+          GOCACHE: /actions-runner/_work/sqlpipe/gocache
       # - name: Build Linux ARM binary
       #   run: cd sqlpipe && go build sqlpipe/ -o linux/sqlpipe
       #   env:
