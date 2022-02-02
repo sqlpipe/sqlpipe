@@ -16,7 +16,8 @@ var rootCmd = &cobra.Command{
 	Short: "SQLPipe makes it easy to move data between data systems.",
 }
 
-var buildVersion string
+var gitHash string
+var sqlpipeVersion = "1.0.0"
 
 func init() {
 	rootCmd.AddCommand(serve.ServeCmd)
@@ -24,7 +25,8 @@ func init() {
 	rootCmd.AddCommand(transfer.TransferCmd)
 	rootCmd.AddCommand(query.QueryCmd)
 
-	globals.Version = buildVersion
+	globals.GitHash = gitHash
+	globals.SqlpipeVersion = sqlpipeVersion
 	rootCmd.AddCommand(version.VersionCmd)
 }
 

@@ -221,7 +221,7 @@ vendor:
 
 current_time = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 git_description = $(shell git describe --always --dirty --tags --long)
-linker_flags = '-s -X main.buildVersion=${git_description}'
+linker_flags = '-s -X main.gitHash=${git_description}'
 
 ## build: build the application
 .PHONY: build

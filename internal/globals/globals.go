@@ -1,4 +1,5 @@
 package globals
 
-var Version string
+var GitHash string
+var SqlpipeVersion string
 var Analytics bool

@@ -186,7 +186,7 @@ func openDB(cfg config) (*sql.DB, error) {
 }
 
 func publishMetrics(db *sql.DB) {
-	expvar.NewString("version").Set(globals.Version)
+	expvar.NewString("version").Set(globals.GitHash)
 	expvar.Publish("goroutines", expvar.Func(func() interface{} {
 		return runtime.NumGoroutine()
 	}))

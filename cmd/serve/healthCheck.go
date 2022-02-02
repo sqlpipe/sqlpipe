@@ -10,7 +10,7 @@ func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Reques
 	env := envelope{
 		"status": "available",
 		"system_info": map[string]string{
-			"version": globals.Version,
+			"version": globals.SqlpipeVersion,
 		},
 	}
 

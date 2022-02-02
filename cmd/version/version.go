@@ -16,5 +16,6 @@ var (
 )
 
 func showVersion(cmd *cobra.Command, args []string) {
-	fmt.Println(globals.Version)
+	fmt.Println("Git hash:", globals.GitHash)
+	fmt.Println("Human version:", globals.SqlpipeVersion)
 }

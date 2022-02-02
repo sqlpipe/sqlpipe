@@ -30,7 +30,7 @@ func SendAnonymizedTransferAnalytics(transfer data.Transfer, server bool) (errPr
 		input.CreatedAt = PgDate(transfer.CreatedAt)
 		input.StoppedAt = PgDate(transfer.StoppedAt)
 		input.Server = server
-		input.SQLpipeVersion = Version
+		input.SQLpipeVersion = GitHash
 
 		body, err := json.Marshal(input)
 		if err != nil {
@@ -59,7 +59,7 @@ func SendAnonymizedQueryAnalytics(query data.Query, server bool) (errProperties 
 		input.CreatedAt = PgDate(query.CreatedAt)
 		input.CreatedAt = PgDate(query.StoppedAt)
 		input.Server = server
-		input.SQLpipeVersion = Version
+		input.SQLpipeVersion = GitHash
 
 		body, err := json.Marshal(input)
 		if err != nil {
