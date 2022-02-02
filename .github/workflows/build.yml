@@ -71,6 +71,7 @@ jobs:
         run: ls /actions-runner/_work/sqlpipe
       - name: Run setup script
         run: sh build.sh
+        env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
       # - name: Build Linux ARM binary
