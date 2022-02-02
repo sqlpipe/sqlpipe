@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/validator"
 	"github.com/calmitchell617/sqlpipe/pkg"
@@ -49,6 +50,21 @@ func (app *application) readString(qs url.Values, key string, defaultValue strin
 	return s
 }
 
+func (app *application) readDateTime(qs url.Values, key string, defaultValue time.Time) time.Time {
+	s := qs.Get(key)
+
+	if s == "" {
+		return defaultValue
+	}
+
+	timeVal, err := time.Parse("2006-01-02T03:04", s)
+	if err != nil {
+		return defaultValue
+	}
+
+	return timeVal
+}
+
 func (app *application) readInt(qs url.Values, key string, defaultValue int, v *validator.Validator) int {
 	s := qs.Get(key)
 
@@ -63,6 +79,17 @@ func (app *application) readInt(qs url.Values, key string, defaultValue int, v *
 	}
 
 	return i
+}
+
+func (app *application) readCSV(qs url.Values, key string, defaultValue []string) []string {
+	// Extract the value from the query string.
+	csv := qs.Get(key)
+	// If no key exists (or the value is empty) then return the default value.
+	if csv == "" {
+		return defaultValue
+	}
+	// Otherwise parse the value into a []string slice and return it.
+	return strings.Split(csv, ",")
 }
 
 func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst interface{}) error {
@@ -213,5 +240,5 @@ func getPaginationData(
 }
 
 func (app *application) homeReRoute(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/ui/transfers?sort=-id", http.StatusSeeOther)
+	http.Redirect(w, r, "/ui/transfers", http.StatusSeeOther)
 }

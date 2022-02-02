@@ -14,31 +14,42 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	InitializeCmd = &cobra.Command{
-		Use:   "initialize",
-		Short: "Initialize PostgreSQL DB.",
-		Run:   initialize,
-	}
+var InitializeCmd = &cobra.Command{
+	Use:   "initialize",
+	Short: "Initialize PostgreSQL DB.",
+	Run:   initialize,
+}
 
-	dsn   string
-	force bool
+var createTypes = `
+CREATE TYPE ds_type AS ENUM ('postgresql', 'mysql', 'mssql', 'oracle', 'redshift', 'snowflake');
+CREATE TYPE status_type AS ENUM ('queued', 'active', 'cancelled', 'error', 'completed')
+`
 
-	createUsers = `
+var createUsers = `
 		CREATE TABLE users (
 			id bigserial PRIMARY KEY,
+			active bool not null default true,
 			created_at timestamp(0) NOT NULL DEFAULT NOW(),
+			created_by bigint,
 			username text UNIQUE NOT NULL,
 			password_hash bytea NOT NULL,
 			admin bool NOT NULL DEFAULT false,
-			version INT NOT NULL DEFAULT 1
+			FOREIGN KEY (created_by) REFERENCES users(id)
 		);
+
+		CREATE INDEX idx_users_active ON users(active);
+		CREATE INDEX idx_users_created_by ON users(created_by);
+		CREATE INDEX idx_users_created_at ON users(created_at);
+		CREATE INDEX idx_users_username ON users(username);
+		CREATE INDEX idx_users_admin ON users(admin);
 	`
 
-	createConnections = `
+var createConnections = `
 		CREATE TABLE connections (
 			id bigserial PRIMARY KEY,
+			active bool not null default true,
 			created_at timestamp(0) NOT NULL DEFAULT NOW(),
+			last_modified_by bigint not null,
 			name text UNIQUE NOT NULL,
 			ds_type text not null,
 			username TEXT NOT NULL,
@@ -47,44 +58,66 @@ var (
 			hostname TEXT NOT NULL DEFAULT '',
 			port INT NOT NULL DEFAULT 0,
 			db_name TEXT NOT NULL,
-			version INT NOT NULL DEFAULT 1
+			FOREIGN KEY (last_modified_by) REFERENCES users(id)
 		);
+		
+		CREATE INDEX idx_connections_active ON connections(active);
+		CREATE INDEX idx_connections_name ON connections(name);
+		CREATE INDEX idx_connections_last_modified_by ON connections(last_modified_by);
+		CREATE INDEX idx_connections_ds_type ON connections(ds_type);
 	`
 
-	createTransfers = `
+var createTransfers = `
 		CREATE TABLE transfers (
 			id bigserial PRIMARY KEY,
 			created_at timestamp(0) NOT NULL DEFAULT NOW(),
+			created_by bigint not null,
 			source_id bigint not null,
 			target_id bigint not null,
 			query text not null,
 			target_schema text not null,
 			target_table text not null,
 			overwrite bool not null,
-			status text not null default 'queued',
+			status status_type not null default 'queued',
 			error text not null default '',
 			error_properties text not null default '',
 			stopped_at timestamp(0) not null,
-			Version int not null default 1,
+			FOREIGN KEY (created_by) REFERENCES users(id),
 			FOREIGN KEY (source_id) REFERENCES connections(id),
 			FOREIGN KEY (target_id) REFERENCES connections(id)
 		);
+
+		CREATE INDEX idx_transfers_created_at ON transfers(created_at);
+		CREATE INDEX idx_transfers_created_by ON transfers(created_by);
+		CREATE INDEX idx_transfers_status ON transfers(status);
+		CREATE INDEX idx_transfers_source_id ON transfers(source_id);
+		CREATE INDEX idx_transfers_target_id ON transfers(target_id);
 	`
 
-	createQueries = `
+var createQueries = `
 	CREATE TABLE queries (
 		id bigserial PRIMARY KEY,
 		created_at timestamp(0) NOT NULL DEFAULT NOW(),
+		created_by bigint not null,
 		connection_id bigint not null,
 		query text not null,
-		status text not null default 'queued',
+		status status_type not null default 'queued',
 		error text not null default '',
 		error_properties text not null default '',
 		stopped_at timestamp(0) not null,
-		Version int not null default 1,
-		FOREIGN KEY (connection_id) REFERENCES connections(id)
+		FOREIGN KEY (connection_id) REFERENCES connections(id),
+		FOREIGN KEY (created_by) REFERENCES users(id)
 	);
+
+	CREATE INDEX idx_queries_created_by ON queries(created_by);
+	CREATE INDEX idx_queries_created_at ON queries(created_at);
+	CREATE INDEX idx_queries_status ON queries(status);
+	CREATE INDEX idx_queries_connection_id ON queries(connection_id);
 `
+
+var (
+	dsn   string
+	force bool
 )
 
 func init() {
@@ -159,7 +192,16 @@ func openDB(dsn string) (*sql.DB, error) {
 }
 
 func runMigrations(db *sql.DB) error {
-	_, err := db.Exec(createUsers)
+	var err error
+
+	_, err = db.Exec(createTypes)
+	if err != nil {
+		fmt.Println("Error running migrations on users table:")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	_, err = db.Exec(createUsers)
 	if err != nil {
 		fmt.Println("Error running migrations on users table:")
 		fmt.Println(err)

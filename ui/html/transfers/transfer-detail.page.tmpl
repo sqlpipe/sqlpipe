@@ -37,6 +37,7 @@
 </div>
 
 {{ with .Transfer }}
+<p class="mt-5 mb-1"><strong>Created by user ID:</strong> {{ .CreatedBy }}</p>
 <p class="mt-5 mb-1"><strong>Status:</strong> {{ .Status }}</p>
 <p class="mb-1"><strong>Created at:</strong> {{ humanDate .CreatedAt }}</p>
 {{ if ne (humanDate .StoppedAt) "" }}

@@ -24,7 +24,6 @@ type User struct {
 	Username  string    `json:"username"`
 	Password  password  `json:"-"`
 	Admin     bool      `json:"admin"`
-	Version   int       `json:"-"`
 }
 
 type password struct {
@@ -76,7 +75,6 @@ func ValidatePasswordPlaintext(v *validator.Validator, password string) {
 
 func ValidateUser(v *validator.Validator, user *User) {
 	v.Check(user.Username != "", "username", "A username is required")
-	v.Check(user.Version >= 0, "username", "User version must be greater than or equal to 0")
 
 	ValidateUsername(v, user.Username)
 
@@ -97,14 +95,14 @@ func (m UserModel) Insert(user *User) (*User, error) {
 	query := `
         INSERT INTO users (username, password_hash, admin) 
         VALUES ($1, $2, $3)
-        RETURNING id, created_at, version`
+        RETURNING id, created_at`
 
 	args := []interface{}{user.Username, user.Password.hash, user.Admin}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.ID, &user.CreatedAt, &user.Version)
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.ID, &user.CreatedAt)
 	if err != nil {
 		switch {
 		case err.Error() == `pq: duplicate key value violates unique constraint "users_username_key"`:
@@ -119,7 +117,7 @@ func (m UserModel) Insert(user *User) (*User, error) {
 
 func (m UserModel) GetByUsername(username string) (*User, error) {
 	query := `
-        SELECT id, created_at, username, password_hash, admin, version
+        SELECT id, created_at, username, password_hash, admin
         FROM users
         WHERE username = $1`
 
@@ -134,7 +132,6 @@ func (m UserModel) GetByUsername(username string) (*User, error) {
 		&user.Username,
 		&user.Password.hash,
 		&user.Admin,
-		&user.Version,
 	)
 
 	if err != nil {
@@ -151,7 +148,7 @@ func (m UserModel) GetByUsername(username string) (*User, error) {
 
 func (m UserModel) GetById(id int64) (*User, error) {
 	query := `
-        SELECT id, created_at, username, password_hash, admin, version
+        SELECT id, created_at, username, password_hash, admin
         FROM users
         WHERE id = $1`
 
@@ -166,7 +163,6 @@ func (m UserModel) GetById(id int64) (*User, error) {
 		&user.Username,
 		&user.Password.hash,
 		&user.Admin,
-		&user.Version,
 	)
 
 	if err != nil {
@@ -184,28 +180,26 @@ func (m UserModel) GetById(id int64) (*User, error) {
 func (m UserModel) Update(user *User) error {
 	query := `
         UPDATE users 
-        SET username = $1, password_hash = $2, admin = $3, version = version + 1
-        WHERE id = $4 AND version = $5
-        RETURNING version`
+        SET username = $1, password_hash = $2, admin = $3
+        WHERE id = $4`
 
 	args := []interface{}{
 		user.Username,
 		user.Password.hash,
 		user.Admin,
 		user.ID,
-		user.Version,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.Version)
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan()
 	if err != nil {
 		switch {
 		case err.Error() == `pq: duplicate key value violates unique constraint "users_username_key"`:
 			return ErrDuplicateUsername
 		case errors.Is(err, sql.ErrNoRows):
-			return ErrEditConflict
+			return ErrRecordNotFound
 		default:
 			return err
 		}
@@ -216,7 +210,7 @@ func (m UserModel) Update(user *User) error {
 
 func (m UserModel) GetAll(filters Filters) ([]*User, Metadata, error) {
 	query := fmt.Sprintf(`
-        SELECT count(*) OVER(), id, created_at, username, admin, version
+        SELECT count(*) OVER(), id, created_at, username, admin
         FROM users
         ORDER BY %s %s, id ASC
         LIMIT $1 OFFSET $2`, filters.sortColumn(), filters.sortDirection())
@@ -245,7 +239,6 @@ func (m UserModel) GetAll(filters Filters) ([]*User, Metadata, error) {
 			&user.CreatedAt,
 			&user.Username,
 			&user.Admin,
-			&user.Version,
 		)
 		if err != nil {
 			return nil, Metadata{}, err

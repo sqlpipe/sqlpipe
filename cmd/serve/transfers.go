@@ -14,6 +14,12 @@ import (
 )
 
 type listTransfersInput struct {
+	CreatedAtStart time.Time
+	CreatedAtEnd   time.Time
+	CreatedBy      int64
+	Status         string
+	Source         int64
+	Target         int64
 	data.Filters
 }
 
@@ -22,11 +28,21 @@ func (app *application) getListTransfersInput(r *http.Request) (input listTransf
 
 	qs := r.URL.Query()
 
-	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 10, v)
+	input.CreatedAtStart = app.readDateTime(qs, "created_at_start", time.Now().AddDate(0, 0, -7))
+	input.CreatedAtEnd = app.readDateTime(qs, "created_at_end", time.Now())
 
-	input.Filters.Sort = app.readString(qs, "sort", "id")
-	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
+	input.CreatedBy = int64(app.readInt(qs, "created_by", 0, v))
+
+	input.Status = app.readString(qs, "status", "")
+
+	input.Source = int64(app.readInt(qs, "source_id", 0, v))
+	input.Target = int64(app.readInt(qs, "target_id", 0, v))
+
+	input.Filters.Page = app.readInt(qs, "page", 1, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 100, v)
+
+	input.Filters.Sort = app.readString(qs, "sort", "created_at")
+	input.Filters.SortSafelist = []string{"created_at", "-created_at"}
 
 	data.ValidateFilters(v, input.Filters)
 
@@ -74,6 +90,7 @@ func (app *application) createTransferApiHandler(w http.ResponseWriter, r *http.
 	}
 
 	transfer := &data.Transfer{
+		CreatedBy:    app.getAuthenticatedUserId(r),
 		SourceID:     input.SourceID,
 		TargetID:     input.TargetID,
 		Query:        input.Query,
@@ -319,6 +336,7 @@ func (app *application) createTransferUiHandler(w http.ResponseWriter, r *http.R
 	}
 
 	transfer := &data.Transfer{
+		CreatedBy:    app.getAuthenticatedUserId(r),
 		SourceID:     sourceId,
 		TargetID:     targetId,
 		Query:        r.PostForm.Get("query"),

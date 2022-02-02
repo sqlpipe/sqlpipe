@@ -120,7 +120,7 @@ func (app *application) getListUsersInput(r *http.Request) (input listUsersInput
 	qs := r.URL.Query()
 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 10, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 100, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
 	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
@@ -156,9 +156,9 @@ func (app *application) updateUserApiHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	var input struct {
-		Username *string
-		Password *string
-		Admin    *bool
+		Username string
+		Password string
+		Admin    bool
 	}
 
 	err = app.readJSON(w, r, &input)
@@ -168,30 +168,16 @@ func (app *application) updateUserApiHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	v := validator.New()
-	user, err := app.models.Users.GetById(id)
-	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrRecordNotFound):
-			v.AddError("id", "not found")
-			app.failedValidationResponse(w, r, v.Errors)
-		default:
-			app.serverErrorResponse(w, r, err)
-		}
-		return
+	user := &data.User{
+		ID:       id,
+		Username: input.Username,
+		Admin:    input.Admin,
 	}
 
-	if input.Username != nil {
-		user.Username = *input.Username
-	}
-	if input.Admin != nil {
-		user.Admin = *input.Admin
-	}
-	if input.Password != nil {
-		err = user.Password.Set(*input.Password)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
-			return
-		}
+	err = user.Password.Set(input.Password)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
 	}
 
 	if data.ValidateUser(v, user); !v.Valid() {
@@ -201,12 +187,7 @@ func (app *application) updateUserApiHandler(w http.ResponseWriter, r *http.Requ
 
 	app.models.Users.Update(user)
 	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrEditConflict):
-			app.editConflictResponse(w, r)
-		default:
-			app.serverErrorResponse(w, r, err)
-		}
+		app.serverErrorResponse(w, r, err)
 		return
 	}
 
@@ -436,17 +417,10 @@ func (app *application) updateUserUiHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	version, err := strconv.Atoi(r.PostForm.Get("version"))
-	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse user version from update form")
-		return
-	}
-
 	user := &data.User{
 		ID:       id,
 		Username: r.PostForm.Get("username"),
 		Admin:    r.PostForm.Get("admin") == "on",
-		Version:  version,
 	}
 
 	err = user.Password.Set(r.PostForm.Get("password"))

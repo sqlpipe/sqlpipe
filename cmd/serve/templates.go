@@ -24,6 +24,8 @@ type templateData struct {
 	Metadata        data.Metadata
 	Form            *forms.Form
 	PaginationData  *PaginationData
+	SortOrder       string
+	FilteredBy      string
 	IsAuthenticated bool
 	IsAdmin         bool
 	Flash           string

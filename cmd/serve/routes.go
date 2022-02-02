@@ -50,7 +50,7 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPost, "/api/v1/connections", apiRequireAdmin.ThenFunc(app.createConnectionApiHandler))
 	router.Handler(http.MethodGet, "/api/v1/connections", apiRequireAdmin.ThenFunc(app.listConnectionsApiHandler))
 	router.Handler(http.MethodGet, "/api/v1/connections/:id", apiRequireAdmin.ThenFunc(app.showConnectionApiHandler))
-	router.Handler(http.MethodPatch, "/api/v1/connections/:id", apiRequireAdmin.ThenFunc(app.updateConnectionApiHandler))
+	router.Handler(http.MethodPut, "/api/v1/connections/:id", apiRequireAdmin.ThenFunc(app.updateConnectionApiHandler))
 	router.Handler(http.MethodDelete, "/api/v1/connections/:id", apiRequireAdmin.ThenFunc(app.deleteConnectionApiHandler))
 	// UI
 	router.Handler(http.MethodGet, "/ui/create-connection", uiRequireAdmin.ThenFunc(app.createConnectionFormUiHandler))

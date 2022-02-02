@@ -13,6 +13,7 @@ import (
 type Transfer struct {
 	ID              int64      `json:"id"`
 	CreatedAt       time.Time  `json:"createdAt"`
+	CreatedBy       int64      `json:"createdBy"`
 	SourceID        int64      `json:"sourceID"`
 	Source          Connection `json:"-"`
 	TargetID        int64      `json:"targetID"`
@@ -34,8 +35,8 @@ type TransferModel struct {
 
 func (m TransferModel) Insert(transfer *Transfer) (*Transfer, error) {
 	query := `
-        INSERT INTO transfers (source_id, target_id, query, target_schema, target_table, overwrite, stopped_at) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO transfers (source_id, target_id, query, target_schema, target_table, overwrite, stopped_at, created_by) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, created_at, status, version`
 
 	args := []interface{}{
@@ -46,6 +47,7 @@ func (m TransferModel) Insert(transfer *Transfer) (*Transfer, error) {
 		transfer.TargetTable,
 		transfer.Overwrite,
 		transfer.StoppedAt,
+		transfer.CreatedBy,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -64,6 +66,9 @@ func ValidateTransfer(v *validator.Validator, transfer *Transfer) {
 	v.Check(transfer.TargetID > 0, "targetId", "Source ID is required and must be an integer greater than 0")
 	v.Check(transfer.Query != "", "query", "A query is required")
 	v.Check(transfer.TargetTable != "", "targetTable", "A target table is required")
+	if transfer.CreatedBy == 0 {
+		panic("you shouldn't be able to create or modify a transfer without an authenticated user, exiting program")
+	}
 }
 
 func (m TransferModel) CountTransfers() (int, error) {
@@ -88,6 +93,7 @@ func (m TransferModel) GetAll(filters Filters) ([]*Transfer, Metadata, error) {
 	count(*) OVER(),
 	transfers.id,
 	transfers.created_at,
+	transfers.created_by,
 	transfers.source_id,
 	source.name,
 	source.ds_type,
@@ -148,6 +154,7 @@ offset
 			&totalRecords,
 			&transfer.ID,
 			&transfer.CreatedAt,
+			&transfer.CreatedBy,
 			&transfer.SourceID,
 			&transfer.Source.Name,
 			&transfer.Source.DsType,
@@ -189,6 +196,7 @@ func (m TransferModel) GetQueued() ([]*Transfer, error) {
 	SELECT
 	transfers.id,
 	transfers.created_at,
+	transfers.created_by,
 	source.ID,
 	source.Ds_Type,
 	source.Hostname,
@@ -244,6 +252,7 @@ order by
 		err := rows.Scan(
 			&transfer.ID,
 			&transfer.CreatedAt,
+			&transfer.CreatedBy,
 			&transfer.Source.ID,
 			&transfer.Source.DsType,
 			&transfer.Source.Hostname,
@@ -285,6 +294,7 @@ func (m TransferModel) GetById(id int64) (*Transfer, error) {
 	SELECT
 	transfers.id,
 	transfers.created_at,
+	transfers.created_by,
 	transfers.source_id,
 	source.name,
 	source.ds_type,
@@ -325,6 +335,7 @@ where transfers.id = $1
 	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&transfer.ID,
 		&transfer.CreatedAt,
+		&transfer.CreatedBy,
 		&transfer.SourceID,
 		&transfer.Source.Name,
 		&transfer.Source.DsType,

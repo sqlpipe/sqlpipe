@@ -13,6 +13,7 @@ import (
 type Query struct {
 	ID              int64      `json:"id"`
 	CreatedAt       time.Time  `json:"createdAt"`
+	CreatedBy       int64      `json:"createdBy"`
 	ConnectionID    int64      `json:"connectionId"`
 	Connection      Connection `json:"-"`
 	Query           string     `json:"query"`
@@ -29,11 +30,12 @@ type QueryModel struct {
 
 func (m QueryModel) Insert(query *Query) (*Query, error) {
 	queryToRun := `
-        INSERT INTO queries (connection_id, query, stopped_at) 
-        VALUES ($1, $2, $3)
+        INSERT INTO queries (created_by, connection_id, query, stopped_at) 
+        VALUES ($1, $2, $3, $4)
         RETURNING id, created_at, status, version`
 
 	args := []interface{}{
+		query.CreatedBy,
 		query.ConnectionID,
 		query.Query,
 		query.StoppedAt,
@@ -53,6 +55,9 @@ func (m QueryModel) Insert(query *Query) (*Query, error) {
 func ValidateQuery(v *validator.Validator, query *Query) {
 	v.Check(query.ConnectionID > 0, "connectionId", "Connection ID is required and must be an integer greater than 0")
 	v.Check(query.Query != "", "query", "A query is required")
+	if query.CreatedBy == 0 {
+		panic("you shouldn't be able to create or modify a query without an authenticated user, exiting program")
+	}
 }
 
 func (m QueryModel) GetAll(filters Filters) ([]*Query, Metadata, error) {
@@ -61,6 +66,7 @@ func (m QueryModel) GetAll(filters Filters) ([]*Query, Metadata, error) {
 	count(*) OVER(),
 	queries.id,
 	queries.created_at,
+	queries.created_by,
 	queries.connection_id,
 	connections.name,
 	connections.ds_type,
@@ -110,6 +116,7 @@ offset
 			&totalRecords,
 			&query.ID,
 			&query.CreatedAt,
+			&query.CreatedBy,
 			&query.ConnectionID,
 			&query.Connection.Name,
 			&query.Connection.DsType,
@@ -144,6 +151,7 @@ func (m QueryModel) GetQueued() ([]*Query, error) {
 	SELECT
 	queries.id,
 	queries.created_at,
+	queries.created_by,
 	connections.ID,
 	connections.Ds_Type,
 	connections.Hostname,
@@ -188,6 +196,7 @@ order by
 		err := rows.Scan(
 			&query.ID,
 			&query.CreatedAt,
+			&query.CreatedBy,
 			&query.Connection.ID,
 			&query.Connection.DsType,
 			&query.Connection.Hostname,
@@ -222,6 +231,7 @@ func (m QueryModel) GetById(id int64) (*Query, error) {
 	SELECT
 	queries.id,
 	queries.created_at,
+	queries.created_by,
 	queries.connection_id,
 	connections.name,
 	connections.ds_type,
@@ -252,6 +262,7 @@ where
 	err := m.DB.QueryRowContext(ctx, queryToRun, id).Scan(
 		&query.ID,
 		&query.CreatedAt,
+		&query.CreatedBy,
 		&query.ConnectionID,
 		&query.Connection.Name,
 		&query.Connection.DsType,

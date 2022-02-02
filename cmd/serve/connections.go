@@ -26,7 +26,7 @@ func (app *application) getListConnectionsInput(r *http.Request) (input listConn
 	qs := r.URL.Query()
 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 10, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 100, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
 	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
@@ -81,14 +81,15 @@ func (app *application) createConnectionUiHandler(w http.ResponseWriter, r *http
 	}
 
 	connection := &data.Connection{
-		Name:      r.PostForm.Get("name"),
-		DsType:    r.PostForm.Get("dsType"),
-		Hostname:  r.PostForm.Get("hostname"),
-		Port:      port,
-		AccountId: r.PostForm.Get("accountId"),
-		DbName:    r.PostForm.Get("dbName"),
-		Username:  r.PostForm.Get("username"),
-		Password:  r.PostForm.Get("password"),
+		LastModifiedBy: app.getAuthenticatedUserId(r),
+		Name:           r.PostForm.Get("name"),
+		DsType:         r.PostForm.Get("dsType"),
+		Hostname:       r.PostForm.Get("hostname"),
+		Port:           port,
+		AccountId:      r.PostForm.Get("accountId"),
+		DbName:         r.PostForm.Get("dbName"),
+		Username:       r.PostForm.Get("username"),
+		Password:       r.PostForm.Get("password"),
 	}
 
 	form := forms.New(r.PostForm)
@@ -196,12 +197,6 @@ func (app *application) updateConnectionUiHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	version, err := strconv.Atoi(r.PostForm.Get("version"))
-	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, "unable to parse connection version from update form")
-		return
-	}
-
 	port := 0
 	if r.PostForm.Get("port") != "" {
 		port, err = strconv.Atoi(r.PostForm.Get("port"))
@@ -212,16 +207,16 @@ func (app *application) updateConnectionUiHandler(w http.ResponseWriter, r *http
 	}
 
 	connection := &data.Connection{
-		ID:        id,
-		Name:      r.PostForm.Get("name"),
-		DsType:    r.PostForm.Get("dsType"),
-		Hostname:  r.PostForm.Get("hostname"),
-		Port:      port,
-		AccountId: r.PostForm.Get("accountId"),
-		DbName:    r.PostForm.Get("dbName"),
-		Username:  r.PostForm.Get("username"),
-		Password:  r.PostForm.Get("password"),
-		Version:   version,
+		ID:             id,
+		LastModifiedBy: app.getAuthenticatedUserId(r),
+		Name:           r.PostForm.Get("name"),
+		DsType:         r.PostForm.Get("dsType"),
+		Hostname:       r.PostForm.Get("hostname"),
+		Port:           port,
+		AccountId:      r.PostForm.Get("accountId"),
+		DbName:         r.PostForm.Get("dbName"),
+		Username:       r.PostForm.Get("username"),
+		Password:       r.PostForm.Get("password"),
 	}
 
 	form := forms.New(r.PostForm)
@@ -265,7 +260,9 @@ func (app *application) deleteConnectionUiHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	err = app.models.Connections.Delete(id)
+	connection := &data.Connection{ID: id}
+
+	err = app.models.Connections.Deactivate(connection)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -301,14 +298,15 @@ func (app *application) createConnectionApiHandler(w http.ResponseWriter, r *htt
 	}
 
 	connection := &data.Connection{
-		Name:      input.Name,
-		DsType:    input.DsType,
-		Hostname:  input.Hostname,
-		Port:      input.Port,
-		AccountId: input.AccountId,
-		DbName:    input.DbName,
-		Username:  input.Username,
-		Password:  input.Password,
+		LastModifiedBy: app.getAuthenticatedUserId(r),
+		Name:           input.Name,
+		DsType:         input.DsType,
+		Hostname:       input.Hostname,
+		Port:           input.Port,
+		AccountId:      input.AccountId,
+		DbName:         input.DbName,
+		Username:       input.Username,
+		Password:       input.Password,
 	}
 
 	v := validator.New()
@@ -403,14 +401,14 @@ func (app *application) updateConnectionApiHandler(w http.ResponseWriter, r *htt
 	}
 
 	var input struct {
-		Name      *string
-		DsType    *string
-		Hostname  *string
-		Port      *int
-		AccountId *string
-		DbName    *string
-		Username  *string
-		Password  *string
+		Name      string
+		DsType    string
+		Hostname  string
+		Port      int
+		AccountId string
+		DbName    string
+		Username  string
+		Password  string
 	}
 
 	err = app.readJSON(w, r, &input)
@@ -420,41 +418,16 @@ func (app *application) updateConnectionApiHandler(w http.ResponseWriter, r *htt
 	}
 
 	v := validator.New()
-	connection, err := app.models.Connections.GetById(id)
-	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrRecordNotFound):
-			v.AddError("id", "not found")
-			app.failedValidationResponse(w, r, v.Errors)
-		default:
-			app.serverErrorResponse(w, r, err)
-		}
-		return
-	}
-
-	if input.Name != nil {
-		connection.Name = *input.Name
-	}
-	if input.DsType != nil {
-		connection.DsType = *input.DsType
-	}
-	if input.Hostname != nil {
-		connection.Hostname = *input.Hostname
-	}
-	if input.Port != nil {
-		connection.Port = *input.Port
-	}
-	if input.AccountId != nil {
-		connection.AccountId = *input.AccountId
-	}
-	if input.DbName != nil {
-		connection.DbName = *input.DbName
-	}
-	if input.Username != nil {
-		connection.Username = *input.Username
-	}
-	if input.Password != nil {
-		connection.Password = *input.Password
+	connection := &data.Connection{
+		ID:        id,
+		Name:      input.Name,
+		DsType:    input.DsType,
+		Hostname:  input.Hostname,
+		Port:      input.Port,
+		AccountId: input.AccountId,
+		DbName:    input.DbName,
+		Username:  input.Username,
+		Password:  input.Password,
 	}
 
 	if data.ValidateConnection(v, connection); !v.Valid() {
@@ -464,12 +437,7 @@ func (app *application) updateConnectionApiHandler(w http.ResponseWriter, r *htt
 
 	app.models.Connections.Update(connection)
 	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrEditConflict):
-			app.editConflictResponse(w, r)
-		default:
-			app.serverErrorResponse(w, r, err)
-		}
+		app.serverErrorResponse(w, r, err)
 		return
 	}
 
@@ -486,14 +454,22 @@ func (app *application) deleteConnectionApiHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	err = app.models.Connections.Delete(id)
+	v := validator.New()
+	connection, err := app.models.Connections.GetById(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
-			app.notFoundResponse(w, r)
+			v.AddError("id", "not found")
+			app.failedValidationResponse(w, r, v.Errors)
 		default:
 			app.serverErrorResponse(w, r, err)
 		}
+		return
+	}
+
+	app.models.Connections.Update(connection)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
 		return
 	}
 

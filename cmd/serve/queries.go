@@ -27,6 +27,7 @@ func (app *application) createQueryApiHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	query := &data.Query{
+		CreatedBy:    app.getAuthenticatedUserId(r),
 		ConnectionID: input.ConnectionID,
 		Query:        input.Query,
 	}
@@ -60,7 +61,7 @@ func (app *application) getListQueriesInput(r *http.Request) (input listQueriesI
 	qs := r.URL.Query()
 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
-	input.Filters.PageSize = app.readInt(qs, "page_size", 10, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 100, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "id")
 	input.Filters.SortSafelist = []string{"id", "created_at", "-id", "-created_at"}
@@ -232,6 +233,7 @@ func (app *application) createQueryUiHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	query := &data.Query{
+		CreatedBy:    app.getAuthenticatedUserId(r),
 		ConnectionID: connectionId,
 		Query:        r.PostForm.Get("query"),
 	}
