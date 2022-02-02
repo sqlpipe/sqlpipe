@@ -72,12 +72,8 @@ jobs:
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
       - name: ls
         run: ls
-      - name: ls
-        run: ls sqlpipe
-      - name: ls
+      - name: ls bin
         run: ls bin
-      - name: ls
-        run: ls sqlpipe/bin
       - name: Upload to s3
         uses: jakejarvis/s3-sync-action@master
         with:
@@ -87,7 +83,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          SOURCE_DIR: 'go/src/sqlpipe/bin'
+          SOURCE_DIR: 'bin'
           DEST_DIR: 'arm/v2'
   # build-x86-binaries:
   #   name: Build x86 binaries
