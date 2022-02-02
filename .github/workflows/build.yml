@@ -59,16 +59,12 @@ jobs:
         run: echo "/usr/local/go/bin" >> $GITHUB_PATH
       - name: Setup go directory
         run: mkdir linux
-      # - name: Setup go cache
-        # run: mkdir gocache
-      - name: ls dir
-        run: ls 
       - name: Git pull
         uses: actions/checkout@v2
         with:
           ref: main
-      - name: ls dir
-        run: ls 
+      - name: Run setup script
+        run: sh build.sh
       # - name: Build Linux ARM binary
       #   run: cd sqlpipe && go build sqlpipe/ -o linux/sqlpipe
       #   env:

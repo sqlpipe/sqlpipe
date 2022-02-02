@@ -228,6 +228,6 @@ linker_flags = '-s -X main.gitHash=${git_description}'
 build:
 	@echo 'Building cmd/sqlpipe...'
 	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd
-	# GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd
+	GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd
 	# GOOS=darwin GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/darwin_arm64/sqlpipe ./cmd
 	# GOOS=windows GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/windows_arm64/sqlpipe ./cmd
