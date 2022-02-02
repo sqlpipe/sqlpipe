@@ -70,19 +70,17 @@ jobs:
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
-      - name: ls
-        run: ls ./bin
-      # - name: Upload to s3
-      #   uses: jakejarvis/s3-sync-action@master
-      #   with:
-      #     args: --acl public-read --follow-symlinks
-      #   env:
-      #     AWS_S3_BUCKET: sqlpipe-downloads
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     AWS_REGION: ${{ secrets.AWS_REGION }}
-      #     SOURCE_DIR: 'go/src/sqlpipe/arm'
-      #     DEST_DIR: 'arm/v2'
+      - name: Upload to s3
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read --follow-symlinks
+        env:
+          AWS_S3_BUCKET: sqlpipe-downloads
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SOURCE_DIR: 'go/src/sqlpipe/arm'
+          DEST_DIR: 'arm/v2'
   # build-x86-binaries:
   #   name: Build x86 binaries
   #   needs: start-x86-runner
