@@ -129,28 +129,28 @@ jobs:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
           GOOS: darwin
-          GOARCH: x86
+          GOARCH: amd64
       - name: Build linux
         run: go build -ldflags="-s -X main.gitHash=$(git describe --always --dirty --tags --long) -X main.sqlpipeVersion=${HUMAN_VERSION}" -o=./bin/linux/sqlpipe ./cmd
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
           GOOS: linux 
-          GOARCH: x86
+          GOARCH: amd64
       - name: Build windows
         run: go build -ldflags="-s -X main.gitHash=$(git describe --always --dirty --tags --long) -X main.sqlpipeVersion=${HUMAN_VERSION}" -o=./bin/windows/sqlpipe ./cmd
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
           GOOS: windows
-          GOARCH: x86
+          GOARCH: amd64
       - name: Build freebsd
         run: go build -ldflags="-s -X main.gitHash=$(git describe --always --dirty --tags --long) -X main.sqlpipeVersion=${HUMAN_VERSION}" -o=./bin/freebsd/sqlpipe ./cmd
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
           GOOS: freebsd
-          GOARCH: x86
+          GOARCH: amd64
       - name: Upload to s3
         uses: jakejarvis/s3-sync-action@master
         with:
