@@ -73,7 +73,7 @@ jobs:
           GOOS: darwin
           GOARCH: arm64
       - name: Build linux
-        run: go build -ldflags="-s X main.gitHash=$GITHUB_SHA' -o=./bin/linux/sqlpipe ./cmd
+        run: go build -ldflags='-s X main.gitHash=$GITHUB_SHA' -o=./bin/linux/sqlpipe ./cmd
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
