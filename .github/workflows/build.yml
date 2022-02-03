@@ -55,6 +55,8 @@ jobs:
     needs: start-arm-runner
     runs-on: ${{ needs.start-arm-runner.outputs.label }}
     steps:
+      - name: sha
+        run: echo ${GITHUB_SHA}
       - name: Add go to path
         run: echo "/usr/local/go/bin" >> $GITHUB_PATH
       - name: Setup go directory
