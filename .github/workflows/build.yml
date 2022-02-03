@@ -31,29 +31,29 @@ jobs:
           ec2-instance-type: m6g.large
           subnet-id: subnet-ae198df3
           security-group-id: sg-4ffd7a3b
-  # start-x86-runner:
-  #   name: Start x86 runner
-  #   runs-on: ubuntu-20.04
-  #   outputs:
-  #     label: ${{ steps.start-ec2-runner.outputs.label }}
-  #     ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
-  #   steps:
-  #     - name: Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v1
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: ${{ secrets.AWS_REGION }}
-  #     - name: Start ARM EC2 builder
-  #       id: start-ec2-runner
-  #       uses: machulav/ec2-github-runner@v2
-  #       with:
-  #         mode: start
-  #         github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-  #         ec2-image-id: ami-0d5508a3be09f2763
-  #         ec2-instance-type: m6i.large
-  #         subnet-id: subnet-ae198df3
-  #         security-group-id: sg-4ffd7a3b
+  start-x86-runner:
+    name: Start x86 runner
+    runs-on: ubuntu-20.04
+    outputs:
+      label: ${{ steps.start-ec2-runner.outputs.label }}
+      ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Start ARM EC2 builder
+        id: start-ec2-runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: start
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          ec2-image-id: ami-0d5508a3be09f2763
+          ec2-instance-type: m6i.large
+          subnet-id: subnet-ae198df3
+          security-group-id: sg-4ffd7a3b
   build-arm-binaries:
     name: Build ARM binaries
     needs: start-arm-runner
@@ -107,7 +107,61 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           SOURCE_DIR: 'bin'
-          DEST_DIR: 'arm/v2'
+          DEST_DIR: "${HUMAN_VERSION}/arm/"
+  build-x86-binaries:
+    name: Build x86 binaries
+    needs: start-x86-runner
+    runs-on: ${{ needs.start-x86-runner.outputs.label }}
+    steps:
+      - name: Add go to path
+        run: echo "/usr/local/go/bin" >> $GITHUB_PATH
+      - name: Setup go directory
+        run: mkdir linux
+      - name: Git pull
+        uses: actions/checkout@v2
+        with:
+          ref: main
+      - name: Setup go cache
+        run: mkdir gocache
+      - name: Build macos
+        run: go build -ldflags="-s -X main.gitHash=$(git describe --always --dirty --tags --long) -X main.sqlpipeVersion=${HUMAN_VERSION}" -o=./bin/macos/sqlpipe ./cmd
+        env:
+          GOPATH: /actions-runner/_work/sqlpipe/
+          GOCACHE: /actions-runner/_work/sqlpipe/gocache
+          GOOS: darwin
+          GOARCH: x86
+      - name: Build linux
+        run: go build -ldflags="-s -X main.gitHash=$(git describe --always --dirty --tags --long) -X main.sqlpipeVersion=${HUMAN_VERSION}" -o=./bin/linux/sqlpipe ./cmd
+        env:
+          GOPATH: /actions-runner/_work/sqlpipe/
+          GOCACHE: /actions-runner/_work/sqlpipe/gocache
+          GOOS: linux 
+          GOARCH: x86
+      - name: Build windows
+        run: go build -ldflags="-s -X main.gitHash=$(git describe --always --dirty --tags --long) -X main.sqlpipeVersion=${HUMAN_VERSION}" -o=./bin/windows/sqlpipe ./cmd
+        env:
+          GOPATH: /actions-runner/_work/sqlpipe/
+          GOCACHE: /actions-runner/_work/sqlpipe/gocache
+          GOOS: windows
+          GOARCH: x86
+      - name: Build freebsd
+        run: go build -ldflags="-s -X main.gitHash=$(git describe --always --dirty --tags --long) -X main.sqlpipeVersion=${HUMAN_VERSION}" -o=./bin/freebsd/sqlpipe ./cmd
+        env:
+          GOPATH: /actions-runner/_work/sqlpipe/
+          GOCACHE: /actions-runner/_work/sqlpipe/gocache
+          GOOS: freebsd
+          GOARCH: x86
+      - name: Upload to s3
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read --follow-symlinks
+        env:
+          AWS_S3_BUCKET: sqlpipe-downloads
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SOURCE_DIR: 'bin'
+          DEST_DIR: "${HUMAN_VERSION}/x86/"
   # build-x86-binaries:
   #   name: Build x86 binaries
   #   needs: start-x86-runner
@@ -217,24 +271,24 @@ jobs:
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           label: ${{ needs.start-arm-runner.outputs.label }}
           ec2-instance-id: ${{ needs.start-arm-runner.outputs.ec2-instance-id }}
-  # stop-x86-runner:
-  #   name: Stop x86 runner
-  #   needs:
-  #     - start-x86-runner
-  #     - build-x86-binaries
-  #   runs-on: ubuntu-latest
-  #   if: ${{ always() }}
-  #   steps:
-  #     - name: Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v1
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: ${{ secrets.AWS_REGION }}
-  #     - name: Stop x86 runner
-  #       uses: machulav/ec2-github-runner@v2
-  #       with:
-  #         mode: stop
-  #         github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-  #         label: ${{ needs.start-x86-runner.outputs.label }}
-  #         ec2-instance-id: ${{ needs.start-x86-runner.outputs.ec2-instance-id }}
+  stop-x86-runner:
+    name: Stop x86 runner
+    needs:
+      - start-x86-runner
+      - build-x86-binaries
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Stop x86 runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: stop
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          label: ${{ needs.start-x86-runner.outputs.label }}
+          ec2-instance-id: ${{ needs.start-x86-runner.outputs.ec2-instance-id }}
