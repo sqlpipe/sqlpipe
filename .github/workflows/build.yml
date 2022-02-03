@@ -66,42 +66,33 @@ jobs:
       - name: Setup go cache
         run: mkdir gocache
       - name: Build macos
-        run: go build -ldflags='-s $GITHUB_SHA' -o=./bin/macos/sqlpipe ./cmd
+        run: go build -ldflags='-s -X main.gitHash=$GITHUB_SHA' -o=./bin/macos/sqlpipe ./cmd
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
           GOOS: darwin
           GOARCH: arm64
       - name: Build linux
-        run: go build -ldflags='-s $GITHUB_SHA' -o=./bin/linux/sqlpipe ./cmd
+        run: go build -ldflags="-s X main.gitHash=$GITHUB_SHA' -o=./bin/linux/sqlpipe ./cmd
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
           GOOS: linux 
           GOARCH: arm64
       - name: Build windows
-        run: go build -ldflags='-s $GITHUB_SHA' -o=./bin/windows/sqlpipe ./cmd
+        run: go build -ldflags='-s X main.gitHash=$GITHUB_SHA' -o=./bin/windows/sqlpipe ./cmd
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
           GOOS: windows
           GOARCH: arm64
       - name: Build freebsd
-        run: go build -ldflags='-s $GITHUB_SHA' -o=./bin/freebsd/sqlpipe ./cmd
+        run: go build -ldflags='-s X main.gitHash=$GITHUB_SHA' -o=./bin/freebsd/sqlpipe ./cmd
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
           GOOS: freebsd
           GOARCH: arm64
-      - name: Build freebsd
-        run: go build -ldflags='-s ${GITHUB_SHA}' -o=./bin/freebsd/sqlpipe ./cmd
-        env:
-          GOPATH: /actions-runner/_work/sqlpipe/
-          GOCACHE: /actions-runner/_work/sqlpipe/gocache
-          GOOS: freebsd
-          GOARCH: arm64
-      - name: describe
-        run: git describe --always --dirty --tags --long
       - name: Upload to s3
         uses: jakejarvis/s3-sync-action@master
         with:
