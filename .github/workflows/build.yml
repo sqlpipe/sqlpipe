@@ -70,10 +70,8 @@ jobs:
         env:
           GOPATH: /actions-runner/_work/sqlpipe/
           GOCACHE: /actions-runner/_work/sqlpipe/gocache
-      - name: ls
-        run: ls
-      - name: ls bin
-        run: ls bin
+      - name: describe
+        run: git describe --always --dirty --tags --long
       - name: Upload to s3
         uses: jakejarvis/s3-sync-action@master
         with:
