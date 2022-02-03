@@ -17,7 +17,7 @@ var rootCmd = &cobra.Command{
 }
 
 var gitHash string
-var sqlpipeVersion = "1.0.0"
+var sqlpipeVersion string
 
 func init() {
 	rootCmd.AddCommand(serve.ServeCmd)
