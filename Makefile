@@ -23,7 +23,7 @@ confirm:
 run/serve: build
 	./bin/sqlpipe serve \
 		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
-		--secret "8i.(LBH4JZSv#Z@$qKBUcNlUk*C&y}$p" \
+		--secret "${SECRET}" \
 		--max-concurrency 20
 
 ## run/init: create a new db, set it up, migrate it, then start a new sqlpipe server
@@ -34,7 +34,7 @@ run/init: db/init
 		--dsn=postgres://postgres:${SQLPIPE-PASSWORD}@localhost/sqlpipe?sslmode=disable \
 		--admin-username=sqlpipe \
 		--admin-password=${SQLPIPE-PASSWORD} \
-		--secret "8i.(LBH4JZSv#Z@$qKBUcNlUk*C&y}$p" \
+		--secret "${SECRET}" \
 		--max-concurrency 20 \
 		--create-admin
 
@@ -223,11 +223,13 @@ current_time = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 git_description = $(shell git describe --always --dirty --tags --long)
 linker_flags = '-s -X main.gitHash=${git_description}'
 
-## build: build the application
+## build: build the application locally
 .PHONY: build
 build:
 	@echo 'Building cmd/sqlpipe...'
 	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd
-	GOOS=linux GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/linux_arm64/sqlpipe ./cmd
-	# GOOS=darwin GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/darwin_arm64/sqlpipe ./cmd
-	# GOOS=windows GOARCH=arm64 go build -ldflags=${linker_flags} -o=./bin/windows_arm64/sqlpipe ./cmd
+
+## publish: build and publish app
+.PHONY: publish
+publish:
+	sh build.sh

@@ -1,0 +1,10 @@
+{
+    "source" : ["./bin/macos/x86/sqlpipe"],
+    "bundle_id" : "com.sqlpipe.sqlpipex86Macos",
+    "sign" :{
+        "application_identity" : "Developer ID Application: Cal Mitchell"
+    },
+    "zip" :{
+        "output_path" : "./bin/macos/x86/sqlpipe.zip"
+    }
+}
