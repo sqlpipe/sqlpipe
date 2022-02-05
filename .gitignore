@@ -2,3 +2,4 @@
 bin/
 tls/
 scratch/
+.DS_Store
