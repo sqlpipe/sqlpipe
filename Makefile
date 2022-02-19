@@ -38,6 +38,23 @@ run/init: db/init
 		--max-concurrency 20 \
 		--create-admin
 
+## run/sync: build and run a clis ync
+.PHONY: run/sync
+run/sync: build
+	./sqlpipe sync \
+		--source-ds-type postgresql \
+		--source-hostname ${postgresqlHostname}  \
+		--source-port 5432 \
+		--source-db-name testing \
+		--source-username sqlpipe \
+		--source-password ${SQLPIPE-PASSWORD} \
+		--target-ds-type snowflake \
+		--target-account-id ${snowflakeAccountId} \
+		--target-username ${snowflakeUsername} \
+		--target-password ${snowflakePassword} \
+		--target-db-name testing \
+		--tables="my_table,my_other_table"
+
 ## db/init: Initialize a fresh instance of postgresql
 .PHONY: db/init
 db/init:
@@ -107,52 +124,121 @@ env/spinup:
 		--allocated-storage 20 \
 		--no-enable-performance-insights >/dev/null;
 
-	aws rds create-db-instance \
-		--db-instance-identifier sqlpipe-test-mssql \
-		--backup-retention-period 0 \
-		--db-instance-class db.t3.small \
-		--engine sqlserver-web \
-		--no-multi-az \
-		--vpc-security-group-ids ${rdsSecurityGroup} \
-		--master-username sqlpipe \
-		--master-user-password ${SQLPIPE-PASSWORD} \
-		--storage-type gp2 \
-		--allocated-storage 20 \
-		--license-model license-included \
-		--no-enable-performance-insights >/dev/null;
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-mssql \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.small \
+	# 	--engine sqlserver-web \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--license-model license-included \
+	# 	--no-enable-performance-insights >/dev/null;
 
-	aws rds create-db-instance \
-		--db-instance-identifier sqlpipe-test-oracle \
-		--db-name testing \
-		--backup-retention-period 0 \
-		--db-instance-class db.t3.small \
-		--engine oracle-se2 \
-		--no-multi-az \
-		--vpc-security-group-ids ${rdsSecurityGroup} \
-		--master-username sqlpipe \
-		--master-user-password ${SQLPIPE-PASSWORD} \
-		--storage-type gp2 \
-		--allocated-storage 20 \
-		--license-model license-included \
-		--no-enable-performance-insights >/dev/null;
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-oracle \
+	# 	--db-name testing \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.small \
+	# 	--engine oracle-se2 \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--license-model license-included \
+	# 	--no-enable-performance-insights >/dev/null;
 
-	aws redshift create-cluster \
-		--node-type dc2.large \
-		--master-username sqlpipe \
-		--db-name testing \
-		--cluster-type single-node \
-		--master-user-password ${SQLPIPE-PASSWORD} \
-		--vpc-security-group-ids ${rdsSecurityGroup} \
-		--cluster-identifier sqlpipe-test-redshift >/dev/null;
+	# aws redshift create-cluster \
+	# 	--node-type dc2.large \
+	# 	--master-username sqlpipe \
+	# 	--db-name testing \
+	# 	--cluster-type single-node \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--cluster-identifier sqlpipe-test-redshift >/dev/null;
 
 # env/teardown: Spin down cloud instances
 .PHONY: env/teardown
 env/teardown:
 	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-postgresql --skip-final-snapshot &> /dev/null;
-	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mysql --skip-final-snapshot &> /dev/null;
+	# aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mysql --skip-final-snapshot &> /dev/null;
 	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-mssql --skip-final-snapshot &> /dev/null;
-	aws rds delete-db-instance --db-instance-identifier sqlpipe-test-oracle --skip-final-snapshot &> /dev/null;
-	aws redshift delete-cluster --cluster-identifier sqlpipe-test-redshift --skip-final-cluster-snapshot &> /dev/null;
+	# aws rds delete-db-instance --db-instance-identifier sqlpipe-test-oracle --skip-final-snapshot &> /dev/null;
+	# aws redshift delete-cluster --cluster-identifier sqlpipe-test-redshift --skip-final-cluster-snapshot &> /dev/null;
+
+# env/video: Spinup cloud instances
+.PHONY: env/video
+env/video:
+	aws rds create-db-instance \
+		--db-instance-identifier sqlpipe-video-postgresql \
+		--db-name video \
+		--backup-retention-period 0 \
+		--db-instance-class db.t3.micro \
+		--engine postgres \
+		--no-multi-az \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--master-username testuser \
+		--master-user-password MyTestSecret456 \
+		--storage-type gp2 \
+		--allocated-storage 20 \
+		--no-enable-performance-insights >/dev/null;
+
+	aws rds create-db-instance \
+		--db-instance-identifier sqlpipe-video-mysql \
+		--db-name video \
+		--backup-retention-period 0 \
+		--db-instance-class db.t3.micro \
+		--engine mysql \
+		--no-multi-az \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--master-username testuser \
+		--master-user-password MyTestSecret456 \
+		--storage-type gp2 \
+		--allocated-storage 20 \
+		--no-enable-performance-insights >/dev/null;
+
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-mssql \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.small \
+	# 	--engine sqlserver-web \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--license-model license-included \
+	# 	--no-enable-performance-insights >/dev/null;
+
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-oracle \
+	# 	--db-name testing \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.small \
+	# 	--engine oracle-se2 \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--license-model license-included \
+	# 	--no-enable-performance-insights >/dev/null;
+
+	# aws redshift create-cluster \
+	# 	--node-type dc2.large \
+	# 	--master-username sqlpipe \
+	# 	--db-name testing \
+	# 	--cluster-type single-node \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--cluster-identifier sqlpipe-test-redshift >/dev/null;
 
 # db/postgresql: Open shell to PostgreSQL testing DB
 .PHONY: db/postgresql
@@ -189,7 +275,7 @@ setup:
 # loadtest: Test load
 .PHONY: loadtest
 loadtest:
-	curl -u sqlpipe:Mypass123 -k -i -d '{"sourceId": 2, "targetId": 2, "overwrite": true, "targetSchema": "public", "targetTable":  "postgresql_load_table", "query": "select * from load_table"}' https://localhost:9000/api/v1/transfers;
+	curl -u sqlpipe:${SQLPIPE} -k -i -d '{"sourceId": 2, "targetId": 2, "overwrite": true, "targetSchema": "public", "targetTable":  "postgresql_load_table", "query": "select * from load_table"}' https://localhost:9000/api/v1/transfers;
 
 # ==================================================================================== #
 # QUALITY CONTROL
@@ -227,7 +313,7 @@ linker_flags = '-s -X main.gitHash=${git_description}'
 .PHONY: build
 build:
 	@echo 'Building cmd/sqlpipe...'
-	go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd
+	go build -ldflags=${linker_flags} -o=./sqlpipe ./cmd
 
 ## publish: build and publish app
 .PHONY: publish

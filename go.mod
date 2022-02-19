@@ -12,6 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.14.1
 	github.com/justinas/alice v1.2.0
 	github.com/justinas/nosurf v1.1.1
+	github.com/k0kubun/pp/v3 v3.1.0
 	github.com/lib/pq v1.10.4
 	github.com/sijms/go-ora/v2 v2.2.20
 	github.com/snowflakedb/gosnowflake v1.6.5
@@ -51,7 +52,9 @@ require (
 	github.com/jackc/pgtype v1.9.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
+	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/pierrec/lz4/v4 v4.1.11 // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect

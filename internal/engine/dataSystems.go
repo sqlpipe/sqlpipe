@@ -231,6 +231,14 @@ func RunQuery(query *data.Query) (
 	return errProperties, err
 }
 
+func RunSync(sync *data.Sync) (
+	errProperties map[string]string,
+	err error,
+) {
+	fmt.Println(sync.Tables)
+	return
+}
+
 func standardGetRows(
 	dsConn DsConnection,
 	transferInfo data.Transfer,

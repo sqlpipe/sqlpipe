@@ -4,6 +4,7 @@ import (
 	"github.com/calmitchell617/sqlpipe/cmd/initialize"
 	"github.com/calmitchell617/sqlpipe/cmd/query"
 	"github.com/calmitchell617/sqlpipe/cmd/serve"
+	"github.com/calmitchell617/sqlpipe/cmd/sync"
 	"github.com/calmitchell617/sqlpipe/cmd/transfer"
 	"github.com/calmitchell617/sqlpipe/cmd/version"
 	"github.com/calmitchell617/sqlpipe/internal/globals"
@@ -24,6 +25,7 @@ func init() {
 	rootCmd.AddCommand(initialize.InitializeCmd)
 	rootCmd.AddCommand(transfer.TransferCmd)
 	rootCmd.AddCommand(query.QueryCmd)
+	rootCmd.AddCommand(sync.SyncCmd)
 
 	globals.GitHash = gitHash
 	globals.SqlpipeVersion = sqlpipeVersion
