@@ -43,17 +43,18 @@ run/init: db/init
 run/sync: build
 	./sqlpipe sync \
 		--source-ds-type postgresql \
-		--source-hostname ${postgresqlHostname}  \
+		--source-hostname localhost  \
 		--source-port 5432 \
-		--source-db-name testing \
-		--source-username sqlpipe \
+		--source-db-name postgres \
+		--source-username postgres \
 		--source-password ${SQLPIPE-PASSWORD} \
 		--target-ds-type snowflake \
 		--target-account-id ${snowflakeAccountId} \
 		--target-username ${snowflakeUsername} \
 		--target-password ${snowflakePassword} \
 		--target-db-name testing \
-		--tables="my_table,my_other_table"
+		--tables="my_table,my_other_table" \
+		--replication-slot sqlpipe_slot
 
 ## db/init: Initialize a fresh instance of postgresql
 .PHONY: db/init

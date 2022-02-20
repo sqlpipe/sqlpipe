@@ -5,13 +5,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
 	"github.com/calmitchell617/sqlpipe/pkg"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pglogrepl"
+	"github.com/jackc/pgproto3/v2"
 )
 
 type DsConnection interface {
@@ -235,8 +241,110 @@ func RunSync(sync *data.Sync) (
 	errProperties map[string]string,
 	err error,
 ) {
-	fmt.Println(sync.Tables)
-	return
+	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
+	dsConn, errProperties, err := GetDs(sync.Source)
+	if err != nil {
+		return map[string]string{"error": err.Error()}, errors.New("failed to create DsConnection")
+	}
+
+	_, _, connString := dsConn.getConnectionInfo()
+	connString += "?replication=database"
+
+	conn, err := pgconn.Connect(context.Background(), connString)
+	if err != nil {
+		return map[string]string{"error": err.Error()}, errors.New("failed to connect to PostgreSQL server")
+	}
+	defer conn.Close(context.Background())
+
+	result := conn.Exec(context.Background(), "DROP PUBLICATION IF EXISTS pglogrepl_demo;")
+	_, err = result.ReadAll()
+	if err != nil {
+		return map[string]string{"error": err.Error()}, errors.New("drop publication if exists error")
+	}
+
+	result = conn.Exec(context.Background(), "CREATE PUBLICATION pglogrepl_demo FOR ALL TABLES;")
+	_, err = result.ReadAll()
+	if err != nil {
+		return map[string]string{"error": err.Error()}, errors.New("create publication error")
+	}
+
+	const outputPlugin = "pgoutput"
+	pluginArguments := []string{"proto_version '1'", "publication_names 'pglogrepl_demo'"}
+
+	sysident, err := pglogrepl.IdentifySystem(context.Background(), conn)
+	if err != nil {
+		return map[string]string{"error": err.Error()}, errors.New("IdentifySystem failed")
+	}
+
+	_, err = pglogrepl.CreateReplicationSlot(context.Background(), conn, sync.ReplicationSlot, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
+	if err != nil {
+		return map[string]string{"error": err.Error()}, errors.New("CreateReplicationSlot failed")
+	}
+
+	logger.PrintInfo(fmt.Sprintf("Created temporary replication slot: %v", sync.ReplicationSlot), map[string]string{})
+
+	err = pglogrepl.StartReplication(context.Background(), conn, sync.ReplicationSlot, sysident.XLogPos, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
+	if err != nil {
+		return map[string]string{"error": err.Error()}, errors.New("StartReplication failed")
+	}
+	logger.PrintInfo(fmt.Sprintf("Logical replication started on slot: %v", sync.ReplicationSlot), map[string]string{})
+
+	clientXLogPos := sysident.XLogPos
+	standbyMessageTimeout := time.Second * 10
+	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
+
+	for {
+		if time.Now().After(nextStandbyMessageDeadline) {
+			err = pglogrepl.SendStandbyStatusUpdate(context.Background(), conn, pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
+			if err != nil {
+				log.Fatalln("SendStandbyStatusUpdate failed:", err)
+			}
+			log.Println("Sent Standby status message")
+			nextStandbyMessageDeadline = time.Now().Add(standbyMessageTimeout)
+		}
+
+		ctx, cancel := context.WithDeadline(context.Background(), nextStandbyMessageDeadline)
+		msg, err := conn.ReceiveMessage(ctx)
+		cancel()
+		if err != nil {
+			if pgconn.Timeout(err) {
+				continue
+			}
+			log.Fatalln("ReceiveMessage failed:", err)
+		}
+
+		switch msg := msg.(type) {
+		case *pgproto3.CopyData:
+			switch msg.Data[0] {
+			case pglogrepl.PrimaryKeepaliveMessageByteID:
+				pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
+				if err != nil {
+					log.Fatalln("ParsePrimaryKeepaliveMessage failed:", err)
+				}
+				log.Println("Primary Keepalive Message =>", "ServerWALEnd:", pkm.ServerWALEnd, "ServerTime:", pkm.ServerTime, "ReplyRequested:", pkm.ReplyRequested)
+
+				if pkm.ReplyRequested {
+					nextStandbyMessageDeadline = time.Time{}
+				}
+
+			case pglogrepl.XLogDataByteID:
+				xld, err := pglogrepl.ParseXLogData(msg.Data[1:])
+				if err != nil {
+					log.Fatalln("ParseXLogData failed:", err)
+				}
+				log.Println("XLogData =>", "WALStart", xld.WALStart, "ServerWALEnd", xld.ServerWALEnd, "ServerTime:", xld.ServerTime, "WALData", string(xld.WALData))
+				logicalMsg, err := pglogrepl.Parse(xld.WALData)
+				if err != nil {
+					log.Fatalf("Parse logical replication message: %s", err)
+				}
+				log.Printf("Receive a logical replication message: %s", logicalMsg.Type())
+
+				clientXLogPos = xld.WALStart + pglogrepl.LSN(len(xld.WALData))
+			}
+		default:
+			log.Printf("Received unexpected message: %#v\n", msg)
+		}
+	}
 }
 
 func standardGetRows(

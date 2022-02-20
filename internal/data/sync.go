@@ -21,6 +21,7 @@ type Sync struct {
 	ErrorProperties string     `json:"errorProperties"`
 	StoppedAt       time.Time  `json:"stoppedAt"`
 	Version         int        `json:"version"`
+	ReplicationSlot string     `json:"replicationSlot"`
 }
 
 type SyncModel struct {

@@ -39,6 +39,8 @@ func init() {
 	SyncCmd.Flags().BoolVar(&globals.Analytics, "analytics", true, "Send anonymized usage data to SQLpipe for product improvements")
 
 	SyncCmd.Flags().StringSliceVar(&sync.Tables, "tables", []string{}, "Specify the tables you want synced, with a schema name if necessary.")
+	SyncCmd.Flags().StringVar(&sync.ReplicationSlot, "replication-slot", "", "Replication slot name")
+
 }
 
 func runSync(cmd *cobra.Command, args []string) {
@@ -53,8 +55,6 @@ func runSync(cmd *cobra.Command, args []string) {
 		fmt.Println(errProperties, err)
 		return
 	}
-	// globals.SendAnonymizedSyncAnalytics(sync, false)
-	// fmt.Println("Transfer complete. We make a good team!")
 }
 
 func validateSync(v *validator.Validator) {
@@ -71,5 +71,6 @@ func validateSync(v *validator.Validator) {
 	v.Check(sync.Target.Username != "", "target-username", "A target username is required")
 	v.Check(sync.Target.Password != "", "target-password", "A target password is required")
 
+	v.Check(sync.ReplicationSlot != "", "replication-slot", "A replication slot name is required")
 	v.Check(len(sync.Tables) > 0, "tables", "You must specify at least one table to sync")
 }
