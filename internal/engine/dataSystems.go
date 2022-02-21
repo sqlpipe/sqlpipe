@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"reflect"
 	"strings"
@@ -293,13 +292,14 @@ func RunSync(sync *data.Sync) (
 	standbyMessageTimeout := time.Second * 10
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
 
+	fmt.Println("-----------------------------")
+
 	for {
 		if time.Now().After(nextStandbyMessageDeadline) {
 			err = pglogrepl.SendStandbyStatusUpdate(context.Background(), conn, pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
 			if err != nil {
-				log.Fatalln("SendStandbyStatusUpdate failed:", err)
+				return map[string]string{"error": err.Error()}, errors.New("SendStandbyStatusUpdate failed")
 			}
-			log.Println("Sent Standby status message")
 			nextStandbyMessageDeadline = time.Now().Add(standbyMessageTimeout)
 		}
 
@@ -310,7 +310,7 @@ func RunSync(sync *data.Sync) (
 			if pgconn.Timeout(err) {
 				continue
 			}
-			log.Fatalln("ReceiveMessage failed:", err)
+			return map[string]string{"error": err.Error()}, errors.New("ReceiveMessage failed")
 		}
 
 		switch msg := msg.(type) {
@@ -319,9 +319,9 @@ func RunSync(sync *data.Sync) (
 			case pglogrepl.PrimaryKeepaliveMessageByteID:
 				pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
 				if err != nil {
-					log.Fatalln("ParsePrimaryKeepaliveMessage failed:", err)
+					return map[string]string{"error": err.Error()}, errors.New("ParsePrimaryKeepaliveMessage failed")
 				}
-				log.Println("Primary Keepalive Message =>", "ServerWALEnd:", pkm.ServerWALEnd, "ServerTime:", pkm.ServerTime, "ReplyRequested:", pkm.ReplyRequested)
+				// log.Println("Primary Keepalive Message =>", "ServerWALEnd:", pkm.ServerWALEnd, "ServerTime:", pkm.ServerTime, "ReplyRequested:", pkm.ReplyRequested)
 
 				if pkm.ReplyRequested {
 					nextStandbyMessageDeadline = time.Time{}
@@ -330,19 +330,177 @@ func RunSync(sync *data.Sync) (
 			case pglogrepl.XLogDataByteID:
 				xld, err := pglogrepl.ParseXLogData(msg.Data[1:])
 				if err != nil {
-					log.Fatalln("ParseXLogData failed:", err)
+					return map[string]string{"error": err.Error()}, errors.New("ParseXLogData failed")
+					// log.Fatalln("ParseXLogData failed:", err)
 				}
-				log.Println("XLogData =>", "WALStart", xld.WALStart, "ServerWALEnd", xld.ServerWALEnd, "ServerTime:", xld.ServerTime, "WALData", string(xld.WALData))
+				// log.Println("XLogData =>", "WALStart", xld.WALStart, "ServerWALEnd", xld.ServerWALEnd, "ServerTime:", xld.ServerTime, "WALData", string(xld.WALData))
+				// fmt.Println(string(xld.WALData))
 				logicalMsg, err := pglogrepl.Parse(xld.WALData)
 				if err != nil {
-					log.Fatalf("Parse logical replication message: %s", err)
+					return map[string]string{"error": err.Error()}, errors.New("parse logical replication message failed")
+					// log.Fatalf("Parse logical replication message: %s", err)
 				}
-				log.Printf("Receive a logical replication message: %s", logicalMsg.Type())
+
+				switch logicalMsg.Type().String() {
+				case "Begin":
+					msg := logicalMsg.(*pglogrepl.BeginMessage)
+					fmt.Printf(
+						"Begin msg... FinalLSN: %v, CommitTime: %v, Xid: %v",
+						msg.FinalLSN,
+						msg.CommitTime,
+						msg.Xid,
+					)
+				case "Commit":
+					msg := logicalMsg.(*pglogrepl.CommitMessage)
+					fmt.Printf(
+						"\nCommit msg... Flags: %v, CommitLSN: %v, TransactionEndLSN: %v, CommitTime: %v\n",
+						msg.Flags,
+						msg.CommitLSN,
+						msg.TransactionEndLSN,
+						msg.CommitTime,
+					)
+					fmt.Println("-----------------------------")
+				case "Origin":
+					msg := logicalMsg.(*pglogrepl.OriginMessage)
+					fmt.Printf(
+						"\nOrigin msg... CommitLSN: %v, Name: %v",
+						msg.CommitLSN,
+						msg.Name,
+					)
+				case "Relation":
+					msg := logicalMsg.(*pglogrepl.RelationMessage)
+					fmt.Printf(
+						"\nRelation msg... RelationID: %v, Namespace: %v, RelationName: %v, ReplicaIdentity: %v, ColumnNum: %v",
+						msg.RelationID,
+						msg.Namespace,
+						msg.RelationName,
+						msg.ReplicaIdentity,
+						msg.ColumnNum,
+					)
+					for _, col := range msg.Columns {
+						fmt.Printf(
+							"\n    Flags: %v, Name: %v, DataType: %v, TypeModifier: %v",
+							col.Flags,
+							col.Name,
+							col.DataType,
+							col.TypeModifier,
+						)
+					}
+
+				case "Type":
+					msg := logicalMsg.(*pglogrepl.TypeMessage)
+					fmt.Printf(
+						"\nType msg... DataType: %v, Namespace: %v, Name: %v",
+						msg.DataType,
+						msg.Namespace,
+						msg.Name,
+					)
+				case "Insert":
+					msg := logicalMsg.(*pglogrepl.InsertMessage)
+					tuplesSlice := [][]string{}
+
+					for _, col := range msg.Tuple.Columns {
+						tupleSlice := []string{}
+
+						tupleSlice = append(tupleSlice, fmt.Sprint(col.DataType))
+						tupleSlice = append(tupleSlice, fmt.Sprint(col.Length))
+						tupleSlice = append(tupleSlice, string(col.Data))
+
+						tuplesSlice = append(tuplesSlice, tupleSlice)
+					}
+
+					fmt.Printf(
+						"\nInsert msg... RelationID: %v, Tuple.ColumnNum: %v",
+						msg.RelationID,
+						msg.Tuple.ColumnNum,
+					)
+
+					for _, tuple := range tuplesSlice {
+						fmt.Printf("\n    DataType: %v, Length: %v, Data: %v", tuple[0], tuple[1], tuple[2])
+					}
+
+				case "Update":
+					msg := logicalMsg.(*pglogrepl.UpdateMessage)
+
+					if msg.OldTuple == nil {
+						msg.OldTuple = &pglogrepl.TupleData{}
+					}
+
+					fmt.Printf(
+						"\nUpdate msg... RelationID: %v, OldTupleType: %v, OldTuple.ColumnNum: %v, NewTuple.ColumnNum: %v",
+						msg.RelationID,
+						msg.OldTupleType,
+						msg.OldTuple.ColumnNum,
+						msg.NewTuple.ColumnNum,
+					)
+
+					oldTuplesSlice := [][]string{}
+
+					for _, oldCol := range msg.OldTuple.Columns {
+						oldTupleSlice := []string{}
+
+						oldTupleSlice = append(oldTupleSlice, fmt.Sprint(oldCol.DataType))
+						oldTupleSlice = append(oldTupleSlice, fmt.Sprint(oldCol.Length))
+						oldTupleSlice = append(oldTupleSlice, string(oldCol.Data))
+
+						oldTuplesSlice = append(oldTuplesSlice, oldTupleSlice)
+					}
+					fmt.Printf("\n    OldTuple")
+					for _, oldTuple := range oldTuplesSlice {
+						fmt.Printf("\n        DataType: %v, Length: %v, Data: %v", oldTuple[0], oldTuple[1], oldTuple[2])
+					}
+
+					newTuplesSlice := [][]string{}
+
+					for _, newCol := range msg.NewTuple.Columns {
+						newTupleSlice := []string{}
+
+						newTupleSlice = append(newTupleSlice, fmt.Sprint(newCol.DataType))
+						newTupleSlice = append(newTupleSlice, fmt.Sprint(newCol.Length))
+						newTupleSlice = append(newTupleSlice, string(newCol.Data))
+
+						newTuplesSlice = append(newTuplesSlice, newTupleSlice)
+					}
+
+					fmt.Printf("\n    NewTuple")
+					for _, newTuple := range newTuplesSlice {
+						fmt.Printf("\n        DataType: %v, Length: %v, Data: %v", newTuple[0], newTuple[1], newTuple[2])
+					}
+
+				case "Delete":
+					msg := logicalMsg.(*pglogrepl.DeleteMessage)
+					fmt.Printf(
+						"\nDelete msg... RelationID: %v, OldTupleType: %v, OldTuple.ColumnNum: %v",
+						msg.RelationID,
+						string(msg.OldTupleType),
+						msg.OldTuple.ColumnNum,
+					)
+
+					oldTupleSlice := []string{}
+
+					for _, oldCol := range msg.OldTuple.Columns {
+						oldTupleSlice = append(oldTupleSlice, fmt.Sprint(oldCol.DataType))
+						oldTupleSlice = append(oldTupleSlice, fmt.Sprint(oldCol.Length))
+						oldTupleSlice = append(oldTupleSlice, string(oldCol.Data))
+					}
+					fmt.Printf("\n    DataType: %v, Length: %v, Data: %v", oldTupleSlice[0], oldTupleSlice[1], oldTupleSlice[2])
+
+				case "Truncate":
+					msg := logicalMsg.(*pglogrepl.TruncateMessage)
+					fmt.Printf(
+						"\nTruncate msg... RelationNum: %v, Option: %v, relationIDs: %v",
+						msg.RelationNum,
+						msg.Option,
+						msg.RelationIDs,
+					)
+
+				}
 
 				clientXLogPos = xld.WALStart + pglogrepl.LSN(len(xld.WALData))
 			}
 		default:
-			log.Printf("Received unexpected message: %#v\n", msg)
+			return map[string]string{"message": err.Error()}, errors.New("received unexpected message")
+			// log.Printf("Received unexpected message: %#v\n", msg)
 		}
 	}
 }
