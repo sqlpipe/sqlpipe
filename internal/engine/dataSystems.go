@@ -292,7 +292,24 @@ func RunSync(sync *data.Sync) (
 	standbyMessageTimeout := time.Second * 10
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
 
-	fmt.Println("-----------------------------")
+	type column struct {
+		name    string
+		isKey   bool
+		colType uint32
+	}
+
+	type relation struct {
+		columns   []column
+		name      string
+		namespace string
+	}
+
+	type transaction struct {
+		relation relation
+		queries  []string
+	}
+
+	txn := transaction{}
 
 	for {
 		if time.Now().After(nextStandbyMessageDeadline) {
@@ -355,7 +372,9 @@ func RunSync(sync *data.Sync) (
 						msg.TransactionEndLSN,
 						msg.CommitTime,
 					)
-					fmt.Println("-----------------------------")
+					fmt.Printf("\n%+v", txn)
+					txn = transaction{}
+					fmt.Println("----------------")
 				case "Origin":
 					msg := logicalMsg.(*pglogrepl.OriginMessage)
 					fmt.Printf(
@@ -373,6 +392,10 @@ func RunSync(sync *data.Sync) (
 						msg.ReplicaIdentity,
 						msg.ColumnNum,
 					)
+
+					txn.relation.namespace = msg.Namespace
+					txn.relation.name = msg.RelationName
+
 					for _, col := range msg.Columns {
 						fmt.Printf(
 							"\n    Flags: %v, Name: %v, DataType: %v, TypeModifier: %v",
@@ -381,6 +404,8 @@ func RunSync(sync *data.Sync) (
 							col.DataType,
 							col.TypeModifier,
 						)
+
+						txn.relation.columns = append(txn.relation.columns, column{col.Name, !(col.Flags == 0), col.DataType})
 					}
 
 				case "Type":
@@ -400,14 +425,36 @@ func RunSync(sync *data.Sync) (
 						msg.Tuple.ColumnNum,
 					)
 
+					values := ""
+
 					for _, col := range msg.Tuple.Columns {
 						tupleType := string(col.DataType)
 						if tupleType == "t" {
 							fmt.Printf("\n    Type: %v, Length: %v, Data: %v", tupleType, col.Length, string(col.Data))
+							values += fmt.Sprintf("%v,", string(col.Data))
 						} else {
 							fmt.Printf("\n    Type: %v", tupleType)
+							values += ","
 						}
 					}
+
+					values = strings.TrimSuffix(values, ",")
+
+					colNames := ""
+					for _, col := range txn.relation.columns {
+						colNames += fmt.Sprintf("%v,", col.name)
+					}
+					colNames = strings.TrimSuffix(colNames, ",")
+
+					txn.queries = append(
+						txn.queries,
+						fmt.Sprintf("insert into %v.%v (%v) values (%v);",
+							txn.relation.namespace,
+							txn.relation.name,
+							colNames,
+							values,
+						),
+					)
 
 				case "Update":
 					msg := logicalMsg.(*pglogrepl.UpdateMessage)

@@ -189,19 +189,19 @@ env/video:
 		--allocated-storage 20 \
 		--no-enable-performance-insights >/dev/null;
 
-	aws rds create-db-instance \
-		--db-instance-identifier sqlpipe-video-mysql \
-		--db-name video \
-		--backup-retention-period 0 \
-		--db-instance-class db.t3.micro \
-		--engine mysql \
-		--no-multi-az \
-		--vpc-security-group-ids ${rdsSecurityGroup} \
-		--master-username testuser \
-		--master-user-password MyTestSecret456 \
-		--storage-type gp2 \
-		--allocated-storage 20 \
-		--no-enable-performance-insights >/dev/null;
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-video-mysql \
+	# 	--db-name video \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.micro \
+	# 	--engine mysql \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username testuser \
+	# 	--master-user-password MyTestSecret456 \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--no-enable-performance-insights >/dev/null;
 
 	# aws rds create-db-instance \
 	# 	--db-instance-identifier sqlpipe-test-mssql \
@@ -211,7 +211,7 @@ env/video:
 	# 	--no-multi-az \
 	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
 	# 	--master-username sqlpipe \
-	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--master-user-password MyTestSecret456 \
 	# 	--storage-type gp2 \
 	# 	--allocated-storage 20 \
 	# 	--license-model license-included \
@@ -226,20 +226,20 @@ env/video:
 	# 	--no-multi-az \
 	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
 	# 	--master-username sqlpipe \
-	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--master-user-password MyTestSecret456 \
 	# 	--storage-type gp2 \
 	# 	--allocated-storage 20 \
 	# 	--license-model license-included \
 	# 	--no-enable-performance-insights >/dev/null;
 
-	# aws redshift create-cluster \
-	# 	--node-type dc2.large \
-	# 	--master-username sqlpipe \
-	# 	--db-name testing \
-	# 	--cluster-type single-node \
-	# 	--master-user-password ${SQLPIPE-PASSWORD} \
-	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
-	# 	--cluster-identifier sqlpipe-test-redshift >/dev/null;
+	aws redshift create-cluster \
+		--node-type dc2.large \
+		--master-username testuser \
+		--db-name video \
+		--cluster-type single-node \
+		--master-user-password MyTestSecret456 \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--cluster-identifier sqlpipe-test-redshift >/dev/null;
 
 # db/postgresql: Open shell to PostgreSQL testing DB
 .PHONY: db/postgresql
