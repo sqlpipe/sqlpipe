@@ -321,7 +321,6 @@ func RunSync(sync *data.Sync) (
 				if err != nil {
 					return map[string]string{"error": err.Error()}, errors.New("ParsePrimaryKeepaliveMessage failed")
 				}
-				// log.Println("Primary Keepalive Message =>", "ServerWALEnd:", pkm.ServerWALEnd, "ServerTime:", pkm.ServerTime, "ReplyRequested:", pkm.ReplyRequested)
 
 				if pkm.ReplyRequested {
 					nextStandbyMessageDeadline = time.Time{}
@@ -331,14 +330,11 @@ func RunSync(sync *data.Sync) (
 				xld, err := pglogrepl.ParseXLogData(msg.Data[1:])
 				if err != nil {
 					return map[string]string{"error": err.Error()}, errors.New("ParseXLogData failed")
-					// log.Fatalln("ParseXLogData failed:", err)
 				}
-				// log.Println("XLogData =>", "WALStart", xld.WALStart, "ServerWALEnd", xld.ServerWALEnd, "ServerTime:", xld.ServerTime, "WALData", string(xld.WALData))
-				// fmt.Println(string(xld.WALData))
+
 				logicalMsg, err := pglogrepl.Parse(xld.WALData)
 				if err != nil {
 					return map[string]string{"error": err.Error()}, errors.New("parse logical replication message failed")
-					// log.Fatalf("Parse logical replication message: %s", err)
 				}
 
 				switch logicalMsg.Type().String() {
@@ -397,17 +393,6 @@ func RunSync(sync *data.Sync) (
 					)
 				case "Insert":
 					msg := logicalMsg.(*pglogrepl.InsertMessage)
-					tuplesSlice := [][]string{}
-
-					for _, col := range msg.Tuple.Columns {
-						tupleSlice := []string{}
-
-						tupleSlice = append(tupleSlice, fmt.Sprint(col.DataType))
-						tupleSlice = append(tupleSlice, fmt.Sprint(col.Length))
-						tupleSlice = append(tupleSlice, string(col.Data))
-
-						tuplesSlice = append(tuplesSlice, tupleSlice)
-					}
 
 					fmt.Printf(
 						"\nInsert msg... RelationID: %v, Tuple.ColumnNum: %v",
@@ -415,75 +400,96 @@ func RunSync(sync *data.Sync) (
 						msg.Tuple.ColumnNum,
 					)
 
-					for _, tuple := range tuplesSlice {
-						fmt.Printf("\n    DataType: %v, Length: %v, Data: %v", tuple[0], tuple[1], tuple[2])
+					for _, col := range msg.Tuple.Columns {
+						tupleType := string(col.DataType)
+						if tupleType == "t" {
+							fmt.Printf("\n    Type: %v, Length: %v, Data: %v", tupleType, col.Length, string(col.Data))
+						} else {
+							fmt.Printf("\n    Type: %v", tupleType)
+						}
 					}
 
 				case "Update":
 					msg := logicalMsg.(*pglogrepl.UpdateMessage)
 
-					if msg.OldTuple == nil {
-						msg.OldTuple = &pglogrepl.TupleData{}
+					oldTupleType := string(msg.OldTupleType)
+					switch oldTupleType {
+					case "K":
+						fmt.Printf(
+							"\nUpdate msg...\n    OldTupleType: %v, OldTuple.ColumnNum: %v",
+							oldTupleType,
+							msg.OldTuple.ColumnNum,
+						)
+
+						for _, col := range msg.OldTuple.Columns {
+							tupleType := string(col.DataType)
+							if tupleType == "t" {
+								fmt.Printf("\n        Type: %v, Length: %v, Data: %v", tupleType, col.Length, string(col.Data))
+							} else {
+								fmt.Printf("\n        Type: %v", tupleType)
+							}
+						}
+					case "O":
+						fmt.Printf(
+							"\nUpdate msg...\n    OldTupleType: %v, OldTuple.ColumnNum: %v",
+							oldTupleType,
+							msg.OldTuple.ColumnNum,
+						)
+
+						for _, col := range msg.OldTuple.Columns {
+							tupleType := string(col.DataType)
+							if tupleType == "t" {
+								fmt.Printf("\n        Type: %v, Length: %v, Data: %v", tupleType, col.Length, string(col.Data))
+							} else {
+								fmt.Printf("\n        Type: %v", tupleType)
+							}
+						}
+					default:
+						fmt.Printf(
+							"\nUpdate msg...\n    OldTupleType: %v",
+							oldTupleType,
+						)
 					}
 
 					fmt.Printf(
-						"\nUpdate msg... RelationID: %v, OldTupleType: %v, OldTuple.ColumnNum: %v, NewTuple.ColumnNum: %v",
-						msg.RelationID,
-						msg.OldTupleType,
-						msg.OldTuple.ColumnNum,
+						"\n    NewTuple.ColumnNum: %v",
 						msg.NewTuple.ColumnNum,
 					)
 
-					oldTuplesSlice := [][]string{}
-
-					for _, oldCol := range msg.OldTuple.Columns {
-						oldTupleSlice := []string{}
-
-						oldTupleSlice = append(oldTupleSlice, fmt.Sprint(oldCol.DataType))
-						oldTupleSlice = append(oldTupleSlice, fmt.Sprint(oldCol.Length))
-						oldTupleSlice = append(oldTupleSlice, string(oldCol.Data))
-
-						oldTuplesSlice = append(oldTuplesSlice, oldTupleSlice)
-					}
-					fmt.Printf("\n    OldTuple")
-					for _, oldTuple := range oldTuplesSlice {
-						fmt.Printf("\n        DataType: %v, Length: %v, Data: %v", oldTuple[0], oldTuple[1], oldTuple[2])
-					}
-
-					newTuplesSlice := [][]string{}
-
-					for _, newCol := range msg.NewTuple.Columns {
-						newTupleSlice := []string{}
-
-						newTupleSlice = append(newTupleSlice, fmt.Sprint(newCol.DataType))
-						newTupleSlice = append(newTupleSlice, fmt.Sprint(newCol.Length))
-						newTupleSlice = append(newTupleSlice, string(newCol.Data))
-
-						newTuplesSlice = append(newTuplesSlice, newTupleSlice)
-					}
-
-					fmt.Printf("\n    NewTuple")
-					for _, newTuple := range newTuplesSlice {
-						fmt.Printf("\n        DataType: %v, Length: %v, Data: %v", newTuple[0], newTuple[1], newTuple[2])
+					for _, col := range msg.NewTuple.Columns {
+						tupleType := string(col.DataType)
+						if tupleType == "t" {
+							fmt.Printf("\n        Type: %v, Length: %v, Data: %v", tupleType, col.Length, string(col.Data))
+						} else {
+							fmt.Printf("\n        Type: %v", tupleType)
+						}
 					}
 
 				case "Delete":
 					msg := logicalMsg.(*pglogrepl.DeleteMessage)
-					fmt.Printf(
-						"\nDelete msg... RelationID: %v, OldTupleType: %v, OldTuple.ColumnNum: %v",
-						msg.RelationID,
-						string(msg.OldTupleType),
-						msg.OldTuple.ColumnNum,
-					)
+					fmt.Printf("\n    Delete msg... RelationID: %v, OldTuple.ColumnNum: %v", msg.RelationID, msg.OldTuple.ColumnNum)
 
-					oldTupleSlice := []string{}
-
-					for _, oldCol := range msg.OldTuple.Columns {
-						oldTupleSlice = append(oldTupleSlice, fmt.Sprint(oldCol.DataType))
-						oldTupleSlice = append(oldTupleSlice, fmt.Sprint(oldCol.Length))
-						oldTupleSlice = append(oldTupleSlice, string(oldCol.Data))
+					oldTupleType := string(msg.OldTupleType)
+					switch oldTupleType {
+					case "K":
+						for _, col := range msg.OldTuple.Columns {
+							tupleType := string(col.DataType)
+							if tupleType == "t" {
+								fmt.Printf("\n        Type: %v, Length: %v, Data: %v", tupleType, col.Length, string(col.Data))
+							} else {
+								fmt.Printf("\n        Type: %v", tupleType)
+							}
+						}
+					case "O":
+						for _, col := range msg.OldTuple.Columns {
+							tupleType := string(col.DataType)
+							if tupleType == "t" {
+								fmt.Printf("\n        Type: %v, Length: %v, Data: %v", tupleType, col.Length, string(col.Data))
+							} else {
+								fmt.Printf("\n        Type: %v", tupleType)
+							}
+						}
 					}
-					fmt.Printf("\n    DataType: %v, Length: %v, Data: %v", oldTupleSlice[0], oldTupleSlice[1], oldTupleSlice[2])
 
 				case "Truncate":
 					msg := logicalMsg.(*pglogrepl.TruncateMessage)

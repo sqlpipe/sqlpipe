@@ -45,7 +45,7 @@ run/sync: build
 		--source-ds-type postgresql \
 		--source-hostname localhost  \
 		--source-port 5432 \
-		--source-db-name postgres \
+		--source-db-name testing \
 		--source-username postgres \
 		--source-password ${SQLPIPE-PASSWORD} \
 		--target-ds-type snowflake \
