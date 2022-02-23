@@ -7,7 +7,7 @@ type QueryResult struct {
 	Rows        []interface{}
 }
 
-type ResultSetColumnInfo struct {
+type RowsColumnInfo struct {
 	ColumnNames             []string
 	ColumnDbTypes           []string
 	ColumnIntermediateTypes []string

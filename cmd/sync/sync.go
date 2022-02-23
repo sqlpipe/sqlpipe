@@ -65,8 +65,13 @@ func validateSync(v *validator.Validator) {
 	v.Check(sync.Source.Username != "", "source-username", "A source username is required")
 	v.Check(sync.Source.Password != "", "source-password", "A source password is required")
 
-	v.Check(sync.Target.DsType == "snowflake", "target-ds-type", "The only target system that this version of SQLpipe can sync to is Snowflake at this time.")
-	v.Check(sync.Target.AccountId != "", "target-account-id", "A target account ID is required")
+	switch sync.Target.DsType {
+	case "snowflake":
+		v.Check(sync.Target.AccountId != "", "target-account-id", "A target account ID is required for Snowflake connections")
+	default:
+		v.Check(sync.Target.Hostname != "", "target-hostname", "A target hostname is required")
+		v.Check(sync.Target.Port != 0, "target-port", "A target port is required")
+	}
 	v.Check(sync.Target.DbName != "", "target-db-name", "A target DB name is required")
 	v.Check(sync.Target.Username != "", "target-username", "A target username is required")
 	v.Check(sync.Target.Password != "", "target-password", "A target password is required")

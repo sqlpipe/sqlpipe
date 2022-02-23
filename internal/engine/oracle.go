@@ -20,6 +20,16 @@ type Oracle struct {
 	db              *sql.DB
 }
 
+func (dsConn Oracle) writeSyncInsert(
+	row []string,
+	relation relation,
+	rowsColumnInfo RowsColumnInfo,
+) (
+	query string,
+) {
+	return
+}
+
 func (dsConn Oracle) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
 	return standardExecute(query, dsConn.dsType, dsConn.db)
 }
@@ -120,7 +130,7 @@ func (dsConn Oracle) getIntermediateType(
 func (dsConn Oracle) turboTransfer(
 	rows *sql.Rows,
 	transfer data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -146,25 +156,25 @@ func (dsConn Oracle) getRows(
 	transfer data.Transfer,
 ) (
 	rows *sql.Rows,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 	errProperties map[string]string,
 	err error,
 ) {
 	rows, errProperties, err = dsConn.execute(transfer.Query)
 	if err != nil {
-		return rows, resultSetColumnInfo, errProperties, err
+		return rows, rowColumnInfo, errProperties, err
 	}
-	resultSetColumnInfo, errProperties, err = getResultSetColumnInfo(dsConn, rows)
+	rowColumnInfo, errProperties, err = getRowsColumnInfoFromRows(dsConn, rows)
 	if err != nil {
-		return rows, resultSetColumnInfo, errProperties, err
+		return rows, rowColumnInfo, errProperties, err
 	}
 
 	var formattedResults = QueryResult{}
 	formattedResults.ColumnTypes = map[string]string{}
 	formattedResults.Rows = []interface{}{}
 
-	for i, colType := range resultSetColumnInfo.ColumnDbTypes {
-		formattedResults.ColumnTypes[resultSetColumnInfo.ColumnNames[i]] = colType
+	for i, colType := range rowColumnInfo.ColumnDbTypes {
+		formattedResults.ColumnTypes[rowColumnInfo.ColumnNames[i]] = colType
 	}
 
 	columnInfo := formattedResults.ColumnTypes
@@ -173,12 +183,12 @@ func (dsConn Oracle) getRows(
 	for _, rowType := range columnInfo {
 		switch rowType {
 		case "IBFloat", "IBDouble", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "OracleType(109)", "NOT":
-			transfer.Query = oracleRewriteQuery(transfer.Query, resultSetColumnInfo)
+			transfer.Query = oracleRewriteQuery(transfer.Query, rowColumnInfo)
 			return dsConn.getRows(transfer)
 		}
 	}
 
-	return rows, resultSetColumnInfo, errProperties, err
+	return rows, rowColumnInfo, errProperties, err
 }
 
 func (dsConn Oracle) getFormattedResults(
@@ -194,7 +204,7 @@ func (dsConn Oracle) getFormattedResults(
 		return queryResult, errProperties, err
 	}
 
-	resultSetColumnInfo, errProperties, err := getResultSetColumnInfo(dsConn, rows)
+	rowColumnInfo, errProperties, err := getRowsColumnInfoFromRows(dsConn, rows)
 	if err != nil {
 		return queryResult, errProperties, err
 	}
@@ -203,8 +213,8 @@ func (dsConn Oracle) getFormattedResults(
 	queryResult.ColumnTypes = map[string]string{}
 	queryResult.Rows = []interface{}{}
 
-	for i, colType := range resultSetColumnInfo.ColumnDbTypes {
-		queryResult.ColumnTypes[resultSetColumnInfo.ColumnNames[i]] = colType
+	for i, colType := range rowColumnInfo.ColumnDbTypes {
+		queryResult.ColumnTypes[rowColumnInfo.ColumnNames[i]] = colType
 	}
 
 	columnInfo := queryResult.ColumnTypes
@@ -213,13 +223,13 @@ func (dsConn Oracle) getFormattedResults(
 	for _, rowType := range columnInfo {
 		switch rowType {
 		case "IBFloat", "IBDouble", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "OracleType(109)", "NOT":
-			query = oracleRewriteQuery(query, resultSetColumnInfo)
+			query = oracleRewriteQuery(query, rowColumnInfo)
 			return dsConn.getFormattedResults(query)
 		}
 	}
 
-	numCols := resultSetColumnInfo.NumCols
-	colTypes := resultSetColumnInfo.ColumnIntermediateTypes
+	numCols := rowColumnInfo.NumCols
+	colTypes := rowColumnInfo.ColumnIntermediateTypes
 
 	values := make([]interface{}, numCols)
 	valuePtrs := make([]interface{}, numCols)
@@ -243,7 +253,7 @@ func (dsConn Oracle) getFormattedResults(
 
 func oracleRewriteQuery(
 	query string,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) string {
 	var queryBuilder strings.Builder
 	columnsRemoved := strings.SplitN(strings.ToLower(query), "from", 2)[1]
@@ -252,8 +262,8 @@ func oracleRewriteQuery(
 
 	sep := ""
 
-	colNames := resultSetColumnInfo.ColumnNames
-	colTypes := resultSetColumnInfo.ColumnDbTypes
+	colNames := rowColumnInfo.ColumnNames
+	colTypes := rowColumnInfo.ColumnDbTypes
 
 	for i, colType := range colTypes {
 		colName := colNames[i]
@@ -349,7 +359,7 @@ func (dsConn Oracle) deleteFromTable(
 
 func (dsConn Oracle) createTable(
 	transfer data.Transfer,
-	columnInfo ResultSetColumnInfo,
+	columnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -379,7 +389,7 @@ func (dsConn Oracle) getQueryEnder(targetTable string) string {
 	return fmt.Sprintf(") SELECT * FROM %s_to_insert", targetTable)
 }
 
-func (dsConn Oracle) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
+func (dsConn Oracle) getQueryStarter(targetTable string, columnInfo RowsColumnInfo) string {
 	queryStarter := fmt.Sprintf("insert into %s (%s) with %s_to_insert (%s) as ( SELECT ", targetTable, strings.Join(columnInfo.ColumnNames, ", "), targetTable, strings.Join(columnInfo.ColumnNames, ", "))
 	return queryStarter
 }
@@ -440,7 +450,7 @@ func oracleWriteBool(value interface{}, terminator string) string {
 }
 
 func (dsConn Oracle) getCreateTableType(
-	resultSetColInfo ResultSetColumnInfo,
+	resultSetColInfo RowsColumnInfo,
 	colNum int,
 ) (
 	createType string,

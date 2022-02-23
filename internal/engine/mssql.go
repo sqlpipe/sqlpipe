@@ -28,6 +28,16 @@ func (dsConn MSSQL) closeDb() {
 	dsConn.db.Close()
 }
 
+func (dsConn MSSQL) writeSyncInsert(
+	row []string,
+	relation relation,
+	rowsColumnInfo RowsColumnInfo,
+) (
+	query string,
+) {
+	return
+}
+
 func getNewMSSQL(
 	connection data.Connection,
 ) (
@@ -78,7 +88,7 @@ func (dsConn MSSQL) getRows(
 	transfer data.Transfer,
 ) (
 	rows *sql.Rows,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 	errProperties map[string]string,
 	err error,
 ) {
@@ -172,7 +182,7 @@ func (dsConn MSSQL) GetDebugInfo() (string, string) {
 func (dsConn MSSQL) turboTransfer(
 	rows *sql.Rows,
 	transfer data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -222,7 +232,7 @@ func (dsConn MSSQL) deleteFromTable(
 
 func (dsConn MSSQL) createTable(
 	transfer data.Transfer,
-	columnInfo ResultSetColumnInfo,
+	columnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -246,8 +256,8 @@ func (dsConn MSSQL) getRowStarter() string {
 	return standardGetRowStarter()
 }
 
-func (dsConn MSSQL) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return standardGetQueryStarter(targetTable, columnInfo)
+func (dsConn MSSQL) getQueryStarter(targetTable string, columnInfo RowsColumnInfo) string {
+	return standardGetQueryStarter(targetTable, columnInfo.ColumnNames)
 }
 
 func mssqlWriteBit(value interface{}, terminator string) string {
@@ -343,7 +353,7 @@ func mssqlWriteTime(value interface{}, terminator string) string {
 }
 
 func (dsConn MSSQL) getCreateTableType(
-	resultSetColInfo ResultSetColumnInfo,
+	resultSetColInfo RowsColumnInfo,
 	colNum int,
 ) (
 	createType string,

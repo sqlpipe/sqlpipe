@@ -48,11 +48,12 @@ run/sync: build
 		--source-db-name testing \
 		--source-username postgres \
 		--source-password ${SQLPIPE-PASSWORD} \
-		--target-ds-type snowflake \
-		--target-account-id ${snowflakeAccountId} \
-		--target-username ${snowflakeUsername} \
-		--target-password ${snowflakePassword} \
-		--target-db-name testing \
+		--target-ds-type postgresql \
+		--target-hostname localhost  \
+		--target-port 5432 \
+		--target-username postgres \
+		--target-password ${SQLPIPE-PASSWORD} \
+		--target-db-name postgres \
 		--tables="my_table,my_other_table" \
 		--replication-slot sqlpipe_slot
 

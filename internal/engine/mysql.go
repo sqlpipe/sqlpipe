@@ -25,6 +25,16 @@ func (dsConn MySQL) execute(query string) (rows *sql.Rows, errProperties map[str
 	return standardExecute(query, dsConn.dsType, dsConn.db)
 }
 
+func (dsConn MySQL) writeSyncInsert(
+	row []string,
+	relation relation,
+	rowsColumnInfo RowsColumnInfo,
+) (
+	query string,
+) {
+	return
+}
+
 func (dsConn MySQL) closeDb() {
 	dsConn.db.Close()
 }
@@ -152,7 +162,7 @@ func (dsConn MySQL) getRows(
 	transfer data.Transfer,
 ) (
 	rows *sql.Rows,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 	errProperties map[string]string,
 	err error,
 ) {
@@ -187,7 +197,7 @@ func (dsConn MySQL) dropTable(
 func (dsConn MySQL) turboTransfer(
 	rows *sql.Rows,
 	transfer data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -220,7 +230,7 @@ func (dsConn MySQL) deleteFromTable(
 
 func (dsConn MySQL) createTable(
 	transfer data.Transfer,
-	columnInfo ResultSetColumnInfo,
+	columnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -231,23 +241,23 @@ func (dsConn MySQL) createTable(
 }
 
 func (dsConn MySQL) getValToWriteMidRow(valType string, value interface{}) string {
-	return mysqlInsertWriters[valType](value, ",")
+	return myrowsInsertWriters[valType](value, ",")
 }
 
 func (dsConn MySQL) getValToWriteRaw(valType string, value interface{}) string {
-	return mysqlInsertWriters[valType](value, "")
+	return myrowsInsertWriters[valType](value, "")
 }
 
 func (dsConn MySQL) getValToWriteRowEnd(valType string, value interface{}) string {
-	return mysqlInsertWriters[valType](value, ")")
+	return myrowsInsertWriters[valType](value, ")")
 }
 
 func (dsConn MySQL) getRowStarter() string {
 	return standardGetRowStarter()
 }
 
-func (dsConn MySQL) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return standardGetQueryStarter(targetTable, columnInfo)
+func (dsConn MySQL) getQueryStarter(targetTable string, columnInfo RowsColumnInfo) string {
+	return standardGetQueryStarter(targetTable, columnInfo.ColumnNames)
 }
 
 func mysqlWriteInsertBinary(value interface{}, terminator string) string {
@@ -266,7 +276,7 @@ func mysqlWriteDateTime(value interface{}, terminator string) string {
 }
 
 func (dsConn MySQL) getCreateTableType(
-	resultSetColInfo ResultSetColumnInfo,
+	resultSetColInfo RowsColumnInfo,
 	colNum int,
 ) (
 	createType string,
@@ -566,7 +576,7 @@ func (dsConn MySQL) getCreateTableType(
 	return createType
 }
 
-var mysqlInsertWriters = map[string]func(value interface{}, terminator string) string{
+var myrowsInsertWriters = map[string]func(value interface{}, terminator string) string{
 
 	// POSTGRESQL
 	"bool":                     writeInsertBool,

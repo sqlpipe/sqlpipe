@@ -77,7 +77,7 @@ func getNewPostgreSQL(
 func (dsConn PostgreSQL) turboTransfer(
 	rows *sql.Rows,
 	transfer data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -89,11 +89,21 @@ func (dsConn PostgreSQL) getRows(
 	transfer data.Transfer,
 ) (
 	rows *sql.Rows,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 	errProperties map[string]string,
 	err error,
 ) {
 	return standardGetRows(dsConn, transfer)
+}
+
+func (dsConn PostgreSQL) writeSyncInsert(
+	row []string,
+	relation relation,
+	rowsColumnInfo RowsColumnInfo,
+) (
+	query string,
+) {
+	return standardWriteSyncInsert(dsConn, row, relation, rowsColumnInfo)
 }
 
 func (dsConn PostgreSQL) getFormattedResults(
@@ -142,7 +152,7 @@ func (dsConn PostgreSQL) deleteFromTable(
 
 func (dsConn PostgreSQL) createTable(
 	transfer data.Transfer,
-	columnInfo ResultSetColumnInfo,
+	columnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -184,8 +194,8 @@ func (dsConn PostgreSQL) getQueryEnder(targetTable string) string {
 	return ""
 }
 
-func (dsConn PostgreSQL) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return standardGetQueryStarter(targetTable, columnInfo)
+func (dsConn PostgreSQL) getQueryStarter(targetTable string, columnInfo RowsColumnInfo) string {
+	return standardGetQueryStarter(targetTable, columnInfo.ColumnNames)
 }
 
 func postgresqlWriteByteArray(value interface{}, terminator string) string {
@@ -251,53 +261,69 @@ func (dsConn PostgreSQL) getIntermediateType(
 		intermediateType = "Time"
 	case "TIMESTAMPTZ":
 		intermediateType = "Time"
-	case "BYTEA":
+	case "20":
+		intermediateType = "PostgreSQL_BIGINT_SYNC"
+	case "16":
+		intermediateType = "PostgreSQL_BOOL_SYNC"
+	case "1082":
+		intermediateType = "PostgreSQL_DATE_SYNC"
+	case "701":
+		intermediateType = "PostgreSQL_DOUBLE_SYNC"
+	case "23":
+		intermediateType = "PostgreSQL_INT_SYNC"
+	case "700":
+		intermediateType = "PostgreSQL_FLOAT_SYNC"
+	case "21":
+		intermediateType = "PostgreSQL_SMALLINT_SYNC"
+	case "1114":
+		intermediateType = "PostgreSQL_TIMESTAMP_SYNC"
+	case "1184":
+		intermediateType = "PostgreSQL_TIMESTAMPTZ_SYNC"
+	case "BYTEA", "17":
 		intermediateType = "PostgreSQL_BYTEA"
-	case "UUID":
+	case "UUID", "2950":
 		intermediateType = "PostgreSQL_UUID"
-	case "BIT":
+	case "BIT", "1560":
 		intermediateType = "PostgreSQL_BIT"
-	case "VARBIT":
+	case "VARBIT", "1562":
 		intermediateType = "PostgreSQL_VARBIT"
-	case "BOX":
+	case "BOX", "603":
 		intermediateType = "PostgreSQL_BOX"
-	case "BPCHAR":
+	case "BPCHAR", "1042":
 		intermediateType = "PostgreSQL_BPCHAR"
-	case "VARCHAR":
+	case "VARCHAR", "1043":
 		intermediateType = "PostgreSQL_VARCHAR"
-	case "CIDR":
+	case "CIDR", "650":
 		intermediateType = "PostgreSQL_CIDR"
-	case "CIRCLE":
+	case "CIRCLE", "718":
 		intermediateType = "PostgreSQL_CIRCLE"
-	case "INET":
+	case "INET", "869":
 		intermediateType = "PostgreSQL_INET"
-	case "INTERVAL":
+	case "INTERVAL", "1186":
 		intermediateType = "PostgreSQL_INTERVAL"
-	case "JSON":
+	case "JSON", "114":
 		intermediateType = "PostgreSQL_JSON"
-	case "JSONB":
+	case "JSONB", "3802":
 		intermediateType = "PostgreSQL_JSONB"
-	case "LINE":
+	case "LINE", "628":
 		intermediateType = "PostgreSQL_LINE"
-	case "LSEG":
+	case "LSEG", "601":
 		intermediateType = "PostgreSQL_LSEG"
-	case "MACADDR":
+	case "MACADDR", "829":
 		intermediateType = "PostgreSQL_MACADDR"
 	case "790":
 		intermediateType = "PostgreSQL_MONEY"
-	case "NUMERIC":
+	case "NUMERIC", "1700":
 		intermediateType = "PostgreSQL_DECIMAL"
-	case "PATH":
+	case "PATH", "602":
 		intermediateType = "PostgreSQL_PATH"
 	case "3220":
 		intermediateType = "PostgreSQL_PG_LSN"
-	case "POINT":
+	case "POINT", "600":
 		intermediateType = "PostgreSQL_POINT"
-	case "TEXTcase ":
-		intermediateType = "PostgreSQL_TEXT"
-	case "POLYGON":
+	case "POLYGON", "604":
 		intermediateType = "PostgreSQL_POLYGON"
-	case "TIME":
+	case "TIME", "1083":
 		intermediateType = "PostgreSQL_TIME"
 	case "1266":
 		intermediateType = "PostgreSQL_TIMETZ"
@@ -309,7 +335,7 @@ func (dsConn PostgreSQL) getIntermediateType(
 		intermediateType = "PostgreSQL_TXID_SNAPSHOT"
 	case "142":
 		intermediateType = "PostgreSQL_XML"
-	case "TEXT":
+	case "TEXT", "25":
 		intermediateType = "PostgreSQL_TEXT"
 	default:
 		err = fmt.Errorf("no PostgreSQL intermediate type for driver type '%v'", colTypeFromDriver)
@@ -318,7 +344,7 @@ func (dsConn PostgreSQL) getIntermediateType(
 	return intermediateType, errProperties, err
 }
 
-func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo ResultSetColumnInfo, colNum int) (createType string) {
+func (dsConn PostgreSQL) getCreateTableType(resultSetColInfo RowsColumnInfo, colNum int) (createType string) {
 
 	scanType := resultSetColInfo.ColumnScanTypes[colNum]
 	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
@@ -647,6 +673,17 @@ var postgresValWriters = map[string]func(value interface{}, terminator string) s
 	"PostgreSQL_TSQUERY":       writeInsertEscapedString,
 	"PostgreSQL_TSVECTOR":      writeInsertEscapedString,
 	"PostgreSQL_XML":           writeInsertEscapedString,
+	// Syncs
+	"PostgreSQL_BIGINT_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_BOOL_SYNC":        writeInsertStringNoEscape,
+	"PostgreSQL_DATE_SYNC":        writeInsertStringNoEscape,
+	"PostgreSQL_DOUBLE_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_INT_SYNC":         writeInsertRawStringNoQuotes,
+	"PostgreSQL_FLOAT_SYNC":       writeInsertRawStringNoQuotes,
+	"PostgreSQL_SMALLINT_SYNC":    writeInsertRawStringNoQuotes,
+	"PostgreSQL_TIMESTAMP_SYNC":   writeInsertStringNoEscape,
+	"PostgreSQL_TIMESTAMPTZ_SYNC": writeInsertStringNoEscape,
+	"NIL":                         postgresqlWriteNone,
 
 	// MYSQL
 

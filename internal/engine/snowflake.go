@@ -25,6 +25,16 @@ type Snowflake struct {
 	db              *sql.DB
 }
 
+func (dsConn Snowflake) writeSyncInsert(
+	row []string,
+	relation relation,
+	rowsColumnInfo RowsColumnInfo,
+) (
+	query string,
+) {
+	return
+}
+
 func (dsConn Snowflake) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
 	return standardExecute(query, dsConn.dsType, dsConn.db)
 }
@@ -80,7 +90,7 @@ func (dsConn Snowflake) getRows(
 	transfer data.Transfer,
 ) (
 	rows *sql.Rows,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 	errProperties map[string]string,
 	err error,
 ) {
@@ -176,7 +186,7 @@ func snowflakePut(
 func (dsConn Snowflake) turboTransfer(
 	rows *sql.Rows,
 	transfer data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -197,10 +207,10 @@ func (dsConn Snowflake) turboTransfer(
 		return errProperties, err
 	}()
 
-	numCols := resultSetColumnInfo.NumCols
+	numCols := rowColumnInfo.NumCols
 	zeroIndexedNumCols := numCols - 1
 	// targetTable := transfer.TargetTable
-	colTypes := resultSetColumnInfo.ColumnIntermediateTypes
+	colTypes := rowColumnInfo.ColumnIntermediateTypes
 
 	var wg sync.WaitGroup
 	var fileBuilder strings.Builder
@@ -333,7 +343,7 @@ func (dsConn Snowflake) deleteFromTable(
 
 func (dsConn Snowflake) createTable(
 	transfer data.Transfer,
-	columnInfo ResultSetColumnInfo,
+	columnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -369,7 +379,7 @@ func (dsConn Snowflake) getQueryEnder(targetTable string) string {
 	return ""
 }
 
-func (dsConn Snowflake) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
+func (dsConn Snowflake) getQueryStarter(targetTable string, columnInfo RowsColumnInfo) string {
 	for _, colType := range columnInfo.ColumnIntermediateTypes {
 		switch colType {
 		case
@@ -405,10 +415,10 @@ func (dsConn Snowflake) getQueryStarter(targetTable string, columnInfo ResultSet
 		}
 	}
 
-	return standardGetQueryStarter(targetTable, columnInfo)
+	return standardGetQueryStarter(targetTable, columnInfo.ColumnNames)
 }
 
-func (dsConn Snowflake) getCreateTableType(resultSetColInfo ResultSetColumnInfo, colNum int) (createType string) {
+func (dsConn Snowflake) getCreateTableType(resultSetColInfo RowsColumnInfo, colNum int) (createType string) {
 	scanType := resultSetColInfo.ColumnScanTypes[colNum]
 	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]
 

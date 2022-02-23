@@ -19,6 +19,23 @@ import (
 	"github.com/jackc/pgproto3/v2"
 )
 
+type column struct {
+	name    string
+	isKey   bool
+	colType uint32
+	length  int
+}
+
+type relation struct {
+	columns   []column
+	name      string
+	namespace string
+}
+
+type transaction struct {
+	queries []string
+}
+
 type DsConnection interface {
 
 	// Gets information needed to connect to the DB represented by the DsConnection
@@ -34,7 +51,7 @@ type DsConnection interface {
 	dropTable(transferInfo data.Transfer) (errProperties map[string]string, err error)
 
 	// Creates a table to match the result set of <transfer.Query>
-	createTable(transfer data.Transfer, columnInfo ResultSetColumnInfo) (errProperties map[string]string, err error)
+	createTable(transfer data.Transfer, columnInfo RowsColumnInfo) (errProperties map[string]string, err error)
 
 	// Translates a single value from the source into an intermediate type,
 	// which will then be translated by one of the writer functions below
@@ -65,7 +82,7 @@ type DsConnection interface {
 	getRowStarter() (rowStarted string)
 
 	// Generates the start of an insertion query for a given data system type
-	getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) (queryStarter string)
+	getQueryStarter(targetTable string, columnInfo RowsColumnInfo) (queryStarter string)
 
 	// Generates the end of an insertion query for a given data system type
 	getQueryEnder(targetTable string) (queryEnder string)
@@ -75,20 +92,23 @@ type DsConnection interface {
 	GetDebugInfo() (dsType string, debugConnString string)
 
 	// Gets the result of a given query, which will later be inserted
-	getRows(transferInfo data.Transfer) (resultSet *sql.Rows, resultSetColumnInfo ResultSetColumnInfo, errProperties map[string]string, err error)
+	getRows(transferInfo data.Transfer) (resultSet *sql.Rows, rowColumnInfo RowsColumnInfo, errProperties map[string]string, err error)
 
 	// Gets the result of a given query, which will not be inserted
 	getFormattedResults(query string) (resultSet QueryResult, errProperties map[string]string, err error)
 
 	// Takes result set info, and returns a list of types to create a new table in another DB based
 	// on those types.
-	getCreateTableType(resultSetColInfo ResultSetColumnInfo, colNum int) (createTableTypes string)
+	getCreateTableType(resultSetColInfo RowsColumnInfo, colNum int) (createTableTypes string)
 
 	// Runs a turbo transfer
-	turboTransfer(rows *sql.Rows, transferInfo data.Transfer, resultSetColumnInfo ResultSetColumnInfo) (errProperties map[string]string, err error)
+	turboTransfer(rows *sql.Rows, transferInfo data.Transfer, rowColumnInfo RowsColumnInfo) (errProperties map[string]string, err error)
 
 	// Bottom level func where queries actually get run
 	execute(query string) (rows *sql.Rows, errProperties map[string]string, err error)
+
+	// Replication insert writer
+	writeSyncInsert(row []string, relation relation, rowsColumnInfo RowsColumnInfo) (query string)
 
 	closeDb()
 }
@@ -204,7 +224,7 @@ func RunTransfer(
 		return errProperties, err
 	}
 
-	rows, resultSetColumnInfo, errProperties, err := sourceSystem.getRows(*transfer)
+	rows, rowColumnInfo, errProperties, err := sourceSystem.getRows(*transfer)
 	if err != nil {
 		return errProperties, err
 	}
@@ -214,7 +234,7 @@ func RunTransfer(
 	if err != nil {
 		return errProperties, err
 	}
-	errProperties, err = Insert(targetSystem, rows, *transfer, resultSetColumnInfo)
+	errProperties, err = Insert(targetSystem, rows, *transfer, rowColumnInfo)
 
 	return errProperties, err
 }
@@ -240,7 +260,25 @@ func RunSync(sync *data.Sync) (
 	errProperties map[string]string,
 	err error,
 ) {
+
+	sourceConnection := sync.Source
+
+	targetConnection := sync.Target
+
+	sourceSystem, errProperties, err := GetDs(sourceConnection)
+	defer sourceSystem.closeDb()
+	if err != nil {
+		return errProperties, err
+	}
+
+	targetSystem, errProperties, err := GetDs(targetConnection)
+	defer targetSystem.closeDb()
+	if err != nil {
+		return errProperties, err
+	}
+
 	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
+
 	dsConn, errProperties, err := GetDs(sync.Source)
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("failed to create DsConnection")
@@ -292,24 +330,8 @@ func RunSync(sync *data.Sync) (
 	standbyMessageTimeout := time.Second * 10
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
 
-	type column struct {
-		name    string
-		isKey   bool
-		colType uint32
-	}
-
-	type relation struct {
-		columns   []column
-		name      string
-		namespace string
-	}
-
-	type transaction struct {
-		relation relation
-		queries  []string
-	}
-
 	txn := transaction{}
+	lastRelation := relation{}
 
 	for {
 		if time.Now().After(nextStandbyMessageDeadline) {
@@ -331,6 +353,7 @@ func RunSync(sync *data.Sync) (
 		}
 
 		switch msg := msg.(type) {
+
 		case *pgproto3.CopyData:
 			switch msg.Data[0] {
 			case pglogrepl.PrimaryKeepaliveMessageByteID:
@@ -356,25 +379,33 @@ func RunSync(sync *data.Sync) (
 
 				switch logicalMsg.Type().String() {
 				case "Begin":
-					msg := logicalMsg.(*pglogrepl.BeginMessage)
-					fmt.Printf(
-						"Begin msg... FinalLSN: %v, CommitTime: %v, Xid: %v",
-						msg.FinalLSN,
-						msg.CommitTime,
-						msg.Xid,
-					)
-				case "Commit":
-					msg := logicalMsg.(*pglogrepl.CommitMessage)
-					fmt.Printf(
-						"\nCommit msg... Flags: %v, CommitLSN: %v, TransactionEndLSN: %v, CommitTime: %v\n",
-						msg.Flags,
-						msg.CommitLSN,
-						msg.TransactionEndLSN,
-						msg.CommitTime,
-					)
-					fmt.Printf("\n%+v", txn)
+					// msg := logicalMsg.(*pglogrepl.BeginMessage)
+					// fmt.Printf(
+					// 	"Begin msg... FinalLSN: %v, CommitTime: %v, Xid: %v",
+					// 	msg.FinalLSN,
+					// 	msg.CommitTime,
+					// 	msg.Xid,
+					// )
 					txn = transaction{}
-					fmt.Println("----------------")
+					lastRelation = relation{}
+				case "Commit":
+					// msg := logicalMsg.(*pglogrepl.CommitMessage)
+					// fmt.Printf(
+					// 	"\nCommit msg... Flags: %v, CommitLSN: %v, TransactionEndLSN: %v, CommitTime: %v\n",
+					// 	msg.Flags,
+					// 	msg.CommitLSN,
+					// 	msg.TransactionEndLSN,
+					// 	msg.CommitTime,
+					// )
+
+					for _, query := range txn.queries {
+						_, errProperties, err := targetSystem.execute(query)
+						if err != nil {
+							fmt.Println(err, errProperties)
+						}
+					}
+					txn = transaction{}
+					lastRelation = relation{}
 				case "Origin":
 					msg := logicalMsg.(*pglogrepl.OriginMessage)
 					fmt.Printf(
@@ -384,28 +415,35 @@ func RunSync(sync *data.Sync) (
 					)
 				case "Relation":
 					msg := logicalMsg.(*pglogrepl.RelationMessage)
-					fmt.Printf(
-						"\nRelation msg... RelationID: %v, Namespace: %v, RelationName: %v, ReplicaIdentity: %v, ColumnNum: %v",
-						msg.RelationID,
-						msg.Namespace,
-						msg.RelationName,
-						msg.ReplicaIdentity,
-						msg.ColumnNum,
-					)
+					// fmt.Printf(
+					// 	"\nRelation msg... RelationID: %v, Namespace: %v, RelationName: %v, ReplicaIdentity: %v, ColumnNum: %v",
+					// 	msg.RelationID,
+					// 	msg.Namespace,
+					// 	msg.RelationName,
+					// 	msg.ReplicaIdentity,
+					// 	msg.ColumnNum,
+					// )
 
-					txn.relation.namespace = msg.Namespace
-					txn.relation.name = msg.RelationName
+					lastRelation.namespace = msg.Namespace
+					lastRelation.name = msg.RelationName
 
 					for _, col := range msg.Columns {
-						fmt.Printf(
-							"\n    Flags: %v, Name: %v, DataType: %v, TypeModifier: %v",
-							col.Flags,
-							col.Name,
-							col.DataType,
-							col.TypeModifier,
-						)
+						// fmt.Printf(
+						// 	"\n    Flags: %v, Name: %v, DataType: %v, TypeModifier: %v",
+						// 	col.Flags,
+						// 	col.Name,
+						// 	col.DataType,
+						// 	col.TypeModifier,
+						// )
 
-						txn.relation.columns = append(txn.relation.columns, column{col.Name, !(col.Flags == 0), col.DataType})
+						lastRelation.columns = append(
+							lastRelation.columns,
+							column{
+								col.Name, !(col.Flags == 0),
+								col.DataType,
+								0,
+							},
+						)
 					}
 
 				case "Type":
@@ -419,42 +457,37 @@ func RunSync(sync *data.Sync) (
 				case "Insert":
 					msg := logicalMsg.(*pglogrepl.InsertMessage)
 
-					fmt.Printf(
-						"\nInsert msg... RelationID: %v, Tuple.ColumnNum: %v",
-						msg.RelationID,
-						msg.Tuple.ColumnNum,
-					)
+					// fmt.Printf(
+					// 	"\nInsert msg... RelationID: %v, Tuple.ColumnNum: %v",
+					// 	msg.RelationID,
+					// 	msg.Tuple.ColumnNum,
+					// )
 
-					values := ""
+					rowVals := []string{}
 
-					for _, col := range msg.Tuple.Columns {
-						tupleType := string(col.DataType)
-						if tupleType == "t" {
-							fmt.Printf("\n    Type: %v, Length: %v, Data: %v", tupleType, col.Length, string(col.Data))
-							values += fmt.Sprintf("%v,", string(col.Data))
-						} else {
-							fmt.Printf("\n    Type: %v", tupleType)
-							values += ","
+					for i, col := range msg.Tuple.Columns {
+						var val string
+						var length int = -1
+						switch string(col.DataType) {
+						case "t":
+							val = string(col.Data)
+							length = int(col.Length)
+						default:
+							val = string(col.Data)
 						}
+
+						rowVals = append(rowVals, val)
+						lastRelation.columns[i].length = length
 					}
 
-					values = strings.TrimSuffix(values, ",")
-
-					colNames := ""
-					for _, col := range txn.relation.columns {
-						colNames += fmt.Sprintf("%v,", col.name)
+					rowColumnInfo, errProperties, err := getRowsColumnInfoFromSync(sourceSystem, lastRelation)
+					if err != nil {
+						return errProperties, err
 					}
-					colNames = strings.TrimSuffix(colNames, ",")
 
-					txn.queries = append(
-						txn.queries,
-						fmt.Sprintf("insert into %v.%v (%v) values (%v);",
-							txn.relation.namespace,
-							txn.relation.name,
-							colNames,
-							values,
-						),
-					)
+					query := targetSystem.writeSyncInsert(rowVals, lastRelation, rowColumnInfo)
+
+					txn.queries = append(txn.queries, query)
 
 				case "Update":
 					msg := logicalMsg.(*pglogrepl.UpdateMessage)
@@ -563,32 +596,71 @@ func standardGetRows(
 	transferInfo data.Transfer,
 ) (
 	rows *sql.Rows,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 	errProperties map[string]string,
 	err error,
 ) {
 
 	rows, errProperties, err = dsConn.execute(transferInfo.Query)
 	if err != nil {
-		return rows, resultSetColumnInfo, errProperties, err
+		return rows, rowColumnInfo, errProperties, err
 	}
-	resultSetColumnInfo, errProperties, err = getResultSetColumnInfo(dsConn, rows)
-	return rows, resultSetColumnInfo, errProperties, err
+	rowColumnInfo, errProperties, err = getRowsColumnInfoFromRows(dsConn, rows)
+	return rows, rowColumnInfo, errProperties, err
 }
 
-func sqlInsert(
+func standardWriteSyncInsert(
+	dsConn DsConnection,
+	rowVals []string,
+	relation relation,
+	rowColumnInfo RowsColumnInfo,
+) (
+	query string,
+) {
+
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString(dsConn.getQueryStarter(relation.name, rowColumnInfo))
+
+	numCols := rowColumnInfo.NumCols
+	zeroIndexedNumCols := numCols - 1
+	colTypes := rowColumnInfo.ColumnIntermediateTypes
+
+	fmt.Printf(
+		"\n\nNumcols: %v, zero indexed: %v, colTypes len: %v, rowVals len: %v",
+		numCols,
+		zeroIndexedNumCols,
+		len(colTypes),
+		len(rowVals),
+	)
+
+	// while in the middle of insert row, add commas at end of values
+	for j := 0; j < zeroIndexedNumCols; j++ {
+		switch rowVals[j] {
+		case "":
+			queryBuilder.WriteString(dsConn.getValToWriteMidRow("NIL", rowVals[j]))
+		default:
+			queryBuilder.WriteString(dsConn.getValToWriteMidRow(colTypes[j], rowVals[j]))
+		}
+	}
+
+	queryBuilder.WriteString(dsConn.getValToWriteRowEnd(colTypes[zeroIndexedNumCols], rowVals[zeroIndexedNumCols]))
+
+	return queryBuilder.String()
+}
+
+func rowsInsert(
 	dsConn DsConnection,
 	rows *sql.Rows,
 	transfer data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
 ) {
-	numCols := resultSetColumnInfo.NumCols
+	numCols := rowColumnInfo.NumCols
 	zeroIndexedNumCols := numCols - 1
 	targetTable := transfer.TargetTable
-	colTypes := resultSetColumnInfo.ColumnIntermediateTypes
+	colTypes := rowColumnInfo.ColumnIntermediateTypes
 
 	var wg sync.WaitGroup
 	var queryBuilder strings.Builder
@@ -611,7 +683,7 @@ func sqlInsert(
 		rows.Scan(valuePtrs...)
 
 		if isFirst {
-			queryBuilder.WriteString(dsConn.getQueryStarter(targetTable, resultSetColumnInfo))
+			queryBuilder.WriteString(dsConn.getQueryStarter(targetTable, rowColumnInfo))
 			isFirst = false
 		} else {
 			queryBuilder.WriteString(dsConn.getRowStarter())
@@ -679,19 +751,19 @@ func turboTransfer(
 	dsConn DsConnection,
 	rows *sql.Rows,
 	transferInfo data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
 ) {
-	return dsConn.turboTransfer(rows, transferInfo, resultSetColumnInfo)
+	return dsConn.turboTransfer(rows, transferInfo, rowColumnInfo)
 }
 
 func Insert(
 	dsConn DsConnection,
 	rows *sql.Rows,
 	transfer data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -702,13 +774,13 @@ func Insert(
 		if err != nil {
 			return errProperties, err
 		}
-		errProperties, err = dsConn.createTable(transfer, resultSetColumnInfo)
+		errProperties, err = dsConn.createTable(transfer, rowColumnInfo)
 		if err != nil {
 			return errProperties, err
 		}
 	}
 
-	return sqlInsert(dsConn, rows, transfer, resultSetColumnInfo)
+	return rowsInsert(dsConn, rows, transfer, rowColumnInfo)
 }
 
 func standardGetFormattedResults(
@@ -725,16 +797,16 @@ func standardGetFormattedResults(
 		return queryResult, errProperties, err
 	}
 
-	resultSetColumnInfo, errProperties, err := getResultSetColumnInfo(dsConn, rows)
+	rowColumnInfo, errProperties, err := getRowsColumnInfoFromRows(dsConn, rows)
 
 	queryResult.ColumnTypes = map[string]string{}
 	queryResult.Rows = []interface{}{}
-	for i, colType := range resultSetColumnInfo.ColumnDbTypes {
-		queryResult.ColumnTypes[resultSetColumnInfo.ColumnNames[i]] = colType
+	for i, colType := range rowColumnInfo.ColumnDbTypes {
+		queryResult.ColumnTypes[rowColumnInfo.ColumnNames[i]] = colType
 	}
 
-	numCols := resultSetColumnInfo.NumCols
-	colTypes := resultSetColumnInfo.ColumnIntermediateTypes
+	numCols := rowColumnInfo.NumCols
+	colTypes := rowColumnInfo.ColumnIntermediateTypes
 
 	values := make([]interface{}, numCols)
 	valuePtrs := make([]interface{}, numCols)
@@ -776,11 +848,11 @@ func standardExecute(query string, dsType string, db *sql.DB) (rows *sql.Rows, e
 	return rows, nil, nil
 }
 
-func getResultSetColumnInfo(
+func getRowsColumnInfoFromRows(
 	dsConn DsConnection,
 	rows *sql.Rows,
 ) (
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 	errProperties map[string]string,
 	err error,
 ) {
@@ -800,7 +872,7 @@ func getResultSetColumnInfo(
 
 	colTypesFromDriver, err := rows.ColumnTypes()
 	if err != nil {
-		return resultSetColumnInfo, errProperties, err
+		return rowColumnInfo, errProperties, err
 	}
 
 	for _, colType := range colTypesFromDriver {
@@ -810,7 +882,7 @@ func getResultSetColumnInfo(
 
 		intermediateType, errProperties, err := dsConn.getIntermediateType(colType.DatabaseTypeName())
 		if err != nil {
-			return resultSetColumnInfo, errProperties, err
+			return rowColumnInfo, errProperties, err
 		}
 		intermediateTypes = append(intermediateTypes, intermediateType)
 
@@ -829,7 +901,78 @@ func getResultSetColumnInfo(
 		colNamesToTypes[colType.Name()] = colType.DatabaseTypeName()
 	}
 
-	columnInfo := ResultSetColumnInfo{
+	columnInfo := RowsColumnInfo{
+		ColumnNames:             colNames,
+		ColumnDbTypes:           colTypes,
+		ColumnScanTypes:         scanTypes,
+		ColumnIntermediateTypes: intermediateTypes,
+		ColumnLengths:           colLens,
+		LengthOks:               lenOks,
+		ColumnPrecisions:        precisions,
+		ColumnScales:            scales,
+		PrecisionScaleOks:       precisionScaleOks,
+		ColumnNullables:         nullables,
+		NullableOks:             nullableOks,
+		NumCols:                 len(colNames),
+	}
+
+	return columnInfo, errProperties, err
+}
+
+func getRowsColumnInfoFromSync(
+	dsConn DsConnection,
+	relation relation,
+) (
+	rowColumnInfo RowsColumnInfo,
+	errProperties map[string]string,
+	err error,
+) {
+
+	var colNames []string
+	var colTypes []string
+	var scanTypes []reflect.Type
+	var intermediateTypes []string
+	var colLens []int64
+	var lenOks []bool
+	var precisions []int64
+	var scales []int64
+	var precisionScaleOks []bool
+	var nullables []bool
+	var nullableOks []bool
+	var colNamesToTypes = map[string]string{}
+
+	for _, col := range relation.columns {
+		colType := fmt.Sprint(col.colType)
+		colNames = append(colNames, col.name)
+		colTypes = append(colTypes, colType)
+		scanTypes = append(scanTypes, reflect.TypeOf(""))
+
+		intermediateType, errProperties, err := dsConn.getIntermediateType(colType)
+		if err != nil {
+			return rowColumnInfo, errProperties, err
+		}
+		intermediateTypes = append(intermediateTypes, intermediateType)
+
+		colLen := col.length
+		lenOk := false
+		if colLen > -1 {
+			lenOk = true
+		}
+		colLens = append(colLens, int64(colLen))
+		lenOks = append(lenOks, lenOk)
+
+		precisionScaleOk := false
+		precisions = append(precisions, 0)
+		scales = append(scales, 0)
+		precisionScaleOks = append(precisionScaleOks, precisionScaleOk)
+
+		nullables = append(nullables, false)
+		nullableOks = append(nullableOks, false)
+
+		colNamesToTypes[col.name] = colType
+	}
+
+	columnInfo := RowsColumnInfo{
 		ColumnNames:             colNames,
 		ColumnDbTypes:           colTypes,
 		ColumnScanTypes:         scanTypes,
@@ -851,8 +994,8 @@ func standardGetRowStarter() string {
 	return ",("
 }
 
-func standardGetQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return fmt.Sprintf("INSERT INTO %s ("+strings.Join(columnInfo.ColumnNames, ", ")+") VALUES (", targetTable)
+func standardGetQueryStarter(targetTable string, colNames []string) string {
+	return fmt.Sprintf("INSERT INTO %s ("+strings.Join(colNames, ", ")+") VALUES (", targetTable)
 }
 
 func dropTableIfExistsWithSchema(
@@ -940,7 +1083,7 @@ func deleteFromTableNoSchema(dsConn DsConnection, transferInfo data.Transfer) (
 func standardCreateTable(
 	dsConn DsConnection,
 	transferInfo data.Transfer,
-	columnInfo ResultSetColumnInfo,
+	columnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,

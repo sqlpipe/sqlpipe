@@ -23,6 +23,16 @@ func (dsConn Redshift) execute(query string) (rows *sql.Rows, errProperties map[
 	return standardExecute(query, dsConn.dsType, dsConn.db)
 }
 
+func (dsConn Redshift) writeSyncInsert(
+	row []string,
+	relation relation,
+	rowsColumnInfo RowsColumnInfo,
+) (
+	query string,
+) {
+	return
+}
+
 func (dsConn Redshift) closeDb() {
 	dsConn.db.Close()
 }
@@ -75,7 +85,7 @@ func (dsConn Redshift) getRows(
 	transfer data.Transfer,
 ) (
 	rows *sql.Rows,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 	errProperties map[string]string,
 	err error,
 ) {
@@ -85,7 +95,7 @@ func (dsConn Redshift) getRows(
 func (dsConn Redshift) turboTransfer(
 	rows *sql.Rows,
 	transfer data.Transfer,
-	resultSetColumnInfo ResultSetColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -196,7 +206,7 @@ func (dsConn Redshift) deleteFromTable(
 
 func (dsConn Redshift) createTable(
 	transfer data.Transfer,
-	columnInfo ResultSetColumnInfo,
+	columnInfo RowsColumnInfo,
 ) (
 	errProperties map[string]string,
 	err error,
@@ -224,11 +234,11 @@ func (dsConn Redshift) getQueryEnder(targetTable string) string {
 	return ""
 }
 
-func (dsConn Redshift) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return standardGetQueryStarter(targetTable, columnInfo)
+func (dsConn Redshift) getQueryStarter(targetTable string, columnInfo RowsColumnInfo) string {
+	return standardGetQueryStarter(targetTable, columnInfo.ColumnNames)
 }
 
-func (dsConn Redshift) getCreateTableType(resultSetColInfo ResultSetColumnInfo, colNum int) (createType string) {
+func (dsConn Redshift) getCreateTableType(resultSetColInfo RowsColumnInfo, colNum int) (createType string) {
 
 	scanType := resultSetColInfo.ColumnScanTypes[colNum]
 	intermediateType := resultSetColInfo.ColumnIntermediateTypes[colNum]

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-var generalReplacer = strings.NewReplacer(`"`, `""`, "\n", "")
+var generalReplacer = strings.NewReplacer(`"`, `""`, "\n", "", `,'\x',`, "null")
 var turboEndStringNilReplacer = strings.NewReplacer(
 	`"%!s(<nil>)"`, "",
 	`%!s(<nil>)`, "",
@@ -180,6 +180,10 @@ func writeInsertInt(value interface{}, terminator string) string {
 
 func writeInsertStringNoEscape(value interface{}, terminator string) string {
 	return fmt.Sprintf("'%s'%s", value, terminator)
+}
+
+func postgresqlWriteNone(value interface{}, terminator string) string {
+	return "NULL,"
 }
 
 func writeInsertBool(value interface{}, terminator string) string {
