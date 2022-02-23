@@ -54,8 +54,7 @@ run/sync: build
 		--target-username postgres \
 		--target-password ${SQLPIPE-PASSWORD} \
 		--target-db-name postgres \
-		--tables="my_table,my_other_table" \
-		--replication-slot sqlpipe_slot
+		--tables="wide_table"
 
 ## db/init: Initialize a fresh instance of postgresql
 .PHONY: db/init

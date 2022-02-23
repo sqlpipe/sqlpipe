@@ -39,7 +39,7 @@ func init() {
 	SyncCmd.Flags().BoolVar(&globals.Analytics, "analytics", true, "Send anonymized usage data to SQLpipe for product improvements")
 
 	SyncCmd.Flags().StringSliceVar(&sync.Tables, "tables", []string{}, "Specify the tables you want synced, with a schema name if necessary.")
-	SyncCmd.Flags().StringVar(&sync.ReplicationSlot, "replication-slot", "", "Replication slot name")
+	SyncCmd.Flags().StringVar(&sync.ReplicationSlot, "replication-slot", "sqlpipe_slot", "Replication slot name")
 
 }
 

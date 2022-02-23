@@ -261,17 +261,28 @@ func RunSync(sync *data.Sync) (
 	err error,
 ) {
 
-	sourceConnection := sync.Source
-
-	targetConnection := sync.Target
-
-	sourceSystem, errProperties, err := GetDs(sourceConnection)
+	sourceSystem, errProperties, err := GetDs(sync.Source)
 	defer sourceSystem.closeDb()
 	if err != nil {
 		return errProperties, err
 	}
 
-	targetSystem, errProperties, err := GetDs(targetConnection)
+	rows, errProperties, err := sourceSystem.execute("show wal_level")
+	if err != nil {
+		return errProperties, err
+	}
+
+	for rows.Next() {
+		var wal_level string
+		rows.Scan(&wal_level)
+		if wal_level != "logical" {
+			err = errors.New(`PostgreSQL wal_level MUST be set to logical... Run "ALTER SYSTEM SET wal_level=logical;" and restart the DB`)
+			errProperties = map[string]string{"error": "wal_level != logical"}
+			return
+		}
+	}
+
+	targetSystem, errProperties, err := GetDs(sync.Target)
 	defer targetSystem.closeDb()
 	if err != nil {
 		return errProperties, err
@@ -279,48 +290,46 @@ func RunSync(sync *data.Sync) (
 
 	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
 
-	dsConn, errProperties, err := GetDs(sync.Source)
-	if err != nil {
-		return map[string]string{"error": err.Error()}, errors.New("failed to create DsConnection")
-	}
+	_, _, sourceConnString := sourceSystem.getConnectionInfo()
+	sourceConnString += "?replication=database"
 
-	_, _, connString := dsConn.getConnectionInfo()
-	connString += "?replication=database"
-
-	conn, err := pgconn.Connect(context.Background(), connString)
+	sourceConn, err := pgconn.Connect(context.Background(), sourceConnString)
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("failed to connect to PostgreSQL server")
 	}
-	defer conn.Close(context.Background())
+	defer sourceConn.Close(context.Background())
 
-	result := conn.Exec(context.Background(), "DROP PUBLICATION IF EXISTS pglogrepl_demo;")
+	result := sourceConn.Exec(context.Background(), "DROP PUBLICATION IF EXISTS sqlpipe_publication;")
 	_, err = result.ReadAll()
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("drop publication if exists error")
 	}
 
-	result = conn.Exec(context.Background(), "CREATE PUBLICATION pglogrepl_demo FOR ALL TABLES;")
+	result = sourceConn.Exec(
+		context.Background(),
+		fmt.Sprintf("CREATE PUBLICATION sqlpipe_publication FOR TABLE %v;", strings.Join(sync.Tables, ", ")),
+	)
 	_, err = result.ReadAll()
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("create publication error")
 	}
 
 	const outputPlugin = "pgoutput"
-	pluginArguments := []string{"proto_version '1'", "publication_names 'pglogrepl_demo'"}
+	pluginArguments := []string{"proto_version '1'", "publication_names 'sqlpipe_publication'"}
 
-	sysident, err := pglogrepl.IdentifySystem(context.Background(), conn)
+	sysident, err := pglogrepl.IdentifySystem(context.Background(), sourceConn)
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("IdentifySystem failed")
 	}
 
-	_, err = pglogrepl.CreateReplicationSlot(context.Background(), conn, sync.ReplicationSlot, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
+	_, err = pglogrepl.CreateReplicationSlot(context.Background(), sourceConn, sync.ReplicationSlot, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("CreateReplicationSlot failed")
 	}
 
 	logger.PrintInfo(fmt.Sprintf("Created temporary replication slot: %v", sync.ReplicationSlot), map[string]string{})
 
-	err = pglogrepl.StartReplication(context.Background(), conn, sync.ReplicationSlot, sysident.XLogPos, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
+	err = pglogrepl.StartReplication(context.Background(), sourceConn, sync.ReplicationSlot, sysident.XLogPos, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("StartReplication failed")
 	}
@@ -335,7 +344,7 @@ func RunSync(sync *data.Sync) (
 
 	for {
 		if time.Now().After(nextStandbyMessageDeadline) {
-			err = pglogrepl.SendStandbyStatusUpdate(context.Background(), conn, pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
+			err = pglogrepl.SendStandbyStatusUpdate(context.Background(), sourceConn, pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
 			if err != nil {
 				return map[string]string{"error": err.Error()}, errors.New("SendStandbyStatusUpdate failed")
 			}
@@ -343,7 +352,7 @@ func RunSync(sync *data.Sync) (
 		}
 
 		ctx, cancel := context.WithDeadline(context.Background(), nextStandbyMessageDeadline)
-		msg, err := conn.ReceiveMessage(ctx)
+		msg, err := sourceConn.ReceiveMessage(ctx)
 		cancel()
 		if err != nil {
 			if pgconn.Timeout(err) {
@@ -387,7 +396,6 @@ func RunSync(sync *data.Sync) (
 					// 	msg.Xid,
 					// )
 					txn = transaction{}
-					lastRelation = relation{}
 				case "Commit":
 					// msg := logicalMsg.(*pglogrepl.CommitMessage)
 					// fmt.Printf(
@@ -405,7 +413,6 @@ func RunSync(sync *data.Sync) (
 						}
 					}
 					txn = transaction{}
-					lastRelation = relation{}
 				case "Origin":
 					msg := logicalMsg.(*pglogrepl.OriginMessage)
 					fmt.Printf(
@@ -477,6 +484,7 @@ func RunSync(sync *data.Sync) (
 						}
 
 						rowVals = append(rowVals, val)
+
 						lastRelation.columns[i].length = length
 					}
 
@@ -624,14 +632,6 @@ func standardWriteSyncInsert(
 	numCols := rowColumnInfo.NumCols
 	zeroIndexedNumCols := numCols - 1
 	colTypes := rowColumnInfo.ColumnIntermediateTypes
-
-	fmt.Printf(
-		"\n\nNumcols: %v, zero indexed: %v, colTypes len: %v, rowVals len: %v",
-		numCols,
-		zeroIndexedNumCols,
-		len(colTypes),
-		len(rowVals),
-	)
 
 	// while in the middle of insert row, add commas at end of values
 	for j := 0; j < zeroIndexedNumCols; j++ {
