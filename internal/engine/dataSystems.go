@@ -17,7 +17,6 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgproto3/v2"
-	"github.com/jackc/pgx/v4"
 )
 
 type column struct {
@@ -268,6 +267,12 @@ func RunSync(sync *data.Sync) (
 		return errProperties, err
 	}
 
+	targetSystem, errProperties, err := GetDs(sync.Target)
+	defer targetSystem.closeDb()
+	if err != nil {
+		return errProperties, err
+	}
+
 	rows, errProperties, err := sourceSystem.execute("show wal_level")
 	if err != nil {
 		return errProperties, err
@@ -308,7 +313,6 @@ func RunSync(sync *data.Sync) (
 		return map[string]string{"error": err.Error()}, errors.New("create publication error")
 	}
 
-	const outputPlugin = "pgoutput"
 	pluginArguments := []string{"proto_version '1'", "publication_names 'sqlpipe_publication'"}
 
 	sysident, err := pglogrepl.IdentifySystem(context.Background(), sourceConn)
@@ -316,34 +320,38 @@ func RunSync(sync *data.Sync) (
 		return map[string]string{"error": err.Error()}, errors.New("IdentifySystem failed")
 	}
 
-	_, err = pglogrepl.CreateReplicationSlot(context.Background(), sourceConn, sync.ReplicationSlot, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
+	createReplicationSlotResult, err := pglogrepl.CreateReplicationSlot(context.Background(), sourceConn, sync.ReplicationSlot, "pgoutput", pglogrepl.CreateReplicationSlotOptions{Temporary: true})
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("CreateReplicationSlot failed")
 	}
-
 	logger.PrintInfo(fmt.Sprintf("Created temporary replication slot: %v", sync.ReplicationSlot), map[string]string{})
 
-	conn, err := pgx.Connect(context.Background(), sourceConnString)
+	conn, err := sql.Open("pgx", sourceConnString)
 	if err != nil {
 		errProperties = map[string]string{"error": err.Error()}
 		return errProperties, errors.New("unable to connect to source system")
 	}
-	defer conn.Close(context.Background())
+	defer conn.Close()
 
-	tx, err := conn.Begin(context.Background())
+	tx, err := conn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		errProperties = map[string]string{"error": err.Error()}
-		return errProperties, errors.New("unable to begin transaction")
+		return errProperties, errors.New("unable to begin data copy transaction")
 	}
 
-	var lsnString string
-	err = tx.QueryRow(context.Background(), "select pg_current_wal_insert_lsn()").Scan(&lsnString)
+	// var lsnString string
+	_, err = tx.Exec("SET TRANSACTION ISOLATION LEVEL repeatable read;")
 	if err != nil {
 		errProperties = map[string]string{"error": err.Error()}
-		return errProperties, errors.New("unable to query current lsn")
+		return errProperties, errors.New("unable to set transaction isolation level")
 	}
-	fmt.Println(lsnString)
-	lsn, err := pglogrepl.ParseLSN(lsnString)
+	_, err = tx.Exec(fmt.Sprintf("set transaction snapshot '%v';", createReplicationSlotResult.SnapshotName))
+	if err != nil {
+		errProperties = map[string]string{"error": err.Error()}
+		return errProperties, errors.New("unable to set transaction isolation level")
+	}
+
+	lsn, err := pglogrepl.ParseLSN(createReplicationSlotResult.ConsistentPoint)
 	if err != nil {
 		errProperties = map[string]string{"error": err.Error()}
 		return errProperties, errors.New("unable to parse lsn")
@@ -353,38 +361,43 @@ func RunSync(sync *data.Sync) (
 
 		tableAndSchema := pkg.GetTableAndSchema(table)
 
-		errProperties, err := RunTransfer(
-			&data.Transfer{
-				Query:        fmt.Sprintf("select * from %v", table),
-				Overwrite:    true,
-				TargetSchema: sync.TargetSchema,
-				TargetTable:  tableAndSchema.TableName,
-				Source:       sync.Source,
-				Target:       sync.Target,
-			},
-		)
+		transfer := data.Transfer{
+			Query:        fmt.Sprintf("select * from %v", table),
+			Overwrite:    true,
+			TargetSchema: sync.TargetSchema,
+			TargetTable:  tableAndSchema.TableName,
+			Source:       sync.Source,
+			Target:       sync.Target,
+		}
+
+		rows, err := tx.Query(fmt.Sprintf("select * from %v", table))
+		if err != nil {
+			errProperties = map[string]string{"error": err.Error()}
+			return errProperties, errors.New("unable to run data copy")
+		}
+
+		rowColumnInfo, errProperties, err := getRowsColumnInfoFromRows(sourceSystem, rows)
+		if err != nil {
+			return errProperties, err
+		}
+
+		errProperties, err = Insert(targetSystem, rows, transfer, rowColumnInfo)
 		if err != nil {
 			return errProperties, err
 		}
 	}
 
-	err = tx.Commit(context.Background())
+	err = tx.Commit()
 	if err != nil {
 		errProperties = map[string]string{"error": err.Error()}
 		return errProperties, fmt.Errorf("error committing")
-	}
-
-	targetSystem, errProperties, err := GetDs(sync.Target)
-	defer targetSystem.closeDb()
-	if err != nil {
-		return errProperties, err
 	}
 
 	err = pglogrepl.StartReplication(context.Background(), sourceConn, sync.ReplicationSlot, lsn, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("StartReplication failed")
 	}
-	logger.PrintInfo(fmt.Sprintf("Logical replication started on slot: %v, at location: %v", sync.ReplicationSlot, lsnString), map[string]string{})
+	logger.PrintInfo(fmt.Sprintf("Logical replication started on slot: %v, at location: %v", sync.ReplicationSlot, createReplicationSlotResult.ConsistentPoint), map[string]string{})
 
 	clientXLogPos := sysident.XLogPos
 	standbyMessageTimeout := time.Second * 10
