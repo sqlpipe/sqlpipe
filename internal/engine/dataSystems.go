@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgproto3/v2"
+	"github.com/jackc/pgx/v4"
 )
 
 type column struct {
@@ -276,24 +277,17 @@ func RunSync(sync *data.Sync) (
 		var wal_level string
 		rows.Scan(&wal_level)
 		if wal_level != "logical" {
-			err = errors.New(`PostgreSQL wal_level MUST be set to logical... Run "ALTER SYSTEM SET wal_level=logical;" and restart the DB`)
+			err = errors.New(`wal_level must be set to "logical". to make this change, run "ALTER SYSTEM SET wal_level=logical;". alternatively, alter your config file. then, restart the DB. more info at https://www.postgresql.org/docs/9.6/runtime-config-wal.html`)
 			errProperties = map[string]string{"error": "wal_level != logical"}
 			return
 		}
 	}
 
-	targetSystem, errProperties, err := GetDs(sync.Target)
-	defer targetSystem.closeDb()
-	if err != nil {
-		return errProperties, err
-	}
-
 	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
-
 	_, _, sourceConnString := sourceSystem.getConnectionInfo()
-	sourceConnString += "?replication=database"
+	sourceReplicationConnString := sourceConnString + "?replication=database"
 
-	sourceConn, err := pgconn.Connect(context.Background(), sourceConnString)
+	sourceConn, err := pgconn.Connect(context.Background(), sourceReplicationConnString)
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("failed to connect to PostgreSQL server")
 	}
@@ -329,11 +323,68 @@ func RunSync(sync *data.Sync) (
 
 	logger.PrintInfo(fmt.Sprintf("Created temporary replication slot: %v", sync.ReplicationSlot), map[string]string{})
 
-	err = pglogrepl.StartReplication(context.Background(), sourceConn, sync.ReplicationSlot, sysident.XLogPos, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
+	conn, err := pgx.Connect(context.Background(), sourceConnString)
+	if err != nil {
+		errProperties = map[string]string{"error": err.Error()}
+		return errProperties, errors.New("unable to connect to source system")
+	}
+	defer conn.Close(context.Background())
+
+	tx, err := conn.Begin(context.Background())
+	if err != nil {
+		errProperties = map[string]string{"error": err.Error()}
+		return errProperties, errors.New("unable to begin transaction")
+	}
+
+	var lsnString string
+	err = tx.QueryRow(context.Background(), "select pg_current_wal_insert_lsn()").Scan(&lsnString)
+	if err != nil {
+		errProperties = map[string]string{"error": err.Error()}
+		return errProperties, errors.New("unable to query current lsn")
+	}
+	fmt.Println(lsnString)
+	lsn, err := pglogrepl.ParseLSN(lsnString)
+	if err != nil {
+		errProperties = map[string]string{"error": err.Error()}
+		return errProperties, errors.New("unable to parse lsn")
+	}
+
+	for _, table := range sync.Tables {
+
+		tableAndSchema := pkg.GetTableAndSchema(table)
+
+		errProperties, err := RunTransfer(
+			&data.Transfer{
+				Query:        fmt.Sprintf("select * from %v", table),
+				Overwrite:    true,
+				TargetSchema: sync.TargetSchema,
+				TargetTable:  tableAndSchema.TableName,
+				Source:       sync.Source,
+				Target:       sync.Target,
+			},
+		)
+		if err != nil {
+			return errProperties, err
+		}
+	}
+
+	err = tx.Commit(context.Background())
+	if err != nil {
+		errProperties = map[string]string{"error": err.Error()}
+		return errProperties, fmt.Errorf("error committing")
+	}
+
+	targetSystem, errProperties, err := GetDs(sync.Target)
+	defer targetSystem.closeDb()
+	if err != nil {
+		return errProperties, err
+	}
+
+	err = pglogrepl.StartReplication(context.Background(), sourceConn, sync.ReplicationSlot, lsn, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("StartReplication failed")
 	}
-	logger.PrintInfo(fmt.Sprintf("Logical replication started on slot: %v", sync.ReplicationSlot), map[string]string{})
+	logger.PrintInfo(fmt.Sprintf("Logical replication started on slot: %v, at location: %v", sync.ReplicationSlot, lsnString), map[string]string{})
 
 	clientXLogPos := sysident.XLogPos
 	standbyMessageTimeout := time.Second * 10

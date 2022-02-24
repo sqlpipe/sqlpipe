@@ -16,6 +16,7 @@ type Sync struct {
 	Target          Connection `json:"-"`
 	Query           string     `json:"query"`
 	Tables          []string   `json:"tables"`
+	TargetSchema    string     `json:"targetSchema"`
 	Status          string     `json:"status"`
 	Error           string     `json:"error"`
 	ErrorProperties string     `json:"errorProperties"`

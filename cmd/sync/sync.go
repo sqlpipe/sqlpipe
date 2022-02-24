@@ -2,16 +2,19 @@ package sync
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	"github.com/calmitchell617/sqlpipe/internal/engine"
 	"github.com/calmitchell617/sqlpipe/internal/globals"
+	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
 	"github.com/calmitchell617/sqlpipe/internal/validator"
-	"github.com/k0kubun/pp/v3"
+	"github.com/calmitchell617/sqlpipe/pkg"
 	"github.com/spf13/cobra"
 )
 
 var sync data.Sync
+var force bool
 
 var SyncCmd = &cobra.Command{
 	Use:   "sync",
@@ -36,20 +39,32 @@ func init() {
 	SyncCmd.Flags().StringVar(&sync.Target.DbName, "target-db-name", "", "Target system's DB name")
 	SyncCmd.Flags().StringVar(&sync.Target.Username, "target-username", "", "Target username")
 	SyncCmd.Flags().StringVar(&sync.Target.Password, "target-password", "", "Target password")
+	SyncCmd.Flags().StringVar(&sync.TargetSchema, "target-schema", "", "Target schema")
 	SyncCmd.Flags().BoolVar(&globals.Analytics, "analytics", true, "Send anonymized usage data to SQLpipe for product improvements")
 
 	SyncCmd.Flags().StringSliceVar(&sync.Tables, "tables", []string{}, "Specify the tables you want synced, with a schema name if necessary.")
 	SyncCmd.Flags().StringVar(&sync.ReplicationSlot, "replication-slot", "sqlpipe_slot", "Replication slot name")
 
+	SyncCmd.Flags().BoolVar(&force, "force", false, "Do not ask for confirmation")
+
 }
 
 func runSync(cmd *cobra.Command, args []string) {
+	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
 	v := validator.New()
 	if validateSync(v); !v.Valid() {
-		fmt.Printf("\nErrors validating your input:\n\n")
-		pp.Print(v.Errors)
+		logger.PrintInfo("Exiting.", v.Errors)
 		return
 	}
+
+	if !force {
+		confirmed := pkg.Confirm(fmt.Sprintf(`replicate the db? This will drop the publication "%v", if it exists, and recreate it. it will create a replication slot by the same name and subscribe to it.`, sync.ReplicationSlot))
+		if !confirmed {
+			logger.PrintInfo("Exiting.", nil)
+			return
+		}
+	}
+
 	errProperties, err := engine.RunSync(&sync)
 	if err != nil {
 		fmt.Println(errProperties, err)
@@ -68,7 +83,25 @@ func validateSync(v *validator.Validator) {
 	switch sync.Target.DsType {
 	case "snowflake":
 		v.Check(sync.Target.AccountId != "", "target-account-id", "A target account ID is required for Snowflake connections")
-	default:
+		v.Check(sync.TargetSchema != "", "target-schema", "A target schema is required for Snowflake connections")
+	case "postgresql":
+		v.Check(sync.TargetSchema != "", "target-schema", "A target schema is required for postgresql connections")
+		v.Check(sync.Target.Hostname != "", "target-hostname", "A target hostname is required")
+		v.Check(sync.Target.Port != 0, "target-port", "A target port is required")
+	case "mysql":
+		v.Check(sync.TargetSchema == "", "target-schema", "target schema must be nil for mysql connections")
+		v.Check(sync.Target.Hostname != "", "target-hostname", "A target hostname is required")
+		v.Check(sync.Target.Port != 0, "target-port", "A target port is required")
+	case "mssql":
+		v.Check(sync.TargetSchema != "", "target-schema", "A target schema is required for mssql connections")
+		v.Check(sync.Target.Hostname != "", "target-hostname", "A target hostname is required")
+		v.Check(sync.Target.Port != 0, "target-port", "A target port is required")
+	case "oracle":
+		v.Check(sync.TargetSchema == "", "target-schema", "target schema must be nil for oracle connections")
+		v.Check(sync.Target.Hostname != "", "target-hostname", "A target hostname is required")
+		v.Check(sync.Target.Port != 0, "target-port", "A target port is required")
+	case "redshift":
+		v.Check(sync.TargetSchema != "", "target-schema", "A target schema is required for redshift connections")
 		v.Check(sync.Target.Hostname != "", "target-hostname", "A target hostname is required")
 		v.Check(sync.Target.Port != 0, "target-port", "A target port is required")
 	}

@@ -38,7 +38,7 @@ run/init: db/init
 		--max-concurrency 20 \
 		--create-admin
 
-## run/sync: build and run a clis ync
+## run/sync: build and run a cli sync
 .PHONY: run/sync
 run/sync: build
 	./sqlpipe sync \
@@ -52,9 +52,11 @@ run/sync: build
 		--target-hostname localhost  \
 		--target-port 5432 \
 		--target-username postgres \
+		--target-schema public \
 		--target-password ${SQLPIPE-PASSWORD} \
 		--target-db-name postgres \
-		--tables="wide_table"
+		--tables="wide_table" \
+		--force
 
 ## db/init: Initialize a fresh instance of postgresql
 .PHONY: db/init

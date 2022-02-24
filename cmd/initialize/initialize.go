@@ -1,16 +1,15 @@
 package initialize
 
 import (
-	"bufio"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
+	"github.com/calmitchell617/sqlpipe/pkg"
 	"github.com/spf13/cobra"
 )
 
@@ -100,7 +99,7 @@ func initialize(cmd *cobra.Command, args []string) {
 	}
 
 	if !force {
-		confirmed := confirm()
+		confirmed := pkg.Confirm("initialize the database?")
 		if !confirmed {
 			logger.PrintInfo("Exiting.", nil)
 			return
@@ -116,29 +115,6 @@ func initialize(cmd *cobra.Command, args []string) {
 
 	runMigrations(db)
 	logger.PrintInfo("successfully migrated DB", nil)
-}
-
-func confirm() bool {
-	reader := bufio.NewReader(os.Stdin)
-	var answer bool
-
-	for {
-		fmt.Printf("\nAre you sure you want to initialize the database at DSN %s?\n\n**************************************************\n** WARNING: The target database should be empty **\n**************************************************\n\nRespnd Y or N -> ", dsn)
-		text, _ := reader.ReadString('\n')
-		text = strings.Replace(text, "\n", "", -1)
-
-		if strings.Compare("Y", strings.ToUpper(text)) == 0 {
-			answer = true
-			break
-		} else if strings.Compare("N", strings.ToUpper(text)) == 0 {
-			answer = false
-			break
-		} else {
-			fmt.Println("Respond Y or N")
-		}
-	}
-
-	return answer
 }
 
 func openDB(dsn string) (*sql.DB, error) {
