@@ -35,7 +35,7 @@ func (dsConn MSSQL) writeSyncInsert(
 ) (
 	query string,
 ) {
-	return
+	return standardWriteSyncInsert(dsConn, row, relation, rowsColumnInfo)
 }
 
 func getNewMSSQL(
@@ -324,6 +324,11 @@ func mssqlWriteDateTime(value interface{}, terminator string) string {
 	}
 
 	return returnVal
+}
+
+func mssqlWriteDateTimeFromPostgreSQLSync(value interface{}, terminator string) string {
+	value = strings.Split(fmt.Sprint(value), "+")[0]
+	return fmt.Sprintf("CONVERT(DATETIME2, '%s', 121)%s", value, terminator)
 }
 
 func mssqlWriteDateTimeWithTZ(value interface{}, terminator string) string {
@@ -676,35 +681,6 @@ func (dsConn MSSQL) getCreateTableType(
 	return createType
 }
 
-var mssqlIntermediateTypes = map[string]string{
-	"BIGINT":           "MSSQL_BIGINT",
-	"BIT":              "MSSQL_BIT",
-	"DECIMAL":          "MSSQL_DECIMAL",
-	"INT":              "MSSQL_INT",
-	"MONEY":            "MSSQL_MONEY",
-	"SMALLINT":         "MSSQL_SMALLINT",
-	"SMALLMONEY":       "MSSQL_SMALLMONEY",
-	"TINYINT":          "MSSQL_TINYINT",
-	"FLOAT":            "MSSQL_FLOAT",
-	"REAL":             "MSSQL_REAL",
-	"DATE":             "MSSQL_DATE",
-	"DATETIME2":        "MSSQL_DATETIME2",
-	"DATETIME":         "MSSQL_DATETIME",
-	"DATETIMEOFFSET":   "MSSQL_DATETIMEOFFSET",
-	"SMALLDATETIME":    "MSSQL_SMALLDATETIME",
-	"TIME":             "MSSQL_TIME",
-	"CHAR":             "MSSQL_CHAR",
-	"VARCHAR":          "MSSQL_VARCHAR",
-	"TEXT":             "MSSQL_TEXT",
-	"NCHAR":            "MSSQL_NCHAR",
-	"NVARCHAR":         "MSSQL_NVARCHAR",
-	"NTEXT":            "MSSQL_NTEXT",
-	"BINARY":           "MSSQL_BINARY",
-	"VARBINARY":        "MSSQL_VARBINARY",
-	"UNIQUEIDENTIFIER": "MSSQL_UNIQUEIDENTIFIER",
-	"XML":              "MSSQL_XML",
-}
-
 var mssqlValWriters = map[string]func(value interface{}, terminator string) string{
 
 	// Generics
@@ -755,6 +731,17 @@ var mssqlValWriters = map[string]func(value interface{}, terminator string) stri
 	"PostgreSQL_TSQUERY":       writeInsertEscapedString,
 	"PostgreSQL_TSVECTOR":      writeInsertEscapedString,
 	"PostgreSQL_XML":           writeInsertEscapedString,
+	// Syncs
+	"PostgreSQL_BIGINT_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_BOOL_SYNC":        writeNumberFromPostgreSQLBoolSync,
+	"PostgreSQL_DATE_SYNC":        writeInsertStringNoEscape,
+	"PostgreSQL_DOUBLE_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_INT_SYNC":         writeInsertRawStringNoQuotes,
+	"PostgreSQL_FLOAT_SYNC":       writeInsertRawStringNoQuotes,
+	"PostgreSQL_SMALLINT_SYNC":    writeInsertRawStringNoQuotes,
+	"PostgreSQL_TIMESTAMP_SYNC":   mssqlWriteDateTimeFromPostgreSQLSync,
+	"PostgreSQL_TIMESTAMPTZ_SYNC": mssqlWriteDateTimeFromPostgreSQLSync,
+	"NIL":                         postgresqlWriteNone,
 
 	// MYSQL
 

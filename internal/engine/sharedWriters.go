@@ -182,6 +182,17 @@ func writeInsertStringNoEscape(value interface{}, terminator string) string {
 	return fmt.Sprintf("'%s'%s", value, terminator)
 }
 
+func writeNumberFromPostgreSQLBoolSync(value interface{}, terminator string) string {
+	var returnVal string
+	switch fmt.Sprint(value) {
+	case "t":
+		returnVal = fmt.Sprintf("1%s", terminator)
+	default:
+		returnVal = fmt.Sprintf("0%s", terminator)
+	}
+	return returnVal
+}
+
 func postgresqlWriteNone(value interface{}, terminator string) string {
 	return "NULL,"
 }

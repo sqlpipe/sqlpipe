@@ -30,7 +30,7 @@ func (dsConn Redshift) writeSyncInsert(
 ) (
 	query string,
 ) {
-	return
+	return standardWriteSyncInsert(dsConn, row, relation, rowsColumnInfo)
 }
 
 func (dsConn Redshift) closeDb() {
@@ -627,6 +627,17 @@ var redshiftValWriters = map[string]func(value interface{}, terminator string) s
 	"PostgreSQL_TSQUERY":       writeInsertEscapedString,
 	"PostgreSQL_TSVECTOR":      writeInsertEscapedString,
 	"PostgreSQL_XML":           writeInsertEscapedString,
+	// Syncs
+	"PostgreSQL_BIGINT_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_BOOL_SYNC":        writeInsertStringNoEscape,
+	"PostgreSQL_DATE_SYNC":        writeInsertStringNoEscape,
+	"PostgreSQL_DOUBLE_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_INT_SYNC":         writeInsertRawStringNoQuotes,
+	"PostgreSQL_FLOAT_SYNC":       writeInsertRawStringNoQuotes,
+	"PostgreSQL_SMALLINT_SYNC":    writeInsertRawStringNoQuotes,
+	"PostgreSQL_TIMESTAMP_SYNC":   writeInsertStringNoEscape,
+	"PostgreSQL_TIMESTAMPTZ_SYNC": writeInsertStringNoEscape,
+	"NIL":                         postgresqlWriteNone,
 
 	// MYSQL
 

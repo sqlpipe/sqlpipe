@@ -99,47 +99,47 @@ env/insert:
 # env/spinup: Spinup cloud instances
 .PHONY: env/spinup
 env/spinup:
-	aws rds create-db-instance \
-		--db-instance-identifier sqlpipe-test-postgresql \
-		--db-name testing \
-		--backup-retention-period 0 \
-		--db-instance-class db.t3.micro \
-		--engine postgres \
-		--no-multi-az \
-		--vpc-security-group-ids ${rdsSecurityGroup} \
-		--master-username sqlpipe \
-		--master-user-password ${SQLPIPE-PASSWORD} \
-		--storage-type gp2 \
-		--allocated-storage 20 \
-		--no-enable-performance-insights >/dev/null;
-
-	aws rds create-db-instance \
-		--db-instance-identifier sqlpipe-test-mysql \
-		--db-name testing \
-		--backup-retention-period 0 \
-		--db-instance-class db.t3.micro \
-		--engine mysql \
-		--no-multi-az \
-		--vpc-security-group-ids ${rdsSecurityGroup} \
-		--master-username sqlpipe \
-		--master-user-password ${SQLPIPE-PASSWORD} \
-		--storage-type gp2 \
-		--allocated-storage 20 \
-		--no-enable-performance-insights >/dev/null;
-
 	# aws rds create-db-instance \
-	# 	--db-instance-identifier sqlpipe-test-mssql \
+	# 	--db-instance-identifier sqlpipe-test-postgresql \
+	# 	--db-name testing \
 	# 	--backup-retention-period 0 \
-	# 	--db-instance-class db.t3.small \
-	# 	--engine sqlserver-web \
+	# 	--db-instance-class db.t3.micro \
+	# 	--engine postgres \
 	# 	--no-multi-az \
 	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
 	# 	--master-username sqlpipe \
 	# 	--master-user-password ${SQLPIPE-PASSWORD} \
 	# 	--storage-type gp2 \
 	# 	--allocated-storage 20 \
-	# 	--license-model license-included \
 	# 	--no-enable-performance-insights >/dev/null;
+
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-mysql \
+	# 	--db-name testing \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.micro \
+	# 	--engine mysql \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--no-enable-performance-insights >/dev/null;
+
+	aws rds create-db-instance \
+		--db-instance-identifier sqlpipe-test-mssql \
+		--backup-retention-period 0 \
+		--db-instance-class db.t3.small \
+		--engine sqlserver-web \
+		--no-multi-az \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--master-username sqlpipe \
+		--master-user-password ${SQLPIPE-PASSWORD} \
+		--storage-type gp2 \
+		--allocated-storage 20 \
+		--license-model license-included \
+		--no-enable-performance-insights >/dev/null;
 
 	# aws rds create-db-instance \
 	# 	--db-instance-identifier sqlpipe-test-oracle \
@@ -156,14 +156,14 @@ env/spinup:
 	# 	--license-model license-included \
 	# 	--no-enable-performance-insights >/dev/null;
 
-	# aws redshift create-cluster \
-	# 	--node-type dc2.large \
-	# 	--master-username sqlpipe \
-	# 	--db-name testing \
-	# 	--cluster-type single-node \
-	# 	--master-user-password ${SQLPIPE-PASSWORD} \
-	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
-	# 	--cluster-identifier sqlpipe-test-redshift >/dev/null;
+	aws redshift create-cluster \
+		--node-type dc2.large \
+		--master-username sqlpipe \
+		--db-name testing \
+		--cluster-type single-node \
+		--master-user-password ${SQLPIPE-PASSWORD} \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--cluster-identifier sqlpipe-test-redshift >/dev/null;
 
 # env/teardown: Spin down cloud instances
 .PHONY: env/teardown
