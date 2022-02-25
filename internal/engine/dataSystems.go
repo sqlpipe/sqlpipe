@@ -385,6 +385,7 @@ func RunSync(sync *data.Sync) (
 		if err != nil {
 			return errProperties, err
 		}
+		rows.Close()
 	}
 
 	err = tx.Commit()
@@ -833,6 +834,7 @@ func Insert(
 	errProperties map[string]string,
 	err error,
 ) {
+	defer rows.Close()
 
 	if transfer.Overwrite {
 		errProperties, err = dsConn.dropTable(transfer)
