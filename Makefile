@@ -55,7 +55,7 @@ run/sync: build
 		--target-schema public \
 		--target-password ${SQLPIPE-PASSWORD} \
 		--target-db-name postgres \
-		--tables="wide_table" \
+		--tables="wide_table,load_table" \
 		--force
 
 ## db/init: Initialize a fresh instance of postgresql

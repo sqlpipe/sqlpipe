@@ -471,10 +471,11 @@ func RunSync(sync *data.Sync) (
 					// )
 
 					for _, query := range txn.queries {
-						_, errProperties, err := targetSystem.execute(query)
+						rows, errProperties, err := targetSystem.execute(query)
 						if err != nil {
 							fmt.Println(err, errProperties)
 						}
+						rows.Close()
 					}
 					txn = transaction{}
 				case "Origin":
