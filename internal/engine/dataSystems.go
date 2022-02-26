@@ -288,6 +288,63 @@ func RunSync(sync *data.Sync) (
 		}
 	}
 
+	for _, table := range sync.Tables {
+
+		tableAndSchema := pkg.GetTableAndSchema(table)
+		if !tableAndSchema.HasSchema {
+			tableAndSchema.SchemaName = "public"
+		}
+
+		tableCheckRows, errProperties, err := sourceSystem.execute(
+			fmt.Sprintf(`
+				select
+					CASE
+						relreplident
+						WHEN 'd' THEN 'default'
+						WHEN 'n' THEN 'nothing'
+						WHEN 'f' THEN 'full'
+						WHEN 'i' THEN 'index'
+					END AS replica_identity,
+					(count(indisprimary) > 0) :: bool as has_primary_key
+				from
+					pg_class
+					inner join pg_namespace on pg_class.relnamespace = pg_namespace.oid
+					left join pg_index on pg_class.oid = pg_index.indrelid
+				where
+					pg_class.relname = '%v'
+					and pg_namespace.nspname = '%v'
+				group by
+					relname,
+					relreplident;
+			`,
+				tableAndSchema.TableName,
+				tableAndSchema.SchemaName,
+			),
+		)
+		if err != nil {
+			return errProperties, err
+		}
+		var replicaIdentity string
+		var hasPrimaryKey bool
+		for tableCheckRows.Next() {
+			tableCheckRows.Scan(&replicaIdentity, &hasPrimaryKey)
+		}
+		tableCheckRows.Close()
+
+		switch replicaIdentity {
+		case "default", "nothing":
+			if !hasPrimaryKey {
+				return map[string]string{
+						"error": fmt.Sprintf("cannot replicate table with no primary key and '%v' replica identity.", replicaIdentity),
+					}, fmt.Errorf(
+						"cannot replicate %v.%v table. add a primary key to the table, or alter the replica identity",
+						tableAndSchema.SchemaName,
+						tableAndSchema.TableName,
+					)
+			}
+		}
+	}
+
 	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
 	_, _, sourceConnString := sourceSystem.getConnectionInfo()
 	sourceReplicationConnString := sourceConnString + "?replication=database"
