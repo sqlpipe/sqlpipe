@@ -453,23 +453,23 @@ func RunSync(sync *data.Sync) (
 
 				switch logicalMsg.Type().String() {
 				case "Begin":
-					// msg := logicalMsg.(*pglogrepl.BeginMessage)
-					// fmt.Printf(
-					// 	"Begin msg... FinalLSN: %v, CommitTime: %v, Xid: %v",
-					// 	msg.FinalLSN,
-					// 	msg.CommitTime,
-					// 	msg.Xid,
-					// )
+					msg := logicalMsg.(*pglogrepl.BeginMessage)
+					fmt.Printf(
+						"Begin msg... FinalLSN: %v, CommitTime: %v, Xid: %v",
+						msg.FinalLSN,
+						msg.CommitTime,
+						msg.Xid,
+					)
 					txn = transaction{}
 				case "Commit":
-					// msg := logicalMsg.(*pglogrepl.CommitMessage)
-					// fmt.Printf(
-					// 	"\nCommit msg... Flags: %v, CommitLSN: %v, TransactionEndLSN: %v, CommitTime: %v\n",
-					// 	msg.Flags,
-					// 	msg.CommitLSN,
-					// 	msg.TransactionEndLSN,
-					// 	msg.CommitTime,
-					// )
+					msg := logicalMsg.(*pglogrepl.CommitMessage)
+					fmt.Printf(
+						"\nCommit msg... Flags: %v, CommitLSN: %v, TransactionEndLSN: %v, CommitTime: %v\n",
+						msg.Flags,
+						msg.CommitLSN,
+						msg.TransactionEndLSN,
+						msg.CommitTime,
+					)
 
 					for _, query := range txn.queries {
 						rows, errProperties, err := targetSystem.execute(query)
@@ -488,27 +488,20 @@ func RunSync(sync *data.Sync) (
 					)
 				case "Relation":
 					msg := logicalMsg.(*pglogrepl.RelationMessage)
-					// fmt.Printf(
-					// 	"\nRelation msg... RelationID: %v, Namespace: %v, RelationName: %v, ReplicaIdentity: %v, ColumnNum: %v",
-					// 	msg.RelationID,
-					// 	msg.Namespace,
-					// 	msg.RelationName,
-					// 	msg.ReplicaIdentity,
-					// 	msg.ColumnNum,
-					// )
+					fmt.Printf(
+						"\nRelation msg... RelationID: %v, Namespace: %v, RelationName: %v, ReplicaIdentity: %v, ColumnNum: %v",
+						msg.RelationID,
+						msg.Namespace,
+						msg.RelationName,
+						msg.ReplicaIdentity,
+						msg.ColumnNum,
+					)
 
 					lastRelation.namespace = msg.Namespace
 					lastRelation.name = msg.RelationName
+					lastRelation.columns = []column{}
 
 					for _, col := range msg.Columns {
-						// fmt.Printf(
-						// 	"\n    Flags: %v, Name: %v, DataType: %v, TypeModifier: %v",
-						// 	col.Flags,
-						// 	col.Name,
-						// 	col.DataType,
-						// 	col.TypeModifier,
-						// )
-
 						lastRelation.columns = append(
 							lastRelation.columns,
 							column{
@@ -530,11 +523,11 @@ func RunSync(sync *data.Sync) (
 				case "Insert":
 					msg := logicalMsg.(*pglogrepl.InsertMessage)
 
-					// fmt.Printf(
-					// 	"\nInsert msg... RelationID: %v, Tuple.ColumnNum: %v",
-					// 	msg.RelationID,
-					// 	msg.Tuple.ColumnNum,
-					// )
+					fmt.Printf(
+						"\nInsert msg... RelationID: %v, Tuple.ColumnNum: %v",
+						msg.RelationID,
+						msg.Tuple.ColumnNum,
+					)
 
 					rowVals := []string{}
 
