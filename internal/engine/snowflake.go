@@ -32,7 +32,7 @@ func (dsConn Snowflake) writeSyncInsert(
 ) (
 	query string,
 ) {
-	return
+	return standardWriteSyncInsert(dsConn, row, relation, rowsColumnInfo)
 }
 
 func (dsConn Snowflake) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
@@ -763,22 +763,6 @@ func snowflakeWriteBinaryfromBytes(value interface{}, terminator string) string 
 	return fmt.Sprintf("to_binary('%x')%s", value, terminator)
 }
 
-var snowflakeIntermediateTypes = map[string]string{
-	"FIXED":         "Snowflake_NUMBER",
-	"REAL":          "Snowflake_REAL",
-	"TEXT":          "Snowflake_TEXT",
-	"BOOLEAN":       "Snowflake_BOOLEAN",
-	"DATE":          "Snowflake_DATE",
-	"TIME":          "Snowflake_TIME",
-	"TIMESTAMP_LTZ": "Snowflake_TIMESTAMP_LTZ",
-	"TIMESTAMP_NTZ": "Snowflake_TIMESTAMP_NTZ",
-	"TIMESTAMP_TZ":  "Snowflake_TIMESTAMP_TZ",
-	"VARIANT":       "Snowflake_VARIANT", // https://media.giphy.com/media/JYfcUkZgQxZgx1TlZM/giphy.gif
-	"OBJECT":        "Snowflake_OBJECT",
-	"ARRAY":         "Snowflake_ARRAY",
-	"BINARY":        "Snowflake_BINARY",
-}
-
 var snowflakeTimeFormat = "2006-01-02 15:04:05.000000"
 
 func snowflakeWriteTimestampFromTimeMidTurbo(value interface{}, builder *strings.Builder) {
@@ -1195,6 +1179,17 @@ var snowflakeValWriters = map[string]func(value interface{}, terminator string) 
 	"PostgreSQL_TSQUERY":       writeInsertEscapedString,
 	"PostgreSQL_TSVECTOR":      writeInsertEscapedString,
 	"PostgreSQL_XML":           writeInsertEscapedString,
+	// Syncs
+	"PostgreSQL_BIGINT_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_BOOL_SYNC":        writeInsertStringNoEscape,
+	"PostgreSQL_DATE_SYNC":        writeInsertStringNoEscape,
+	"PostgreSQL_DOUBLE_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_INT_SYNC":         writeInsertRawStringNoQuotes,
+	"PostgreSQL_FLOAT_SYNC":       writeInsertRawStringNoQuotes,
+	"PostgreSQL_SMALLINT_SYNC":    writeInsertRawStringNoQuotes,
+	"PostgreSQL_TIMESTAMP_SYNC":   writeInsertStringNoEscape,
+	"PostgreSQL_TIMESTAMPTZ_SYNC": writeInsertStringNoEscape,
+	"NIL":                         postgresqlWriteNone,
 
 	// MYSQL
 

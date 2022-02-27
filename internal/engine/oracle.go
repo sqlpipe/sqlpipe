@@ -21,13 +21,32 @@ type Oracle struct {
 }
 
 func (dsConn Oracle) writeSyncInsert(
-	row []string,
+	rowVals []string,
 	relation relation,
-	rowsColumnInfo RowsColumnInfo,
+	rowColumnInfo RowsColumnInfo,
 ) (
 	query string,
 ) {
-	return
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString(standardGetQueryStarter(relation.name, rowColumnInfo.ColumnNames))
+
+	numCols := rowColumnInfo.NumCols
+	zeroIndexedNumCols := numCols - 1
+	colTypes := rowColumnInfo.ColumnIntermediateTypes
+
+	// while in the middle of insert row, add commas at end of values
+	for j := 0; j < zeroIndexedNumCols; j++ {
+		switch rowVals[j] {
+		case "":
+			queryBuilder.WriteString(dsConn.getValToWriteMidRow("NIL", rowVals[j]))
+		default:
+			queryBuilder.WriteString(dsConn.getValToWriteMidRow(colTypes[j], rowVals[j]))
+		}
+	}
+
+	queryBuilder.WriteString(dsConn.getValToWriteRowEndSync(colTypes[zeroIndexedNumCols], rowVals[zeroIndexedNumCols]))
+
+	return queryBuilder.String()
 }
 
 func (dsConn Oracle) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
@@ -377,6 +396,10 @@ func (dsConn Oracle) getValToWriteRowEnd(valType string, value interface{}) stri
 	return oracleValWriters[valType](value, " FROM dual UNION ALL ")
 }
 
+func (dsConn Oracle) getValToWriteRowEndSync(valType string, value interface{}) string {
+	return oracleValWriters[valType](value, ")")
+}
+
 func (dsConn Oracle) getValToWriteRaw(valType string, value interface{}) string {
 	return oracleValWriters[valType](value, "")
 }
@@ -413,6 +436,18 @@ func oracleWriteDateFromString(value interface{}, terminator string) string {
 
 func oracleWriteDatetimeFromString(value interface{}, terminator string) string {
 	return fmt.Sprintf("TO_TIMESTAMP('%s', 'YYYY-MM-DD HH24:MI:SS.FF')%s", value, terminator)
+}
+
+func oracleWriteDatetimeFromPostgreSQLSync(value interface{}, terminator string) string {
+	valueString := strings.Split(fmt.Sprint(value), "+")[0]
+
+	fmt.Printf("\n\nTO_TIMESTAMP('%s', 'YYYY-MM-DD HH24:MI:SS')%s\n\n", valueString, terminator)
+	return fmt.Sprintf("TO_TIMESTAMP('%s', 'YYYY-MM-DD HH24:MI:SS')%s", valueString, terminator)
+}
+
+func oracleWriteDateFromPostgreSQLSync(value interface{}, terminator string) string {
+	fmt.Printf("\n\nTO_DATE('%s', 'YYYY-MM-DD')%s\n\n", value, terminator)
+	return fmt.Sprintf("TO_DATE('%s', 'YYYY-MM-DD')%s", value, terminator)
 }
 
 func oracleWriteDatetimeFromTime(value interface{}, terminator string) string {
@@ -774,23 +809,6 @@ func (dsConn Oracle) getCreateTableType(
 	return createType
 }
 
-var oracleIntermediateTypes = map[string]string{
-	"CHAR":             "Oracle_CHAR",
-	"NCHAR":            "Oracle_NCHAR",
-	"OCIClobLocator":   "Oracle_OCIClobLocator",
-	"OCIBlobLocator":   "Oracle_OCIBlobLocator",
-	"LONG":             "Oracle_LONG",
-	"NUMBER":           "Oracle_NUMBER",
-	"IBFloat":          "Oracle_IBFloat",
-	"IBDouble":         "Oracle_IBDouble",
-	"DATE":             "Oracle_DATE",
-	"TimeStampDTY":     "Oracle_TimeStampDTY",
-	"TimeStampTZ_DTY":  "Oracle_TimeStampTZ_DTY",
-	"TimeStampLTZ_DTY": "Oracle_TimeStampLTZ_DTY",
-	"NOT":              "Oracle_NOT",
-	"OracleType(109)":  "Oracle_OracleType(109)",
-}
-
 var oracleValWriters = map[string]func(value interface{}, terminator string) string{
 
 	// Generics
@@ -858,6 +876,17 @@ var oracleValWriters = map[string]func(value interface{}, terminator string) str
 	"PostgreSQL_TSQUERY":       writeInsertEscapedString,
 	"PostgreSQL_TSVECTOR":      writeInsertEscapedString,
 	"PostgreSQL_XML":           writeInsertEscapedString,
+	// Syncs
+	"PostgreSQL_BIGINT_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_BOOL_SYNC":        writeNumberFromPostgreSQLBoolSync,
+	"PostgreSQL_DATE_SYNC":        oracleWriteDateFromPostgreSQLSync,
+	"PostgreSQL_DOUBLE_SYNC":      writeInsertRawStringNoQuotes,
+	"PostgreSQL_INT_SYNC":         writeInsertRawStringNoQuotes,
+	"PostgreSQL_FLOAT_SYNC":       writeInsertRawStringNoQuotes,
+	"PostgreSQL_SMALLINT_SYNC":    writeInsertRawStringNoQuotes,
+	"PostgreSQL_TIMESTAMP_SYNC":   oracleWriteDatetimeFromPostgreSQLSync,
+	"PostgreSQL_TIMESTAMPTZ_SYNC": oracleWriteDatetimeFromPostgreSQLSync,
+	"NIL":                         postgresqlWriteNone,
 
 	// MySQL
 	"MySQL_BIT":       oracleWriteBlob,
