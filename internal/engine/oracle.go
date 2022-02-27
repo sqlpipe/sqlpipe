@@ -440,13 +440,10 @@ func oracleWriteDatetimeFromString(value interface{}, terminator string) string 
 
 func oracleWriteDatetimeFromPostgreSQLSync(value interface{}, terminator string) string {
 	valueString := strings.Split(fmt.Sprint(value), "+")[0]
-
-	fmt.Printf("\n\nTO_TIMESTAMP('%s', 'YYYY-MM-DD HH24:MI:SS')%s\n\n", valueString, terminator)
 	return fmt.Sprintf("TO_TIMESTAMP('%s', 'YYYY-MM-DD HH24:MI:SS')%s", valueString, terminator)
 }
 
 func oracleWriteDateFromPostgreSQLSync(value interface{}, terminator string) string {
-	fmt.Printf("\n\nTO_DATE('%s', 'YYYY-MM-DD')%s\n\n", value, terminator)
 	return fmt.Sprintf("TO_DATE('%s', 'YYYY-MM-DD')%s", value, terminator)
 }
 
