@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 func Confirm(action string) bool {
@@ -83,6 +84,13 @@ func Max64(a, b int64) int64 {
 }
 
 func Background(fn func()) {
+	go func() {
+		fn()
+	}()
+}
+
+func BackgroundWithWg(fn func(), wg *sync.WaitGroup) {
+	defer wg.Done()
 	go func() {
 		fn()
 	}()

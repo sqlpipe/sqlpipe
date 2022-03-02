@@ -39,6 +39,17 @@ func (dsConn Snowflake) execute(query string) (rows *sql.Rows, errProperties map
 	return standardExecute(query, dsConn.dsType, dsConn.db)
 }
 
+func (dsConn Snowflake) workerPoolExecute(ch chan string, wg *sync.WaitGroup) {
+	for query := range ch {
+		rows, errProperties, err := dsConn.execute(query)
+		if err != nil {
+			fmt.Println(err, errProperties)
+		}
+		rows.Close()
+	}
+	wg.Done()
+}
+
 func (dsConn Snowflake) closeDb() {
 	dsConn.db.Close()
 }

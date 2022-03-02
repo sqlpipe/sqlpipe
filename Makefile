@@ -38,10 +38,10 @@ run/init: db/init
 		--max-concurrency 20 \
 		--create-admin
 
-## run/sync: build and run a cli sync
-.PHONY: run/sync
-run/sync: build
-	./sqlpipe sync \
+## run/replicate: build and run a cli replication
+.PHONY: run/replicate
+run/replicate: build
+	./sqlpipe replicate \
 		--source-ds-type postgresql \
 		--source-hostname localhost  \
 		--source-port 5432 \

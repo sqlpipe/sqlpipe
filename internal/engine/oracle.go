@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
@@ -51,6 +52,17 @@ func (dsConn Oracle) writeSyncInsert(
 
 func (dsConn Oracle) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
 	return standardExecute(query, dsConn.dsType, dsConn.db)
+}
+
+func (dsConn Oracle) workerPoolExecute(ch chan string, wg *sync.WaitGroup) {
+	for query := range ch {
+		rows, errProperties, err := dsConn.execute(query)
+		if err != nil {
+			fmt.Println(err, errProperties)
+		}
+		rows.Close()
+	}
+	wg.Done()
 }
 
 func (dsConn Oracle) closeDb() {

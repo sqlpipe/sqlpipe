@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/calmitchell617/sqlpipe/internal/data"
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -21,6 +22,17 @@ type Redshift struct {
 
 func (dsConn Redshift) execute(query string) (rows *sql.Rows, errProperties map[string]string, err error) {
 	return standardExecute(query, dsConn.dsType, dsConn.db)
+}
+
+func (dsConn Redshift) workerPoolExecute(ch chan string, wg *sync.WaitGroup) {
+	for query := range ch {
+		rows, errProperties, err := dsConn.execute(query)
+		if err != nil {
+			fmt.Println(err, errProperties)
+		}
+		rows.Close()
+	}
+	wg.Done()
 }
 
 func (dsConn Redshift) writeSyncInsert(

@@ -107,6 +107,8 @@ type DsConnection interface {
 	// Bottom level func where queries actually get run
 	execute(query string) (rows *sql.Rows, errProperties map[string]string, err error)
 
+	workerPoolExecute(ch chan string, wg *sync.WaitGroup)
+
 	// Replication insert writer
 	writeSyncInsert(row []string, relation relation, rowsColumnInfo RowsColumnInfo) (query string)
 
@@ -256,18 +258,18 @@ func RunQuery(query *data.Query) (
 	return errProperties, err
 }
 
-func RunSync(sync *data.Sync) (
+func RunReplication(replication *data.Replication) (
 	errProperties map[string]string,
 	err error,
 ) {
 
-	sourceSystem, errProperties, err := GetDs(sync.Source)
+	sourceSystem, errProperties, err := GetDs(replication.Source)
 	defer sourceSystem.closeDb()
 	if err != nil {
 		return errProperties, err
 	}
 
-	targetSystem, errProperties, err := GetDs(sync.Target)
+	targetSystem, errProperties, err := GetDs(replication.Target)
 	defer targetSystem.closeDb()
 	if err != nil {
 		return errProperties, err
@@ -288,7 +290,7 @@ func RunSync(sync *data.Sync) (
 		}
 	}
 
-	for _, table := range sync.Tables {
+	for _, table := range replication.Tables {
 
 		tableAndSchema := pkg.GetTableAndSchema(table)
 		if !tableAndSchema.HasSchema {
@@ -363,7 +365,7 @@ func RunSync(sync *data.Sync) (
 
 	result = sourceConn.Exec(
 		context.Background(),
-		fmt.Sprintf("CREATE PUBLICATION sqlpipe_publication FOR TABLE %v;", strings.Join(sync.Tables, ", ")),
+		fmt.Sprintf("CREATE PUBLICATION sqlpipe_publication FOR TABLE %v;", strings.Join(replication.Tables, ", ")),
 	)
 	_, err = result.ReadAll()
 	if err != nil {
@@ -377,11 +379,11 @@ func RunSync(sync *data.Sync) (
 		return map[string]string{"error": err.Error()}, errors.New("IdentifySystem failed")
 	}
 
-	createReplicationSlotResult, err := pglogrepl.CreateReplicationSlot(context.Background(), sourceConn, sync.ReplicationSlot, "pgoutput", pglogrepl.CreateReplicationSlotOptions{Temporary: true})
+	createReplicationSlotResult, err := pglogrepl.CreateReplicationSlot(context.Background(), sourceConn, replication.ReplicationSlot, "pgoutput", pglogrepl.CreateReplicationSlotOptions{Temporary: true})
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("CreateReplicationSlot failed")
 	}
-	logger.PrintInfo(fmt.Sprintf("Created temporary replication slot: %v", sync.ReplicationSlot), map[string]string{})
+	logger.PrintInfo(fmt.Sprintf("Created temporary replication slot: %v", replication.ReplicationSlot), map[string]string{})
 
 	conn, err := sql.Open("pgx", sourceConnString)
 	if err != nil {
@@ -414,17 +416,17 @@ func RunSync(sync *data.Sync) (
 		return errProperties, errors.New("unable to parse lsn")
 	}
 
-	for _, table := range sync.Tables {
+	for _, table := range replication.Tables {
 
 		tableAndSchema := pkg.GetTableAndSchema(table)
 
 		transfer := data.Transfer{
 			Query:        fmt.Sprintf("select * from %v", table),
 			Overwrite:    true,
-			TargetSchema: sync.TargetSchema,
+			TargetSchema: replication.TargetSchema,
 			TargetTable:  tableAndSchema.TableName,
-			Source:       sync.Source,
-			Target:       sync.Target,
+			Source:       replication.Source,
+			Target:       replication.Target,
 		}
 
 		rows, err := tx.Query(fmt.Sprintf("select * from %v", table))
@@ -451,11 +453,11 @@ func RunSync(sync *data.Sync) (
 		return errProperties, fmt.Errorf("error committing")
 	}
 
-	err = pglogrepl.StartReplication(context.Background(), sourceConn, sync.ReplicationSlot, lsn, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
+	err = pglogrepl.StartReplication(context.Background(), sourceConn, replication.ReplicationSlot, lsn, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
 	if err != nil {
 		return map[string]string{"error": err.Error()}, errors.New("StartReplication failed")
 	}
-	logger.PrintInfo(fmt.Sprintf("Logical replication started on slot: %v, at location: %v", sync.ReplicationSlot, createReplicationSlotResult.ConsistentPoint), map[string]string{})
+	logger.PrintInfo(fmt.Sprintf("Logical replication started on slot: %v, at location: %v", replication.ReplicationSlot, createReplicationSlotResult.ConsistentPoint), map[string]string{})
 
 	clientXLogPos := sysident.XLogPos
 	standbyMessageTimeout := time.Second * 10
@@ -528,13 +530,37 @@ func RunSync(sync *data.Sync) (
 						msg.CommitTime,
 					)
 
-					for _, query := range txn.queries {
-						rows, errProperties, err := targetSystem.execute(query)
-						if err != nil {
-							fmt.Println(err, errProperties)
-						}
-						rows.Close()
+					// create a channel for work "tasks"
+					ch := make(chan string)
+
+					wg := sync.WaitGroup{}
+
+					// start the workers
+					for t := 0; t < 10; t++ {
+						wg.Add(1)
+						go targetSystem.workerPoolExecute(ch, &wg)
 					}
+
+					// push the lines to the queue channel for processing
+					for _, query := range txn.queries {
+						ch <- query
+					}
+
+					// this will cause the workers to stop and exit their receive loop
+					close(ch)
+
+					// make sure they all exit
+					wg.Wait()
+
+					// for _, query := range txn.queries {
+
+					// 	rows, errProperties, err := targetSystem.execute(query)
+					// 	if err != nil {
+					// 		fmt.Println(err, errProperties)
+					// 	}
+					// 	rows.Close()
+					// }
+
 					txn = transaction{}
 				case "Origin":
 					msg := logicalMsg.(*pglogrepl.OriginMessage)
