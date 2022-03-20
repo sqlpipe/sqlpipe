@@ -246,8 +246,8 @@ func (dsConn MSSQL) getRowStarter() string {
 	return standardGetRowStarter()
 }
 
-func (dsConn MSSQL) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return standardGetQueryStarter(targetTable, columnInfo)
+func (dsConn MSSQL) getQueryStarter(targetTable string, targetSchema string, columnInfo ResultSetColumnInfo) string {
+	return standardGetQueryStarter(targetTable, targetSchema, columnInfo)
 }
 
 func mssqlWriteBit(value interface{}, terminator string) string {

@@ -224,8 +224,8 @@ func (dsConn Redshift) getQueryEnder(targetTable string) string {
 	return ""
 }
 
-func (dsConn Redshift) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return standardGetQueryStarter(targetTable, columnInfo)
+func (dsConn Redshift) getQueryStarter(targetTable string, targetSchema string, columnInfo ResultSetColumnInfo) string {
+	return standardGetQueryStarter(targetTable, targetSchema, columnInfo)
 }
 
 func (dsConn Redshift) getCreateTableType(resultSetColInfo ResultSetColumnInfo, colNum int) (createType string) {

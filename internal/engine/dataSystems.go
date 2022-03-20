@@ -60,7 +60,7 @@ type DsConnection interface {
 	getRowStarter() (rowStarted string)
 
 	// Generates the start of an insertion query for a given data system type
-	getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) (queryStarter string)
+	getQueryStarter(targetTable string, targetSchema string, columnInfo ResultSetColumnInfo) (queryStarter string)
 
 	// Generates the end of an insertion query for a given data system type
 	getQueryEnder(targetTable string) (queryEnder string)
@@ -284,7 +284,7 @@ func sqlInsert(
 		rows.Scan(valuePtrs...)
 
 		if isFirst {
-			queryBuilder.WriteString(dsConn.getQueryStarter(targetTable, resultSetColumnInfo))
+			queryBuilder.WriteString(dsConn.getQueryStarter(targetTable, transfer.TargetSchema, resultSetColumnInfo))
 			isFirst = false
 		} else {
 			queryBuilder.WriteString(dsConn.getRowStarter())
@@ -524,8 +524,13 @@ func standardGetRowStarter() string {
 	return ",("
 }
 
-func standardGetQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return fmt.Sprintf("INSERT INTO %s ("+strings.Join(columnInfo.ColumnNames, ", ")+") VALUES (", targetTable)
+func standardGetQueryStarter(targetTable string, targetSchema string, columnInfo ResultSetColumnInfo) string {
+	switch targetSchema {
+	case "":
+		return fmt.Sprintf("INSERT INTO %s ("+strings.Join(columnInfo.ColumnNames, ", ")+") VALUES (", targetTable)
+	default:
+		return fmt.Sprintf("INSERT INTO %s.%s ("+strings.Join(columnInfo.ColumnNames, ", ")+") VALUES (", targetSchema, targetTable)
+	}
 }
 
 func dropTableIfExistsWithSchema(

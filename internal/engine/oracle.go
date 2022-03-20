@@ -379,7 +379,7 @@ func (dsConn Oracle) getQueryEnder(targetTable string) string {
 	return fmt.Sprintf(") SELECT * FROM %s_to_insert", targetTable)
 }
 
-func (dsConn Oracle) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
+func (dsConn Oracle) getQueryStarter(targetTable string, targetSchema string, columnInfo ResultSetColumnInfo) string {
 	queryStarter := fmt.Sprintf("insert into %s (%s) with %s_to_insert (%s) as ( SELECT ", targetTable, strings.Join(columnInfo.ColumnNames, ", "), targetTable, strings.Join(columnInfo.ColumnNames, ", "))
 	return queryStarter
 }

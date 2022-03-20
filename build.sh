@@ -1,4 +1,4 @@
-HUMAN_VERSION="1.0.0"
+HUMAN_VERSION="1.0.1"
 GIT_HASH=$(git describe --always --dirty --tags --long)
 
 rm -rf ./bin
