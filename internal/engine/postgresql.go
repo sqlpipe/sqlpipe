@@ -184,8 +184,8 @@ func (dsConn PostgreSQL) getQueryEnder(targetTable string) string {
 	return ""
 }
 
-func (dsConn PostgreSQL) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return standardGetQueryStarter(targetTable, columnInfo)
+func (dsConn PostgreSQL) getQueryStarter(targetTable string, targetSchema string, columnInfo ResultSetColumnInfo) string {
+	return standardGetQueryStarter(targetTable, targetSchema, columnInfo)
 }
 
 func postgresqlWriteByteArray(value interface{}, terminator string) string {

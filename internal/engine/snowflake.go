@@ -369,7 +369,7 @@ func (dsConn Snowflake) getQueryEnder(targetTable string) string {
 	return ""
 }
 
-func (dsConn Snowflake) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
+func (dsConn Snowflake) getQueryStarter(targetTable string, targetSchema string, columnInfo ResultSetColumnInfo) string {
 	for _, colType := range columnInfo.ColumnIntermediateTypes {
 		switch colType {
 		case
@@ -382,7 +382,7 @@ func (dsConn Snowflake) getQueryStarter(targetTable string, columnInfo ResultSet
 
 			sep := ""
 			var queryBuilder strings.Builder
-			fmt.Fprintf(&queryBuilder, "INSERT INTO %s (%s) SELECT ", targetTable, strings.Join(columnInfo.ColumnNames, ", "))
+			fmt.Fprintf(&queryBuilder, "INSERT INTO %s.%s (%s) SELECT ", targetSchema, targetTable, strings.Join(columnInfo.ColumnNames, ", "))
 			for i, colType := range columnInfo.ColumnIntermediateTypes {
 				colNum := i + 1
 				switch colType {
@@ -405,7 +405,7 @@ func (dsConn Snowflake) getQueryStarter(targetTable string, columnInfo ResultSet
 		}
 	}
 
-	return standardGetQueryStarter(targetTable, columnInfo)
+	return standardGetQueryStarter(targetTable, targetSchema, columnInfo)
 }
 
 func (dsConn Snowflake) getCreateTableType(resultSetColInfo ResultSetColumnInfo, colNum int) (createType string) {

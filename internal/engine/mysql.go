@@ -246,8 +246,8 @@ func (dsConn MySQL) getRowStarter() string {
 	return standardGetRowStarter()
 }
 
-func (dsConn MySQL) getQueryStarter(targetTable string, columnInfo ResultSetColumnInfo) string {
-	return standardGetQueryStarter(targetTable, columnInfo)
+func (dsConn MySQL) getQueryStarter(targetTable string, targetSchema string, columnInfo ResultSetColumnInfo) string {
+	return standardGetQueryStarter(targetTable, "", columnInfo)
 }
 
 func mysqlWriteInsertBinary(value interface{}, terminator string) string {
