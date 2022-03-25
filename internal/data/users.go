@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/calmitchell617/sqlpipe/internal/validator"
+	"github.com/sqlpipe/sqlpipe/internal/validator"
 	"golang.org/x/crypto/bcrypt"
 )
 

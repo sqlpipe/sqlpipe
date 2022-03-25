@@ -19,10 +19,10 @@ import (
 
 	"github.com/golangcollege/sessions"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
-	"github.com/calmitchell617/sqlpipe/internal/globals"
-	"github.com/calmitchell617/sqlpipe/internal/jsonLog"
 	"github.com/spf13/cobra"
+	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
+	"github.com/sqlpipe/sqlpipe/internal/jsonLog"
 )
 
 var (

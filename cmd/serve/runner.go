@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/engine"
-	"github.com/calmitchell617/sqlpipe/internal/globals"
-	"github.com/calmitchell617/sqlpipe/pkg"
+	"github.com/sqlpipe/sqlpipe/internal/engine"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
+	"github.com/sqlpipe/sqlpipe/pkg"
 )
 
 var numLocalActiveTransfers int

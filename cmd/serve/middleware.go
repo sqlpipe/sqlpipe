@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
-	"github.com/calmitchell617/sqlpipe/internal/validator"
 	"github.com/felixge/httpsnoop"
 	"github.com/justinas/nosurf"
+	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/validator"
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
 )

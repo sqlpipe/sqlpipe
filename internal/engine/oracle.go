@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
 	_ "github.com/sijms/go-ora/v2"
+	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
 var oracle *sql.DB

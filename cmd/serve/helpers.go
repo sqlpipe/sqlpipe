@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/calmitchell617/sqlpipe/internal/validator"
-	"github.com/calmitchell617/sqlpipe/pkg"
 	"github.com/julienschmidt/httprouter"
 	"github.com/justinas/nosurf"
+	"github.com/sqlpipe/sqlpipe/internal/validator"
+	"github.com/sqlpipe/sqlpipe/pkg"
 )
 
 type envelope map[string]interface{}

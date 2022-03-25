@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
-	"github.com/calmitchell617/sqlpipe/pkg"
 	_ "github.com/snowflakedb/gosnowflake"
+	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/pkg"
 )
 
 var snowflake *sql.DB

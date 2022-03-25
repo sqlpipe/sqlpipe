@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
 	_ "github.com/denisenkom/go-mssqldb"
+	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
 var mssql *sql.DB

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
 func SendAnonymizedTransferAnalytics(transfer data.Transfer, server bool) (errProperties map[string]string, err error) {

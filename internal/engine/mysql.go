@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/data"
 
 	_ "github.com/go-sql-driver/mysql"
 )

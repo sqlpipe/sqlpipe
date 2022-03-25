@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
 type contextKey string

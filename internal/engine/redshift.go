@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
 	_ "github.com/jackc/pgx/v4/stdlib"
+	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
 var redshift *sql.DB

@@ -3,10 +3,10 @@ package transfer
 import (
 	"fmt"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
-	"github.com/calmitchell617/sqlpipe/internal/engine"
-	"github.com/calmitchell617/sqlpipe/internal/globals"
 	"github.com/spf13/cobra"
+	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/engine"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
 )
 
 var TransferCmd = &cobra.Command{

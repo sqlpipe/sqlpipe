@@ -3,7 +3,7 @@ package serve
 import (
 	"net/http"
 
-	"github.com/calmitchell617/sqlpipe/internal/globals"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
 )
 
 func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {

@@ -3,8 +3,8 @@ package version
 import (
 	"fmt"
 
-	"github.com/calmitchell617/sqlpipe/internal/globals"
 	"github.com/spf13/cobra"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
 )
 
 var (

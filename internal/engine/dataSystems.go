@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
-	"github.com/calmitchell617/sqlpipe/pkg"
+	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/pkg"
 )
 
 type DsConnection interface {

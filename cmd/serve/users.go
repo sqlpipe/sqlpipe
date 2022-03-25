@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/calmitchell617/sqlpipe/internal/data"
-	"github.com/calmitchell617/sqlpipe/internal/forms.go"
-	"github.com/calmitchell617/sqlpipe/internal/validator"
+	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/forms.go"
+	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
 func (app *application) createAdminUser(username string, password string) {

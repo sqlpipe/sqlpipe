@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/calmitchell617/sqlpipe/internal/validator"
+	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
 type Transfer struct {

@@ -4,9 +4,9 @@ import (
 	"expvar"
 	"net/http"
 
-	"github.com/calmitchell617/sqlpipe/ui"
 	"github.com/julienschmidt/httprouter"
 	"github.com/justinas/alice"
+	"github.com/sqlpipe/sqlpipe/ui"
 )
 
 func (app *application) routes() http.Handler {
