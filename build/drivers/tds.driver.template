@@ -1,3 +1,0 @@
-[FreeTDS] 
-Description     = Open source FreeTDS driver
-Driver          =/usr/local/lib/libtdsodbc.so

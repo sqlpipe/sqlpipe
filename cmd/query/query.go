@@ -1,10 +1,9 @@
 package query
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/engine"
 )
 
 var QueryCmd = &cobra.Command{
@@ -25,8 +24,9 @@ func init() {
 	QueryCmd.Flags().StringVar(&query.Connection.DbName, "connection-db-name", "", "Connection's DB name")
 	QueryCmd.Flags().StringVar(&query.Connection.Username, "connection-username", "", "Connection username")
 	QueryCmd.Flags().StringVar(&query.Connection.Password, "connection-password", "", "Connection password")
+	QueryCmd.Flags().StringVar(&query.Connection.DriverName, "driver-name", "", "Driver name")
 }
 
 func runQuery(cmd *cobra.Command, args []string) {
-	fmt.Println("running query!")
+	engine.RunQuery(query)
 }

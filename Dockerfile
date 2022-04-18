@@ -23,8 +23,8 @@ RUN ./configure --build=aarch64-unknown-linux-gnu
 RUN make
 RUN make install
 WORKDIR /
-COPY build/drivers/tds.driver.template /
-RUN odbcinst -i -d -f tds.driver.template
+COPY build/drivers/mssql.driver.template /
+RUN odbcinst -i -d -f mssql.driver.template
 
 # Golang 1.18 Linux x86
 RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz -O

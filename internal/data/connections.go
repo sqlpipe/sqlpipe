@@ -13,16 +13,17 @@ var (
 )
 
 type Connection struct {
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"createdAt"`
-	Name      string    `json:"name"`
-	DsType    string    `json:"dsType"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"`
-	AccountId string    `json:"accountID"`
-	Hostname  string    `json:"hostname"`
-	Port      int       `json:"port"`
-	DbName    string    `json:"dbName"`
+	ID         int64     `json:"id"`
+	CreatedAt  time.Time `json:"createdAt"`
+	Name       string    `json:"name"`
+	DsType     string    `json:"dsType"`
+	DriverName string    `json:"driverName"`
+	Username   string    `json:"username"`
+	Password   string    `json:"-"`
+	AccountId  string    `json:"accountID"`
+	Hostname   string    `json:"hostname"`
+	Port       int       `json:"port"`
+	DbName     string    `json:"dbName"`
 }
 
 type ConnectionModel struct {
