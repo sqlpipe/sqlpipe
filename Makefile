@@ -1,9 +1,81 @@
 include .envrc
 
-## run: build and run a sqlpipe server
+## run: build and run a sqlpipe server in docker
 .PHONY: run
-run: build
-	./bin/sqlpipe
+run:
+	docker build -t sqlpipe:2.0.0 .
+	docker container rm -f sqlpipe
+	docker run -d --name sqlpipe sqlpipe:2.0.0
+	docker exec -it sqlpipe bash
+
+# spinup: Spinup cloud db instances
+.PHONY: spinup
+spinup:
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-postgresql \
+	# 	--db-name testing \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.micro \
+	# 	--engine postgres \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--no-enable-performance-insights >/dev/null;
+
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-mysql \
+	# 	--db-name testing \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.micro \
+	# 	--engine mysql \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--no-enable-performance-insights >/dev/null;
+
+	aws rds create-db-instance \
+		--db-instance-identifier sqlpipe-test-mssql \
+		--backup-retention-period 0 \
+		--db-instance-class db.t3.small \
+		--engine sqlserver-web \
+		--no-multi-az \
+		--vpc-security-group-ids ${rdsSecurityGroup} \
+		--master-username sqlpipe \
+		--master-user-password ${SQLPIPE-PASSWORD} \
+		--storage-type gp2 \
+		--allocated-storage 20 \
+		--license-model license-included \
+		--no-enable-performance-insights >/dev/null;
+
+	# aws rds create-db-instance \
+	# 	--db-instance-identifier sqlpipe-test-oracle \
+	# 	--db-name testing \
+	# 	--backup-retention-period 0 \
+	# 	--db-instance-class db.t3.small \
+	# 	--engine oracle-se2 \
+	# 	--no-multi-az \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--master-username sqlpipe \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--storage-type gp2 \
+	# 	--allocated-storage 20 \
+	# 	--license-model license-included \
+	# 	--no-enable-performance-insights >/dev/null;
+
+	# aws redshift create-cluster \
+	# 	--node-type dc2.large \
+	# 	--master-username sqlpipe \
+	# 	--db-name testing \
+	# 	--cluster-type single-node \
+	# 	--master-user-password ${SQLPIPE-PASSWORD} \
+	# 	--vpc-security-group-ids ${rdsSecurityGroup} \
+	# 	--cluster-identifier sqlpipe-test-redshift >/dev/null;
 
 # ==================================================================================== #
 # QUALITY CONTROL
