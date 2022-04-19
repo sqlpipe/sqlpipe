@@ -26,15 +26,15 @@ func (app *application) readIdParam(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func (app *application) readUsernameParam(r *http.Request) (string, error) {
+func (app *application) readStringIdParam(r *http.Request) (string, error) {
 	params := httprouter.ParamsFromContext(r.Context())
 
-	username := params.ByName("id")
-	if username == "" {
-		return "", errors.New("no username parameter given")
+	id := params.ByName("id")
+	if id == "" {
+		return "", errors.New("no id parameter given")
 	}
 
-	return username, nil
+	return id, nil
 }
 
 type envelope map[string]interface{}
