@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"sync"
 	"syscall"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/jsonLog"
 
 	"github.com/coreos/etcd/clientv3"
@@ -39,8 +41,9 @@ type config struct {
 	displayVersion bool
 	cluster        bool
 	etcd           struct {
-		timeout   int
-		endpoints []string
+		timeout          int
+		endpoints        []string
+		autoSyncInterval int
 	}
 	limiter struct {
 		enabled bool
@@ -62,9 +65,10 @@ type application struct {
 func init() {
 	ServeCmd.Flags().StringSliceVar(&cfg.cors.trustedOrigins, "cors-trusted-origins", []string{}, "Trusted CORS origins, comma separated no spaces")
 	ServeCmd.Flags().StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
+	ServeCmd.Flags().IntVar(&cfg.etcd.timeout, "etcd-auto-sync-interval", 60, "Sets AutoSyncInterval property (in seconds) of etcd, which checks for changes to etcd cluster members")
 	ServeCmd.Flags().BoolVar(&cfg.cluster, "etcd-cluster", false, "Join a SQLpipe cluster with an etcd backend (default false)")
 	ServeCmd.Flags().StringSliceVar(&cfg.etcd.endpoints, "etcd-endpoints", []string{}, "etcd endpoints, comma separated no spaces")
-	ServeCmd.Flags().IntVar(&cfg.etcd.timeout, "etcd-timeout", 3, "Timeout in seconds for connecting to etcd")
+	ServeCmd.Flags().IntVar(&cfg.etcd.timeout, "etcd-timeout", 3, "Timeout in seconds for etcd operations")
 	ServeCmd.Flags().IntVar(&cfg.port, "port", 9000, "API server port")
 	ServeCmd.Flags().BoolVar(&cfg.displayVersion, "version", false, "Display version and exit")
 }
@@ -80,20 +84,31 @@ func runServe(cmd *cobra.Command, args []string) {
 	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
 
 	if cfg.cluster {
+		if reflect.DeepEqual(cfg.etcd.endpoints, []string{}) {
+			logger.PrintFatal(
+				errors.New("--etcd-cluster flag given without specifying cluster endpoints"),
+				map[string]string{},
+			)
+		}
+
 		// clientv3.SetLogger(grpclog.NewLoggerV2(os.Stderr, os.Stderr, os.Stderr))
+		globals.EtcdTimeout = time.Second * time.Duration(cfg.etcd.timeout)
 
-		etcd, err = clientv3.New(clientv3.Config{
-			Endpoints:   cfg.etcd.endpoints,
-			DialTimeout: 5 * time.Second,
-		})
+		etcd, err = clientv3.New(
+			clientv3.Config{
+				Endpoints:        cfg.etcd.endpoints,
+				DialTimeout:      globals.EtcdTimeout,
+				AutoSyncInterval: globals.EtcdTimeout,
+			},
+		)
 
-		if err != nil {
+		if err == context.DeadlineExceeded {
 			logger.PrintFatal(
 				errors.New("unable to connect to etcd"),
 				map[string]string{"err": err.Error(), "endpoints": fmt.Sprint(cfg.etcd.endpoints)},
 			)
 		}
-		defer etcd.Close() // make sure to close the client
+		defer etcd.Close()
 	}
 
 	expvar.NewString("version").Set(version)

@@ -13,14 +13,14 @@ var (
 )
 
 type Connection struct {
-	ID         int64     `json:"id"`
+	Id         int64     `json:"id"`
 	CreatedAt  time.Time `json:"createdAt"`
 	Name       string    `json:"name"`
 	DsType     string    `json:"dsType"`
 	DriverName string    `json:"driverName"`
 	Username   string    `json:"username"`
 	Password   string    `json:"-"`
-	AccountId  string    `json:"accountID"`
+	AccountId  string    `json:"accountId"`
 	Hostname   string    `json:"hostname"`
 	Port       int       `json:"port"`
 	DbName     string    `json:"dbName"`
@@ -60,12 +60,12 @@ func ValidateConnection(v *validator.Validator, connection *Connection) {
 	case "snowflake":
 		v.Check(connection.Hostname == "", "hostname", "Do not enter a Hostname if you are configuring a Snowflake connection")
 		v.Check(connection.Port == 0, "port", "Do not enter a port if you are configuring a Snowflake connection")
-		v.Check(connection.AccountId != "", "accountId", "You must enter an account ID if configuring a snowflake connection")
+		v.Check(connection.AccountId != "", "accountId", "You must enter an account Id if configuring a snowflake connection")
 	case "":
 		v.Check(connection.DsType != "", "dsType", "You must select a data system type")
 	default:
 		v.Check(connection.Hostname != "", "hostname", "You must enter a Hostname")
 		v.Check(connection.Port != 0, "port", "You must enter a port number")
-		v.Check(connection.AccountId == "", "accountId", "Do not enter an account ID unless you are configuring a snowflake connection")
+		v.Check(connection.AccountId == "", "accountId", "Do not enter an account Id unless you are configuring a snowflake connection")
 	}
 }

@@ -21,8 +21,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	user := &data.User{
-		Username:  input.Username,
-		Activated: false,
+		Username: input.Username,
 	}
 
 	err = user.Password.Set(input.Password)
@@ -40,11 +39,17 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 
 	err = app.models.Users.Insert(user)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		switch {
+		case errors.Is(err, data.ErrDuplicateUsername):
+			v.AddError("email", "a user with this username already exists")
+			app.failedValidationResponse(w, r, v.Errors)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
 		return
 	}
 
-	// err = app.models.Permissions.AddForUser(user.ID, "movies:read")
+	// err = app.models.Permissions.AddForUser(user.Id, "movies:read")
 	// if err != nil {
 	// 	app.serverErrorResponse(w, r, err)
 	// 	return
@@ -86,8 +91,6 @@ func (app *application) activateUserHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	user.Activated = true
-
 	err = app.models.Users.Update(user)
 	if err != nil {
 		switch {
@@ -99,7 +102,7 @@ func (app *application) activateUserHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err = app.models.Tokens.DeleteAllForUser(data.ScopeActivation, user.ID)
+	err = app.models.Tokens.DeleteAllForUser(data.ScopeActivation, user.Username)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -162,7 +165,7 @@ func (app *application) updateUserPasswordHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	err = app.models.Tokens.DeleteAllForUser(data.ScopePasswordReset, user.ID)
+	err = app.models.Tokens.DeleteAllForUser(data.ScopePasswordReset, user.Username)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -171,6 +174,32 @@ func (app *application) updateUserPasswordHandler(w http.ResponseWriter, r *http
 	env := envelope{"message": "your password was successfully reset"}
 
 	err = app.writeJSON(w, http.StatusOK, env, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) showUserApiHandler(w http.ResponseWriter, r *http.Request) {
+	qs := r.URL.Query()
+
+	username := app.readString(qs, "username", "")
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	user, err := app.models.Users.Get(username)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"user": user}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

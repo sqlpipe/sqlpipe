@@ -8,10 +8,10 @@ import (
 )
 
 type Query struct {
-	ID              int64      `json:"id"`
+	Id              int64      `json:"id"`
 	CreatedAt       time.Time  `json:"createdAt"`
 	StoppedAt       time.Time  `json:"stoppedAt"`
-	ConnectionID    int64      `json:"connectionId"`
+	ConnectionId    int64      `json:"connectionId"`
 	Connection      Connection `json:"-"`
 	Query           string     `json:"query"`
 	ReturnFormat    string     `json:"returnFormat"`

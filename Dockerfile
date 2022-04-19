@@ -31,9 +31,9 @@ RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz -O
 RUN rm -rf /usr/local/go && tar -C /usr/local -xzf go1.18.linux-amd64.tar.gz
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-RUN mkdir go
-RUN mkdir go/src
-RUN mkdir go/src/sqlpipe
+EXPOSE 9000
+
+RUN mkdir go && mkdir go/src && mkdir go/src/sqlpipe
 
 COPY go.mod /go/src/sqlpipe
 COPY go.sum /go/src/sqlpipe
@@ -42,9 +42,7 @@ COPY internal/ /go/src/sqlpipe/internal
 COPY vendor/ /go/src/sqlpipe/vendor
 
 WORKDIR /
-RUN rm unixODBC-2.3.1.tar.gz
-RUN rm freetds-0.91.49.tar.bz2
-RUN rm go1.18.linux-amd64.tar.gz
+RUN rm unixODBC-2.3.1.tar.gz && rm freetds-0.91.49.tar.bz2 && rm go1.18.linux-amd64.tar.gz
 
 WORKDIR /go/src/sqlpipe
 RUN go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd/sqlpipe

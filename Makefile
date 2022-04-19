@@ -5,8 +5,11 @@ include .envrc
 run:
 	docker build -t sqlpipe:2.0.0 .
 	docker container rm -f sqlpipe
-	docker run -d --name sqlpipe sqlpipe:2.0.0
-	docker exec -it sqlpipe bash
+	docker run -d --name sqlpipe -p 9000:9000 sqlpipe:2.0.0
+	docker exec -it sqlpipe sqlpipe serve \
+    	--etcd-cluster \
+    	--etcd-endpoints "http://172.31.13.46:2379"
+
 
 # spinup: Spinup cloud db instances
 .PHONY: spinup

@@ -1,10 +1,14 @@
 package data
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 
 	"golang.org/x/crypto/bcrypt"
@@ -17,12 +21,11 @@ var (
 var AnonymousUser = &User{}
 
 type User struct {
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Username  string    `json:"username"`
-	Password  password  `json:"-"`
-	Activated bool      `json:"activated"`
-	Version   int       `json:"-"`
+	CreatedAt    time.Time `json:"createdAt"`
+	LastModified time.Time `json:"lastModified"`
+	Username     string    `json:"username"`
+	Password     password  `json:"-"`
+	Version      int64     `json:"version"`
 }
 
 func (u *User) IsAnonymous() bool {
@@ -67,8 +70,8 @@ func ValidatePasswordPlaintext(v *validator.Validator, password string) {
 }
 
 func ValidateUser(v *validator.Validator, user *User) {
-	v.Check(user.Username != "", "name", "must be provided")
-	v.Check(len(user.Username) <= 500, "name", "must not be more than 500 bytes long")
+	v.Check(user.Username != "", "username", "must be provided")
+	v.Check(len(user.Username) <= 500, "username", "must not be more than 500 bytes long")
 
 	if user.Password.plaintext != nil {
 		ValidatePasswordPlaintext(v, *user.Password.plaintext)
@@ -84,27 +87,57 @@ type UserModel struct {
 }
 
 func (m UserModel) Insert(user *User) (err error) {
-	// query := `
-	//     INSERT INTO users (name, email, password_hash, activated)
-	//     VALUES ($1, $2, $3, $4)
-	//     RETURNING id, created_at, version`
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	resp, err := m.Etcd.Get(ctx, fmt.Sprintf("sqlpipe/users/%v", user.Username))
+	defer cancel()
+	if err != nil {
+		return err
+	}
+	if resp.Count != 0 {
+		return ErrDuplicateUsername
+	}
 
-	// args := []interface{}{user.Name, user.Email, user.Password.hash, user.Activated}
+	creationTime := time.Now()
+	user.CreatedAt = creationTime
+	user.LastModified = creationTime
 
-	// ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	// defer cancel()
+	bytes, err := json.Marshal(user)
+	if err != nil {
+		return err
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	_, err = m.Etcd.Put(
+		ctx,
+		fmt.Sprintf("sqlpipe/users/%v", user.Username),
+		string(bytes),
+	)
+	defer cancel()
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
-	// err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.ID, &user.CreatedAt, &user.Version)
-	// if err != nil {
-	// 	switch {
-	// 	case err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"`:
-	// 		return ErrDuplicateEmail
-	// 	default:
-	// 		return err
-	// 	}
-	// }
+func (m UserModel) Get(username string) (*User, error) {
 
-	return err
+	context, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	resp, err := m.Etcd.Get(context, fmt.Sprintf("sqlpipe/users/%v", username))
+	defer cancel()
+	if err != nil {
+		return nil, err
+	}
+	if resp.Count == 0 {
+		return nil, ErrRecordNotFound
+	}
+
+	var user User
+	err = json.Unmarshal(resp.Kvs[0].Value, &user)
+	if err != nil {
+		return nil, err
+	}
+	user.Version = resp.Kvs[0].Version
+
+	return &user, nil
 }
 
 func (m UserModel) GetByUsername(username string) (user *User, err error) {
@@ -119,7 +152,7 @@ func (m UserModel) GetByUsername(username string) (user *User, err error) {
 	// defer cancel()
 
 	// err := m.DB.QueryRowContext(ctx, query, email).Scan(
-	// 	&user.ID,
+	// 	&user.Id,
 	// 	&user.CreatedAt,
 	// 	&user.Name,
 	// 	&user.Email,
@@ -152,7 +185,7 @@ func (m UserModel) Update(user *User) (err error) {
 	// 	user.Email,
 	// 	user.Password.hash,
 	// 	user.Activated,
-	// 	user.ID,
+	// 	user.Id,
 	// 	user.Version,
 	// }
 
@@ -194,7 +227,7 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (user *User, e
 	// defer cancel()
 
 	// err := m.DB.QueryRowContext(ctx, query, args...).Scan(
-	// 	&user.ID,
+	// 	&user.Id,
 	// 	&user.CreatedAt,
 	// 	&user.Name,
 	// 	&user.Email,

@@ -17,7 +17,7 @@ func RunQuery(
 	err error,
 ) {
 	dsn := fmt.Sprintf(
-		"DRIVER=%v;SERVER=%v;PORT=%v;DATABASE=%v;UID=%v;PWD=%v;TDS_Version=8.0;",
+		"DRIVER=%v;SERVER=%v;PORT=%v;DATABASE=%v;UId=%v;PWD=%v;TDS_Version=8.0;",
 		query.Connection.DriverName,
 		query.Connection.Hostname,
 		query.Connection.Port,
