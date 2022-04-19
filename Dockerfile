@@ -39,7 +39,6 @@ COPY go.mod /go/src/sqlpipe
 COPY go.sum /go/src/sqlpipe
 COPY cmd/ /go/src/sqlpipe/cmd
 COPY internal/ /go/src/sqlpipe/internal
-COPY pkg/ /go/src/sqlpipe/pkg
 COPY vendor/ /go/src/sqlpipe/vendor
 
 WORKDIR /
@@ -48,7 +47,7 @@ RUN rm freetds-0.91.49.tar.bz2
 RUN rm go1.18.linux-amd64.tar.gz
 
 WORKDIR /go/src/sqlpipe
-RUN go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd
+RUN go build -ldflags=${linker_flags} -o=./bin/sqlpipe ./cmd/sqlpipe
 RUN cp bin/sqlpipe /usr/local/bin
 
 WORKDIR /

@@ -14,7 +14,7 @@ var gitHash string
 var sqlpipeVersion string
 
 func init() {
-	// rootCmd.AddCommand(serve.ServeCmd)
+	rootCmd.AddCommand(ServeCmd)
 	// rootCmd.AddCommand(initialize.InitializeCmd)
 	// rootCmd.AddCommand(transfer.TransferCmd)
 	rootCmd.AddCommand(QueryCmd)
