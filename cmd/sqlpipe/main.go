@@ -2,8 +2,6 @@ package main
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/sqlpipe/sqlpipe/cmd/query"
-	"github.com/sqlpipe/sqlpipe/cmd/version"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
 )
 
@@ -19,11 +17,11 @@ func init() {
 	// rootCmd.AddCommand(serve.ServeCmd)
 	// rootCmd.AddCommand(initialize.InitializeCmd)
 	// rootCmd.AddCommand(transfer.TransferCmd)
-	rootCmd.AddCommand(query.QueryCmd)
+	rootCmd.AddCommand(QueryCmd)
 
 	globals.GitHash = gitHash
 	globals.SqlpipeVersion = sqlpipeVersion
-	rootCmd.AddCommand(version.VersionCmd)
+	rootCmd.AddCommand(VersionCmd)
 }
 
 func main() {

@@ -14,6 +14,7 @@ type Query struct {
 	ConnectionID    int64      `json:"connectionId"`
 	Connection      Connection `json:"-"`
 	Query           string     `json:"query"`
+	ReturnFormat    string     `json:"returnFormat"`
 	Status          string     `json:"status"`
 	Error           string     `json:"error"`
 	ErrorProperties string     `json:"errorProperties"`

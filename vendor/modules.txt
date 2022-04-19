@@ -5,6 +5,13 @@ github.com/alexbrainman/odbc/api
 # github.com/inconshreveable/mousetrap v1.0.0
 ## explicit
 github.com/inconshreveable/mousetrap
+# github.com/shomali11/util v0.0.0-20180607005212-e0f70fd665ff
+## explicit
+github.com/shomali11/util/xrunes
+github.com/shomali11/util/xstrings
+# github.com/shomali11/xsql v0.0.0-20190608141458-bf76292144df
+## explicit
+github.com/shomali11/xsql
 # github.com/spf13/cobra v1.4.0
 ## explicit; go 1.15
 github.com/spf13/cobra
