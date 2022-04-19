@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/segmentio/ksuid"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 
 	"github.com/julienschmidt/httprouter"
@@ -27,15 +26,15 @@ func (app *application) readIdParam(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func (app *application) readUsernameParam(r *http.Request) (ksuid.KSUID, error) {
+func (app *application) readUsernameParam(r *http.Request) (string, error) {
 	params := httprouter.ParamsFromContext(r.Context())
 
-	id, err := ksuid.Parse(params.ByName("id"))
-	if err != nil {
-		return id, errors.New("invalid ksuid parameter")
+	username := params.ByName("id")
+	if username == "" {
+		return "", errors.New("no username parameter given")
 	}
 
-	return id, nil
+	return username, nil
 }
 
 type envelope map[string]interface{}

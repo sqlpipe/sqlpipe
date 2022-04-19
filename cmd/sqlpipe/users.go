@@ -180,9 +180,7 @@ func (app *application) updateUserPasswordHandler(w http.ResponseWriter, r *http
 }
 
 func (app *application) showUserApiHandler(w http.ResponseWriter, r *http.Request) {
-	qs := r.URL.Query()
-
-	username := app.readString(qs, "username", "")
+	username, err := app.readUsernameParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
 		return
