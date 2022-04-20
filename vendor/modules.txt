@@ -75,9 +75,6 @@ github.com/julienschmidt/httprouter
 ## explicit
 # github.com/prometheus/client_golang v1.12.1
 ## explicit; go 1.13
-# github.com/segmentio/ksuid v1.0.4
-## explicit; go 1.12
-github.com/segmentio/ksuid
 # github.com/shomali11/util v0.0.0-20180607005212-e0f70fd665ff
 ## explicit
 github.com/shomali11/util/xrunes

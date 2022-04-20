@@ -7,7 +7,6 @@ require (
 	github.com/coreos/etcd v3.3.27+incompatible
 	github.com/felixge/httpsnoop v1.0.2
 	github.com/julienschmidt/httprouter v1.3.0
-	github.com/segmentio/ksuid v1.0.4
 	github.com/shomali11/xsql v0.0.0-20190608141458-bf76292144df
 	github.com/spf13/cobra v1.4.0
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
