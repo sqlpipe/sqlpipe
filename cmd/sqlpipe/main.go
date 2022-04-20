@@ -15,7 +15,7 @@ var sqlpipeVersion string
 
 func init() {
 	rootCmd.AddCommand(ServeCmd)
-	// rootCmd.AddCommand(initialize.InitializeCmd)
+	rootCmd.AddCommand(InitializeCmd)
 	// rootCmd.AddCommand(transfer.TransferCmd)
 	rootCmd.AddCommand(QueryCmd)
 

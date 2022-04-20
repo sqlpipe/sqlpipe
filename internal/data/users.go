@@ -21,10 +21,11 @@ var (
 var AnonymousUser = &User{}
 
 type User struct {
+	Username     string    `json:"username"`
 	CreatedAt    time.Time `json:"createdAt"`
 	LastModified time.Time `json:"lastModified"`
-	Username     string    `json:"username"`
 	Password     password  `json:"-"`
+	Admin        bool      `json:"admin"`
 	Version      int64     `json:"version"`
 }
 
@@ -87,9 +88,9 @@ type UserModel struct {
 }
 
 func (m UserModel) Insert(user *User) (err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	resp, err := m.Etcd.Get(ctx, fmt.Sprintf("sqlpipe/users/%v", user.Username))
-	defer cancel()
+	getCtx, cancelGet := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancelGet()
+	resp, err := m.Etcd.Get(getCtx, fmt.Sprintf("sqlpipe/users/%v", user.Username))
 	if err != nil {
 		return err
 	}
@@ -105,13 +106,13 @@ func (m UserModel) Insert(user *User) (err error) {
 	if err != nil {
 		return err
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	putCtx, cancelPut := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	_, err = m.Etcd.Put(
-		ctx,
+		putCtx,
 		fmt.Sprintf("sqlpipe/users/%v", user.Username),
 		string(bytes),
 	)
-	defer cancel()
+	defer cancelPut()
 	if err != nil {
 		return err
 	}
@@ -119,10 +120,9 @@ func (m UserModel) Insert(user *User) (err error) {
 }
 
 func (m UserModel) Get(username string) (*User, error) {
-
-	context, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	resp, err := m.Etcd.Get(context, fmt.Sprintf("sqlpipe/users/%v", username))
-	defer cancel()
+	getCtx, cancelGet := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancelGet()
+	resp, err := m.Etcd.Get(getCtx, fmt.Sprintf("sqlpipe/users/%v", username))
 	if err != nil {
 		return nil, err
 	}
@@ -138,39 +138,6 @@ func (m UserModel) Get(username string) (*User, error) {
 	user.Version = resp.Kvs[0].Version
 
 	return &user, nil
-}
-
-func (m UserModel) GetByUsername(username string) (user *User, err error) {
-	// query := `
-	//     SELECT id, created_at, name, email, password_hash, activated, version
-	//     FROM users
-	//     WHERE email = $1`
-
-	// var user User
-
-	// ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	// defer cancel()
-
-	// err := m.DB.QueryRowContext(ctx, query, email).Scan(
-	// 	&user.Id,
-	// 	&user.CreatedAt,
-	// 	&user.Name,
-	// 	&user.Email,
-	// 	&user.Password.hash,
-	// 	&user.Activated,
-	// 	&user.Version,
-	// )
-
-	// if err != nil {
-	// 	switch {
-	// 	case errors.Is(err, sql.ErrNoRows):
-	// 		return nil, ErrRecordNotFound
-	// 	default:
-	// 		return nil, err
-	// 	}
-	// }
-
-	return user, nil
 }
 
 func (m UserModel) Update(user *User) (err error) {

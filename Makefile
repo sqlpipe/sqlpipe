@@ -1,15 +1,23 @@
 include .envrc
 
-## run: build and run a sqlpipe server in docker
+## run: build and run sqlpipe docker image in background
 .PHONY: run
 run:
 	docker build -t sqlpipe:2.0.0 .
 	docker container rm -f sqlpipe
 	docker run -d --name sqlpipe -p 9000:9000 sqlpipe:2.0.0
+
+## shell: build docker image then get a shell inside
+.PHONY: shell
+shell: run
+	docker exec -it sqlpipe bash
+
+## serve: build and run a sqlpipe server in docker
+.PHONY: serve
+serve: run
 	docker exec -it sqlpipe sqlpipe serve \
     	--etcd-cluster \
     	--etcd-endpoints "http://172.31.13.46:2379"
-
 
 # spinup: Spinup cloud db instances
 .PHONY: spinup

@@ -30,7 +30,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
-	user, err := app.models.Users.GetByUsername(input.Username)
+	user, err := app.models.Users.Get(input.Username)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):

@@ -102,7 +102,7 @@ func runServe(cmd *cobra.Command, args []string) {
 			},
 		)
 
-		if err == context.DeadlineExceeded {
+		if err != nil {
 			logger.PrintFatal(
 				errors.New("unable to connect to etcd"),
 				map[string]string{"err": err.Error(), "endpoints": fmt.Sprint(cfg.etcd.endpoints)},
