@@ -16,8 +16,8 @@ import (
 var (
 	InitializeCmd = &cobra.Command{
 		Use:   "initialize",
-		Short: "Prepare an etcd cluster for usage by SQLpipe.",
-		Long:  "Prepare an etcd cluster for usage by SQLpipe. Must have authentication disabled. SQLpipe will create a user, role, and directory called sqlpipe, and grant the user access to the role, and the role access to that directory. It will also give the root user a password, and enable authentication.",
+		Short: "Prepare a new etcd cluster for usage by SQLpipe.",
+		Long:  "Prepare a new etcd cluster for usage by SQLpipe. Must have authentication disabled. SQLpipe will create a user, role, and directory called sqlpipe, and grant the user access to the role, and the role access to that directory. It will also give the root user a password, and enable authentication.",
 		Run:   initializeCmd,
 	}
 	rootPassword    string

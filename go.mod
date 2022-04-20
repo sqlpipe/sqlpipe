@@ -2,6 +2,10 @@ module github.com/sqlpipe/sqlpipe
 
 go 1.18
 
+replace github.com/coreos/bbolt => go.etcd.io/bbolt v1.3.6
+
+replace google.golang.org/grpc => google.golang.org/grpc v1.26.0
+
 require (
 	github.com/alexbrainman/odbc v0.0.0-20211220213544-9c9a2e61c5e2
 	github.com/coreos/etcd v3.3.27+incompatible
@@ -44,12 +48,8 @@ require (
 	golang.org/x/net v0.0.0-20211123203042-d83791d6bcd9 // indirect
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
 	golang.org/x/text v0.3.6 // indirect
-	google.golang.org/genproto v0.0.0-20200825200019-8632dd797987 // indirect
-	google.golang.org/grpc v1.33.1 // indirect
-	google.golang.org/protobuf v1.26.0 // indirect
+	google.golang.org/genproto v0.0.0-20220414192740-2d67ff6cf2b4 // indirect
+	google.golang.org/grpc v1.45.0 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/coreos/bbolt => go.etcd.io/bbolt v1.3.6
-
-replace google.golang.org/grpc => google.golang.org/grpc v1.26.0

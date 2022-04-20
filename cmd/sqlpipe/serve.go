@@ -44,6 +44,8 @@ type config struct {
 		timeout          int
 		endpoints        []string
 		autoSyncInterval int
+		username         string
+		password         string
 	}
 	limiter struct {
 		enabled bool
@@ -68,7 +70,9 @@ func init() {
 	ServeCmd.Flags().IntVar(&cfg.etcd.timeout, "etcd-auto-sync-interval", 60, "Sets AutoSyncInterval property (in seconds) of etcd, which checks for changes to etcd cluster members")
 	ServeCmd.Flags().BoolVar(&cfg.cluster, "etcd-cluster", false, "Join a SQLpipe cluster with an etcd backend (default false)")
 	ServeCmd.Flags().StringSliceVar(&cfg.etcd.endpoints, "etcd-endpoints", []string{}, "etcd endpoints, comma separated no spaces")
-	ServeCmd.Flags().IntVar(&cfg.etcd.timeout, "etcd-timeout", 3, "Timeout in seconds for etcd operations")
+	ServeCmd.Flags().IntVar(&cfg.etcd.timeout, "etcd-timeout", 5, "Timeout in seconds for etcd operations")
+	ServeCmd.Flags().StringVar(&cfg.etcd.password, "etcd-password", "", "Password to access etcd cluster")
+	ServeCmd.Flags().StringVar(&cfg.etcd.username, "etcd-username", "sqlpipe", "Username to access etcd cluster")
 	ServeCmd.Flags().IntVar(&cfg.port, "port", 9000, "API server port")
 	ServeCmd.Flags().BoolVar(&cfg.displayVersion, "version", false, "Display version and exit")
 }
@@ -86,7 +90,14 @@ func runServe(cmd *cobra.Command, args []string) {
 	if cfg.cluster {
 		if reflect.DeepEqual(cfg.etcd.endpoints, []string{}) {
 			logger.PrintFatal(
-				errors.New("--etcd-cluster flag given without specifying cluster endpoints"),
+				errors.New("--etcd-cluster flag given without specifying --etcd-endpoints"),
+				map[string]string{},
+			)
+		}
+
+		if cfg.etcd.password == "" {
+			logger.PrintFatal(
+				errors.New("--etcd-cluster flag given without specifying --etcd-password"),
 				map[string]string{},
 			)
 		}
@@ -99,6 +110,8 @@ func runServe(cmd *cobra.Command, args []string) {
 				Endpoints:        cfg.etcd.endpoints,
 				DialTimeout:      globals.EtcdTimeout,
 				AutoSyncInterval: globals.EtcdTimeout,
+				Username:         cfg.etcd.username,
+				Password:         cfg.etcd.password,
 			},
 		)
 

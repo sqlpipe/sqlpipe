@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 
@@ -25,6 +27,15 @@ type User struct {
 	CreatedAt    time.Time `json:"createdAt"`
 	LastModified time.Time `json:"lastModified"`
 	Password     password  `json:"-"`
+	Admin        bool      `json:"admin"`
+	Version      int64     `json:"version"`
+}
+
+type internalUser struct {
+	Username     string    `json:"username"`
+	CreatedAt    time.Time `json:"createdAt"`
+	LastModified time.Time `json:"lastModified"`
+	PasswordHash string    `json:"passwordHash"`
 	Admin        bool      `json:"admin"`
 	Version      int64     `json:"version"`
 }
@@ -72,6 +83,7 @@ func ValidatePasswordPlaintext(v *validator.Validator, password string) {
 
 func ValidateUser(v *validator.Validator, user *User) {
 	v.Check(user.Username != "", "username", "must be provided")
+	v.Check(!strings.Contains("/", user.Username), "username", "cannot contain a '/' character")
 	v.Check(len(user.Username) <= 500, "username", "must not be more than 500 bytes long")
 
 	if user.Password.plaintext != nil {
@@ -88,9 +100,25 @@ type UserModel struct {
 }
 
 func (m UserModel) Insert(user *User) (err error) {
-	getCtx, cancelGet := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	defer cancelGet()
-	resp, err := m.Etcd.Get(getCtx, fmt.Sprintf("sqlpipe/users/%v", user.Username))
+	session, err := concurrency.NewSession(m.Etcd)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	userKey := fmt.Sprintf("sqlpipe/users/%v", user.Username)
+	mutex := concurrency.NewMutex(session, userKey)
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+
+	err = mutex.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer mutex.Unlock(ctx)
+
+	resp, err := m.Etcd.Get(ctx, userKey)
 	if err != nil {
 		return err
 	}
@@ -98,21 +126,29 @@ func (m UserModel) Insert(user *User) (err error) {
 		return ErrDuplicateUsername
 	}
 
-	creationTime := time.Now()
-	user.CreatedAt = creationTime
-	user.LastModified = creationTime
+	userWithPassword := internalUser{
+		Username:     user.Username,
+		PasswordHash: string(user.Password.hash),
+		Admin:        user.Admin,
+		CreatedAt:    user.CreatedAt,
+		LastModified: user.LastModified,
+		Version:      user.Version,
+	}
 
-	bytes, err := json.Marshal(user)
+	creationTime := time.Now()
+	userWithPassword.CreatedAt = creationTime
+	userWithPassword.LastModified = creationTime
+
+	bytes, err := json.Marshal(userWithPassword)
 	if err != nil {
 		return err
 	}
-	putCtx, cancelPut := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+
 	_, err = m.Etcd.Put(
-		putCtx,
-		fmt.Sprintf("sqlpipe/users/%v", user.Username),
+		ctx,
+		fmt.Sprintf("sqlpipe/users/%v", userWithPassword.Username),
 		string(bytes),
 	)
-	defer cancelPut()
 	if err != nil {
 		return err
 	}
@@ -120,9 +156,9 @@ func (m UserModel) Insert(user *User) (err error) {
 }
 
 func (m UserModel) Get(username string) (*User, error) {
-	getCtx, cancelGet := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	defer cancelGet()
-	resp, err := m.Etcd.Get(getCtx, fmt.Sprintf("sqlpipe/users/%v", username))
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+	resp, err := m.Etcd.Get(ctx, fmt.Sprintf("sqlpipe/users/%v", username))
 	if err != nil {
 		return nil, err
 	}
@@ -140,41 +176,103 @@ func (m UserModel) Get(username string) (*User, error) {
 	return &user, nil
 }
 
-func (m UserModel) Update(user *User) (err error) {
-	// query := `
-	//     UPDATE users
-	//     SET name = $1, email = $2, password_hash = $3, activated = $4, version = version + 1
-	//     WHERE id = $5 AND version = $6
-	//     RETURNING version`
+func (m UserModel) Update(user *User, ctx context.Context) (err error) {
+	userWithPassword := internalUser{
+		Username:     user.Username,
+		PasswordHash: string(user.Password.hash),
+		Admin:        user.Admin,
+		CreatedAt:    user.CreatedAt,
+		LastModified: user.LastModified,
+		Version:      user.Version,
+	}
 
-	// args := []interface{}{
-	// 	user.Name,
-	// 	user.Email,
-	// 	user.Password.hash,
-	// 	user.Activated,
-	// 	user.Id,
-	// 	user.Version,
-	// }
+	userWithPassword.LastModified = time.Now()
 
-	// ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	// defer cancel()
+	bytes, err := json.Marshal(userWithPassword)
+	if err != nil {
+		return err
+	}
 
-	// err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.Version)
-	// if err != nil {
-	// 	switch {
-	// 	case err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"`:
-	// 		return ErrDuplicateEmail
-	// 	case errors.Is(err, sql.ErrNoRows):
-	// 		return ErrEditConflict
-	// 	default:
-	// 		return err
-	// 	}
-	// }
-
-	return err
+	_, err = m.Etcd.Put(
+		ctx,
+		fmt.Sprintf("sqlpipe/users/%v", userWithPassword.Username),
+		string(bytes),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (user *User, err error) {
+func (m UserModel) Delete(username string) error {
+	if username == "" {
+		return ErrRecordNotFound
+	}
+
+	session, err := concurrency.NewSession(m.Etcd)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	userKey := fmt.Sprintf("sqlpipe/users/%v", username)
+	mutex := concurrency.NewMutex(session, userKey)
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+
+	err = mutex.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer mutex.Unlock(ctx)
+
+	// count keys about to be deleted
+	resp, err := m.Etcd.Get(ctx, userKey, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+
+	if resp.Count == 1 {
+		return ErrRecordNotFound
+	}
+
+	_, err = m.Etcd.Delete(ctx, userKey, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m UserModel) GetAll() ([]*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+	resp, err := m.Etcd.Get(ctx, "sqlpipe/users/", clientv3.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+
+	users := []*User{}
+	for i := range resp.Kvs {
+		user := User{}
+		prefixStripped := strings.TrimPrefix(string(resp.Kvs[i].Key), "sqlpipe/users/")
+		if strings.Contains(prefixStripped, "/") {
+			// it is a child node, not a user node. do not unmarshal it
+			continue
+		}
+		err = json.Unmarshal(resp.Kvs[i].Value, &user)
+		user.Version = resp.Kvs[0].Version
+		users = append(users, &user)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
 	// tokenHash := sha256.Sum256([]byte(tokenPlaintext))
 
 	// query := `
@@ -194,7 +292,7 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (user *User, e
 	// defer cancel()
 
 	// err := m.DB.QueryRowContext(ctx, query, args...).Scan(
-	// 	&user.Id,
+	// 	&user.ID,
 	// 	&user.CreatedAt,
 	// 	&user.Name,
 	// 	&user.Email,
@@ -210,6 +308,6 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (user *User, e
 	// 		return nil, err
 	// 	}
 	// }
-
-	return user, nil
+	var user User
+	return &user, nil
 }

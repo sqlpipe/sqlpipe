@@ -17,7 +17,16 @@ shell: run
 serve: run
 	docker exec -it sqlpipe sqlpipe serve \
     	--etcd-cluster \
-    	--etcd-endpoints "http://172.31.13.46:2379"
+    	--etcd-endpoints "http://172.31.13.46:2379" \
+		--etcd-password ${ETCD_PASSWORD}
+
+## init: build sqlpipe and initialize etcd through it
+.PHONY: init
+init: run
+	docker exec -it sqlpipe sqlpipe initialize \
+    --etcd-endpoints "http://172.31.13.46:2379" \
+    --root-password ${ETCD_PASSWORD} \
+    --sqlpipe-password ${ETCD_PASSWORD}
 
 # spinup: Spinup cloud db instances
 .PHONY: spinup

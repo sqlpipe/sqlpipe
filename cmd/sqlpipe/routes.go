@@ -10,8 +10,8 @@ import (
 func (app *application) routes() http.Handler {
 	router := httprouter.New()
 
-	// router.NotFound = http.HandlerFunc(app.notFoundResponse)
-	// router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
+	router.NotFound = http.HandlerFunc(app.notFoundResponse)
+	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 
 	router.HandlerFunc(http.MethodGet, "/v2/healthcheck", app.healthcheckHandler)
 
@@ -21,8 +21,11 @@ func (app *application) routes() http.Handler {
 	// router.HandlerFunc(http.MethodPatch, "/v2/movies/:id", app.requirePermission("movies:write", app.updateMovieHandler))
 	// router.HandlerFunc(http.MethodDelete, "/v2/movies/:id", app.requirePermission("movies:write", app.deleteMovieHandler))
 
-	router.HandlerFunc(http.MethodPost, "/v2/users", app.registerUserHandler)
-	router.HandlerFunc(http.MethodGet, "/v2/users/:id", app.showUserApiHandler)
+	router.HandlerFunc(http.MethodPost, "/v2/users", app.createUserHandler)
+	router.HandlerFunc(http.MethodGet, "/v2/users/:id", app.showUserHandler)
+	router.HandlerFunc(http.MethodGet, "/v2/users", app.listUsersHandler)
+	router.HandlerFunc(http.MethodPatch, "/v2/users/:id", app.updateUserHandler)
+	router.HandlerFunc(http.MethodDelete, "/v2/users/:id", app.deleteUserHandler)
 	// router.HandlerFunc(http.MethodPut, "/v2/users/activated", app.activateUserHandler)
 	// router.HandlerFunc(http.MethodPut, "/v2/users/password", app.updateUserPasswordHandler)
 
