@@ -148,7 +148,7 @@ func (m UserModel) Insert(user *User) (err error) {
 
 	_, err = m.Etcd.Put(
 		ctx,
-		fmt.Sprintf("sqlpipe/users/%v", userWithPassword.Username),
+		userKey,
 		string(bytes),
 	)
 	if err != nil {
