@@ -38,6 +38,7 @@ RUN mkdir go && mkdir go/src && mkdir go/src/sqlpipe
 COPY go.mod /go/src/sqlpipe
 COPY go.sum /go/src/sqlpipe
 COPY cmd/ /go/src/sqlpipe/cmd
+COPY pkg/ /go/src/sqlpipe/pkg
 COPY internal/ /go/src/sqlpipe/internal
 COPY vendor/ /go/src/sqlpipe/vendor
 

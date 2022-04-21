@@ -225,20 +225,20 @@ func (app *application) listUsersHandler(w http.ResponseWriter, r *http.Request)
 	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
 
 	input.Filters.Sort = app.readString(qs, "sort", "username")
-	input.Filters.SortSafelist = []string{"username", "createdAt", "lastModified", "-username", "-createdAt", "-lastModified"}
+	input.Filters.SortSafelist = []string{"username", "created_at", "last_modified", "-username", "-created_at", "-last_modified"}
 
 	if data.ValidateFilters(v, input.Filters); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
-	users, err := app.models.Users.GetAll(input.Username, input.Admin, input.Filters)
+	users, metadata, err := app.models.Users.GetAll(input.Username, input.Admin, input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"users": users}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"users": users, "metadata": metadata}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

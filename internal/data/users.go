@@ -13,6 +13,7 @@ import (
 	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
+	"github.com/sqlpipe/sqlpipe/pkg"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -247,15 +248,18 @@ func (m UserModel) Delete(username string) error {
 	return nil
 }
 
-func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*User, error) {
+func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*User, Metadata, error) {
+	metadata := Metadata{}
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 	resp, err := m.Etcd.Get(ctx, "sqlpipe/users/", clientv3.WithPrefix())
 	if err != nil {
-		return nil, err
+		return nil, metadata, err
 	}
 
 	users := []*User{}
+	totalRecords := 0
+
 	for i := range resp.Kvs {
 		user := User{}
 		prefixStripped := strings.TrimPrefix(string(resp.Kvs[i].Key), "sqlpipe/users/")
@@ -273,6 +277,9 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Use
 		}
 
 		err = json.Unmarshal(resp.Kvs[i].Value, &user)
+		if err != nil {
+			return nil, metadata, err
+		}
 
 		if admin != nil && user.Admin != *admin {
 			// doesn't match filter criteria
@@ -281,28 +288,38 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Use
 
 		user.Version = resp.Kvs[0].Version
 		users = append(users, &user)
+		totalRecords++
 	}
 
 	switch filters.sortColumn() {
 	case "-username":
 		sort.Slice(users, func(i, j int) bool { return users[i].Username > users[j].Username })
-	case "createdAt":
+	case "created_at":
 		sort.Slice(users, func(i, j int) bool { return users[i].CreatedAt.Before(users[j].CreatedAt) })
-	case "-createdAt":
+	case "-created_at":
 		sort.Slice(users, func(i, j int) bool { return users[j].CreatedAt.Before(users[i].CreatedAt) })
-	case "lastModified":
-		sort.Slice(users, func(i, j int) bool { return users[i].CreatedAt.Before(users[j].CreatedAt) })
-	case "-lastModified":
+	case "last_modified":
+		sort.Slice(users, func(i, j int) bool { return users[i].LastModified.Before(users[j].LastModified) })
+	case "-last_modified":
 		sort.Slice(users, func(i, j int) bool { return users[j].LastModified.Before(users[i].LastModified) })
 	default:
 		sort.Slice(users, func(i, j int) bool { return users[i].Username < users[j].Username })
 	}
 
-	if err != nil {
-		return nil, err
+	if filters.offset() > totalRecords {
+		metadata = calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+		return nil, metadata, nil
 	}
 
-	return users, nil
+	maxItem := pkg.Min(filters.offset()+filters.limit(), totalRecords)
+	paginatedUsers := []*User{}
+	for i := filters.offset(); i < maxItem; i++ {
+		paginatedUsers = append(paginatedUsers, users[i])
+	}
+
+	metadata = calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	return paginatedUsers, metadata, nil
 }
 
 func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
