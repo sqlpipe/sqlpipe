@@ -31,7 +31,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		Admin:    input.Admin,
 	}
 
-	err = user.Password.Set(input.Password)
+	err = user.SetPassword(input.Password)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -56,7 +56,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusAccepted, envelope{"user": user}, nil)
+	err = app.writeJSON(w, http.StatusAccepted, envelope{"user": user.Scrub()}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -80,7 +80,7 @@ func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"user": user}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"user": user.Scrub()}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -143,12 +143,12 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if input.Password != nil {
-		data.ValidatePasswordPlaintext(v, *input.Password)
+		data.ValidatePassword(v, *input.Password)
 		if !v.Valid() {
 			app.failedValidationResponse(w, r, v.Errors)
 			return
 		}
-		err = user.Password.Set(*input.Password)
+		err = user.SetPassword(*input.Password)
 		if err != nil {
 			app.serverErrorResponse(w, r, err)
 			return
@@ -175,7 +175,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"user": user}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"user": user.Scrub()}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

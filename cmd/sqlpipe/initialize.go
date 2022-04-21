@@ -10,7 +10,9 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/spf13/cobra"
+	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
+	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
 var (
@@ -20,14 +22,16 @@ var (
 		Long:  "Prepare a new etcd cluster for usage by SQLpipe. Must have authentication disabled. SQLpipe will create a user, role, and directory called sqlpipe, and grant the user access to the role, and the role access to that directory. It will also give the root user a password, and enable authentication.",
 		Run:   initializeCmd,
 	}
-	rootPassword    string
-	sqlpipePassword string
-	etcdEndpoints   []string
+	etcdEndpoints        []string
+	etcdRootPassword     string
+	etcdSqlpipePassword  string
+	sqlpipeAdminPassword string
 )
 
 func init() {
-	InitializeCmd.Flags().StringVar(&rootPassword, "root-password", "", "etcd root password")
-	InitializeCmd.Flags().StringVar(&sqlpipePassword, "sqlpipe-password", "", "password for new 'sqlpipe' user")
+	InitializeCmd.Flags().StringVar(&etcdRootPassword, "etcd-root-password", "", "etcd root password")
+	InitializeCmd.Flags().StringVar(&etcdSqlpipePassword, "etcd-sqlpipe-password", "", "password for new 'sqlpipe' user in etcd")
+	InitializeCmd.Flags().StringVar(&sqlpipeAdminPassword, "sqlpipe-admin-password", "", "password for new 'admin' user in sqlpipe")
 	InitializeCmd.Flags().StringSliceVar(&etcdEndpoints, "etcd-endpoints", []string{}, "etcd endpoints, comma separated no spaces")
 }
 
@@ -36,12 +40,32 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 		log.Fatal(errors.New("--etcd-cluster flag given without specifying cluster endpoints"))
 	}
 
-	if rootPassword == "" {
-		log.Fatal("--root-password empty")
+	if etcdRootPassword == "" {
+		log.Fatal("--etcd-root-password empty")
 	}
 
-	if sqlpipePassword == "" {
-		log.Fatal("--sqlpipe-password empty")
+	if etcdSqlpipePassword == "" {
+		log.Fatal("--etcd-sqlpipe-password empty")
+	}
+
+	if sqlpipeAdminPassword == "" {
+		log.Fatal("--sqlpipe-admin-password empty")
+	}
+
+	user := &data.User{
+		Username: "admin",
+		Admin:    true,
+	}
+
+	err = user.SetPassword(sqlpipeAdminPassword)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	v := validator.New()
+
+	if data.ValidateUser(v, user); !v.Valid() {
+		log.Fatal(v.Errors)
 	}
 
 	globals.EtcdTimeout = time.Second * 5
@@ -81,7 +105,7 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 	if _, err = etcd.RoleAdd(ctx, "root"); err != nil {
 		log.Fatal(err)
 	}
-	if _, err = etcd.UserAdd(ctx, "root", rootPassword); err != nil {
+	if _, err = etcd.UserAdd(ctx, "root", etcdRootPassword); err != nil {
 		log.Fatal(err)
 	}
 	if _, err = etcd.UserGrantRole(ctx, "root", "root"); err != nil {
@@ -91,7 +115,7 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 	if _, err = etcd.RoleAdd(ctx, "sqlpipe"); err != nil {
 		log.Fatal(err)
 	}
-	if _, err = etcd.UserAdd(ctx, "sqlpipe", sqlpipePassword); err != nil {
+	if _, err = etcd.UserAdd(ctx, "sqlpipe", etcdSqlpipePassword); err != nil {
 		log.Fatal(err)
 	}
 	if _, err = etcd.UserGrantRole(ctx, "sqlpipe", "sqlpipe"); err != nil {
@@ -108,9 +132,23 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 		log.Fatal(err)
 	}
 
+	m := data.NewModels(etcd)
+
+	err = m.Users.Insert(user)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrDuplicateUsername):
+			v.AddError("username", "a user with this username already exists")
+			log.Fatal(v.Errors)
+		default:
+			log.Fatal(v.Errors)
+		}
+	}
+
 	if _, err = etcd.AuthEnable(ctx); err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("initialized etcd cluster for usage with SQLpipe")
+	log.Printf("initialized etcd cluster for usage with SQLpipe, and created a SQLpipe user called 'admin'")
 }

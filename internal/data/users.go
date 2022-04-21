@@ -25,47 +25,39 @@ var (
 var AnonymousUser = &User{}
 
 type User struct {
+	Username          string    `json:"username"`
+	CreatedAt         time.Time `json:"createdAt"`
+	LastModified      time.Time `json:"lastModified"`
+	PlaintextPassword string    `json:"-"`
+	HashedPassword    []byte    `json:"hashedPassword"`
+	Admin             bool      `json:"admin"`
+	Version           int64     `json:"version"`
+}
+
+type ScrubbedUser struct {
 	Username     string    `json:"username"`
 	CreatedAt    time.Time `json:"createdAt"`
 	LastModified time.Time `json:"lastModified"`
-	Password     password  `json:"-"`
 	Admin        bool      `json:"admin"`
 	Version      int64     `json:"version"`
 }
 
-type internalUser struct {
-	Username     string    `json:"username"`
-	CreatedAt    time.Time `json:"createdAt"`
-	LastModified time.Time `json:"lastModified"`
-	PasswordHash string    `json:"passwordHash"`
-	Admin        bool      `json:"admin"`
-	Version      int64     `json:"version"`
+func (user User) Scrub() ScrubbedUser {
+	return ScrubbedUser{
+		Username:     user.Username,
+		CreatedAt:    user.CreatedAt,
+		LastModified: user.LastModified,
+		Admin:        user.Admin,
+		Version:      user.Version,
+	}
 }
 
 func (u *User) IsAnonymous() bool {
 	return u == AnonymousUser
 }
 
-type password struct {
-	plaintext *string
-	hash      []byte
-}
-
-func (p *password) Set(plaintextPassword string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextPassword), 12)
-	if err != nil {
-		return err
-	}
-
-	p.plaintext = &plaintextPassword
-	p.hash = hash
-
-	return nil
-}
-
-func (p *password) Matches(plaintextPassword string) (bool, error) {
-
-	err := bcrypt.CompareHashAndPassword(p.hash, []byte(plaintextPassword))
+func (u *User) CheckPassword(plaintextPassword string) (bool, error) {
+	err := bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(plaintextPassword))
 	if err != nil {
 		switch {
 		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
@@ -78,24 +70,36 @@ func (p *password) Matches(plaintextPassword string) (bool, error) {
 	return true, nil
 }
 
-func ValidatePasswordPlaintext(v *validator.Validator, password string) {
+func ValidatePassword(v *validator.Validator, password string) {
 	v.Check(password != "", "password", "must be provided")
-	v.Check(len(password) >= 8, "password", "must be at least 8 bytes long")
-	v.Check(len(password) <= 72, "password", "must not be more than 72 bytes long")
+	v.Check(len([]rune(password)) >= 12, "password", "must be at least 12 characters long")
+	v.Check(len([]rune(password)) <= 32, "password", "must not be more than 32 characters long")
+}
+
+func ValidateUsername(v *validator.Validator, username string) {
+	if username != "" {
+		v.Check(validator.Matches(username, validator.UsernameRX), "username", "Username must be 5-30 characters, contain alphanumeric characters or underscores, and first letter must be a letter")
+	}
 }
 
 func ValidateUser(v *validator.Validator, user *User) {
-	v.Check(user.Username != "", "username", "must be provided")
-	v.Check(!strings.Contains("/", user.Username), "username", "cannot contain a '/' character")
-	v.Check(len(user.Username) <= 500, "username", "must not be more than 500 bytes long")
+	ValidateUsername(v, user.Username)
+	ValidatePassword(v, user.PlaintextPassword)
 
-	if user.Password.plaintext != nil {
-		ValidatePasswordPlaintext(v, *user.Password.plaintext)
-	}
-
-	if user.Password.hash == nil {
+	if user.HashedPassword == nil {
 		panic("missing password hash for user")
 	}
+}
+
+func (u *User) SetPassword(plaintextPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextPassword), 12)
+	if err != nil {
+		return err
+	}
+
+	u.PlaintextPassword = plaintextPassword
+	u.HashedPassword = hash
+	return nil
 }
 
 type UserModel struct {
@@ -129,20 +133,11 @@ func (m UserModel) Insert(user *User) (err error) {
 		return ErrDuplicateUsername
 	}
 
-	userWithPassword := internalUser{
-		Username:     user.Username,
-		PasswordHash: string(user.Password.hash),
-		Admin:        user.Admin,
-		CreatedAt:    user.CreatedAt,
-		LastModified: user.LastModified,
-		Version:      user.Version,
-	}
-
 	creationTime := time.Now()
-	userWithPassword.CreatedAt = creationTime
-	userWithPassword.LastModified = creationTime
+	user.CreatedAt = creationTime
+	user.LastModified = creationTime
 
-	bytes, err := json.Marshal(userWithPassword)
+	bytes, err := json.Marshal(user)
 	if err != nil {
 		return err
 	}
@@ -180,25 +175,17 @@ func (m UserModel) Get(username string) (*User, error) {
 }
 
 func (m UserModel) Update(user *User, ctx context.Context) (err error) {
-	userWithPassword := internalUser{
-		Username:     user.Username,
-		PasswordHash: string(user.Password.hash),
-		Admin:        user.Admin,
-		CreatedAt:    user.CreatedAt,
-		LastModified: user.LastModified,
-		Version:      user.Version,
-	}
 
-	userWithPassword.LastModified = time.Now()
+	user.LastModified = time.Now()
 
-	bytes, err := json.Marshal(userWithPassword)
+	bytes, err := json.Marshal(user)
 	if err != nil {
 		return err
 	}
 
 	_, err = m.Etcd.Put(
 		ctx,
-		fmt.Sprintf("sqlpipe/users/%v", userWithPassword.Username),
+		fmt.Sprintf("sqlpipe/users/%v", user.Username),
 		string(bytes),
 	)
 	if err != nil {
@@ -248,7 +235,7 @@ func (m UserModel) Delete(username string) error {
 	return nil
 }
 
-func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*User, Metadata, error) {
+func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*ScrubbedUser, Metadata, error) {
 	metadata := Metadata{}
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
@@ -257,7 +244,7 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Use
 		return nil, metadata, err
 	}
 
-	users := []*User{}
+	users := []*ScrubbedUser{}
 	totalRecords := 0
 
 	for i := range resp.Kvs {
@@ -287,7 +274,8 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Use
 		}
 
 		user.Version = resp.Kvs[0].Version
-		users = append(users, &user)
+		scrubbedUser := user.Scrub()
+		users = append(users, &scrubbedUser)
 		totalRecords++
 	}
 
@@ -312,7 +300,7 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Use
 	}
 
 	maxItem := pkg.Min(filters.offset()+filters.limit(), totalRecords)
-	paginatedUsers := []*User{}
+	paginatedUsers := []*ScrubbedUser{}
 	for i := filters.offset(); i < maxItem; i++ {
 		paginatedUsers = append(paginatedUsers, users[i])
 	}

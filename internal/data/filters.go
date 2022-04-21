@@ -2,7 +2,6 @@ package data
 
 import (
 	"math"
-	"strings"
 
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
@@ -22,14 +21,6 @@ func (f Filters) sortColumn() string {
 	}
 
 	panic("unsafe sort parameter: " + f.Sort)
-}
-
-func (f Filters) sortDirection() string {
-	if strings.HasPrefix(f.Sort, "-") {
-		return "DESC"
-	}
-
-	return "ASC"
 }
 
 func ValidateFilters(v *validator.Validator, f Filters) {

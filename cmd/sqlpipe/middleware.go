@@ -1,12 +1,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"expvar"
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -85,51 +85,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) authenticate(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Vary", "Authorization")
-
-		authorizationHeader := r.Header.Get("Authorization")
-
-		if authorizationHeader == "" {
-			r = app.contextSetUser(r, data.AnonymousUser)
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		headerParts := strings.Split(authorizationHeader, " ")
-		if len(headerParts) != 2 || headerParts[0] != "Bearer" {
-			app.invalidAuthenticationTokenResponse(w, r)
-			return
-		}
-
-		token := headerParts[1]
-
-		v := validator.New()
-
-		if data.ValidateTokenPlaintext(v, token); !v.Valid() {
-			app.invalidAuthenticationTokenResponse(w, r)
-			return
-		}
-
-		user, err := app.models.Users.GetForToken(data.ScopeAuthentication, token)
-		if err != nil {
-			switch {
-			case errors.Is(err, data.ErrRecordNotFound):
-				app.invalidAuthenticationTokenResponse(w, r)
-			default:
-				app.serverErrorResponse(w, r, err)
-			}
-			return
-		}
-
-		r = app.contextSetUser(r, user)
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (app *application) requireAuthenticatedUser(next http.HandlerFunc) http.HandlerFunc {
+func (app *application) requireAuthenticatedUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := app.contextGetUser(r)
 
@@ -140,27 +96,6 @@ func (app *application) requireAuthenticatedUser(next http.HandlerFunc) http.Han
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (app *application) requirePermission(code string, next http.HandlerFunc) http.HandlerFunc {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		user := app.contextGetUser(r)
-
-		permissions, err := app.models.Permissions.GetAllForUser(user.Username)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
-			return
-		}
-
-		if !permissions.Include(code) {
-			app.notPermittedResponse(w, r)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	}
-
-	return app.requireAuthenticatedUser(fn)
 }
 
 func (app *application) enableCORS(next http.Handler) http.Handler {
@@ -212,5 +147,81 @@ func (app *application) metrics(next http.Handler) http.Handler {
 		totalProcessingTimeMicroseconds.Add(metrics.Duration.Microseconds())
 
 		totalResponsesSentByStatus.Add(strconv.Itoa(metrics.Code), 1)
+	})
+}
+
+func (app *application) authenticate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			ctx := context.WithValue(r.Context(), userContextKey, data.AnonymousUser)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		v := validator.New()
+		data.ValidateUsername(v, username)
+		data.ValidatePassword(v, password)
+
+		if !v.Valid() {
+			app.failedValidationResponse(w, r, v.Errors)
+			return
+		}
+
+		user, err := app.models.Users.Get(username)
+		if err != nil {
+			switch {
+			case errors.Is(err, data.ErrRecordNotFound):
+				app.invalidCredentialsResponse(w, r)
+			default:
+				app.serverErrorResponse(w, r, err)
+			}
+			return
+		}
+
+		match, err := user.CheckPassword(password)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
+
+		if !match {
+			app.invalidCredentialsResponse(w, r)
+			return
+		}
+
+		r = app.contextSetUser(r, user)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) logRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.logger.PrintInfo(
+			"Request received",
+			map[string]string{
+				"Remote address":    r.RemoteAddr,
+				"Protocol":          r.Proto,
+				"Method":            r.Method,
+				"Requested address": r.URL.RequestURI(),
+			},
+		)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := app.contextGetUser(r)
+
+		if !user.Admin {
+			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+			app.requireAdminResponse(w, r)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
