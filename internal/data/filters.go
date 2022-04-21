@@ -17,7 +17,7 @@ type Filters struct {
 func (f Filters) sortColumn() string {
 	for _, safeValue := range f.SortSafelist {
 		if f.Sort == safeValue {
-			return strings.TrimPrefix(f.Sort, "-")
+			return f.Sort
 		}
 	}
 

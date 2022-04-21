@@ -15,7 +15,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-func (app *application) readIdParam(r *http.Request) (int64, error) {
+func (app *application) readIntIdParam(r *http.Request) (int64, error) {
 	params := httprouter.ParamsFromContext(r.Context())
 
 	id, err := strconv.ParseInt(params.ByName("id"), 10, 64)
@@ -26,12 +26,12 @@ func (app *application) readIdParam(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func (app *application) readStringIdParam(r *http.Request) (string, error) {
+func (app *application) readStringIdParam(r *http.Request, paramName string) (string, error) {
 	params := httprouter.ParamsFromContext(r.Context())
 
-	id := params.ByName("id")
+	id := params.ByName(paramName)
 	if id == "" {
-		return "", errors.New("no id parameter given")
+		return "", fmt.Errorf("no %v parameter given", paramName)
 	}
 
 	return id, nil
@@ -144,6 +144,22 @@ func (app *application) readInt(qs url.Values, key string, defaultValue int, v *
 	}
 
 	return i
+}
+
+func (app *application) readBool(qs url.Values, key string, v *validator.Validator) *bool {
+	s := qs.Get(key)
+
+	if s == "" {
+		return nil
+	}
+
+	i, err := strconv.ParseBool(s)
+	if err != nil {
+		v.AddError(key, "must be a boolean value")
+		return nil
+	}
+
+	return &i
 }
 
 func (app *application) background(fn func()) {

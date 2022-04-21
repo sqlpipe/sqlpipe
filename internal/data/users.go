@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -62,6 +63,7 @@ func (p *password) Set(plaintextPassword string) error {
 }
 
 func (p *password) Matches(plaintextPassword string) (bool, error) {
+
 	err := bcrypt.CompareHashAndPassword(p.hash, []byte(plaintextPassword))
 	if err != nil {
 		switch {
@@ -245,7 +247,7 @@ func (m UserModel) Delete(username string) error {
 	return nil
 }
 
-func (m UserModel) GetAll() ([]*User, error) {
+func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 	resp, err := m.Etcd.Get(ctx, "sqlpipe/users/", clientv3.WithPrefix())
@@ -257,14 +259,45 @@ func (m UserModel) GetAll() ([]*User, error) {
 	for i := range resp.Kvs {
 		user := User{}
 		prefixStripped := strings.TrimPrefix(string(resp.Kvs[i].Key), "sqlpipe/users/")
-		if strings.Contains(prefixStripped, "/") {
+		levels := strings.Split(prefixStripped, "/")
+		topLevel := levels[0]
+
+		if len(levels) > 1 {
 			// it is a child node, not a user node. do not unmarshal it
 			continue
 		}
+
+		if username != "" && !strings.Contains(topLevel, username) {
+			// doesn't match filter criteria
+			continue
+		}
+
 		err = json.Unmarshal(resp.Kvs[i].Value, &user)
+
+		if admin != nil && user.Admin != *admin {
+			// doesn't match filter criteria
+			continue
+		}
+
 		user.Version = resp.Kvs[0].Version
 		users = append(users, &user)
 	}
+
+	switch filters.sortColumn() {
+	case "-username":
+		sort.Slice(users, func(i, j int) bool { return users[i].Username > users[j].Username })
+	case "createdAt":
+		sort.Slice(users, func(i, j int) bool { return users[i].CreatedAt.Before(users[j].CreatedAt) })
+	case "-createdAt":
+		sort.Slice(users, func(i, j int) bool { return users[j].CreatedAt.Before(users[i].CreatedAt) })
+	case "lastModified":
+		sort.Slice(users, func(i, j int) bool { return users[i].CreatedAt.Before(users[j].CreatedAt) })
+	case "-lastModified":
+		sort.Slice(users, func(i, j int) bool { return users[j].LastModified.Before(users[i].LastModified) })
+	default:
+		sort.Slice(users, func(i, j int) bool { return users[i].Username < users[j].Username })
+	}
+
 	if err != nil {
 		return nil, err
 	}

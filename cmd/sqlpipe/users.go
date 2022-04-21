@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/data"
@@ -62,7 +63,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) {
-	username, err := app.readStringIdParam(r)
+	username, err := app.readStringIdParam(r, "username")
 	if err != nil {
 		app.notFoundResponse(w, r)
 		return
@@ -86,7 +87,7 @@ func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request) {
-	username, err := app.readStringIdParam(r)
+	username, err := app.readStringIdParam(r, "username")
 	if err != nil {
 		app.notFoundResponse(w, r)
 		return
@@ -181,7 +182,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) deleteUserHandler(w http.ResponseWriter, r *http.Request) {
-	username, err := app.readStringIdParam(r)
+	username, err := app.readStringIdParam(r, "username")
 	if err != nil {
 		app.notFoundResponse(w, r)
 		return
@@ -205,7 +206,33 @@ func (app *application) deleteUserHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) listUsersHandler(w http.ResponseWriter, r *http.Request) {
-	users, err := app.models.Users.GetAll()
+	var input struct {
+		Username     string
+		Admin        *bool
+		CreatedAt    time.Time
+		LastModified time.Time
+		data.Filters
+	}
+
+	v := validator.New()
+
+	qs := r.URL.Query()
+
+	input.Username = app.readString(qs, "username", "")
+	input.Admin = app.readBool(qs, "admin", v)
+
+	input.Filters.Page = app.readInt(qs, "page", 1, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+
+	input.Filters.Sort = app.readString(qs, "sort", "username")
+	input.Filters.SortSafelist = []string{"username", "createdAt", "lastModified", "-username", "-createdAt", "-lastModified"}
+
+	if data.ValidateFilters(v, input.Filters); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	users, err := app.models.Users.GetAll(input.Username, input.Admin, input.Filters)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
