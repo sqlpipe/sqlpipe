@@ -186,6 +186,7 @@ func (m UserModel) GetUserWithPassword(username string) (*User, error) {
 	return &user, nil
 }
 
+// TODO: SHOULD I CHANGE THIS FUNC TO TAKE A CONTEXT POINTER?
 func (m UserModel) GetUserWithPasswordWithContext(username string, ctx context.Context) (*User, error) {
 	resp, err := m.Etcd.Get(ctx, getUserKey(username))
 	if err != nil {

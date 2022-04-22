@@ -111,6 +111,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		app.serverErrorResponse(w, r, err)
 	}
 
+	// TODO: SHOULD I BE PASSING A POINTER HERE?
 	user, err := app.models.Users.GetUserWithPasswordWithContext(username, ctx)
 	if err != nil {
 		switch {
@@ -170,6 +171,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 
 	// If you changed the user's password, delete all of their outstanding authentication tokens
 	if input.Password != nil {
+		// TODO: SHOULD I BE PASSING A POINTER HERE?
 		if err = app.models.Tokens.DeleteAllForUserWithContext(user.Username, ctx); err != nil {
 			if err != data.ErrRecordNotFound {
 				app.serverErrorResponse(w, r, err)

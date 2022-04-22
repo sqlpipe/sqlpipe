@@ -86,6 +86,7 @@ func (m TokenModel) Insert(token *Token, ctx context.Context) (err error) {
 	return err
 }
 
+// TODO: SHOULD I CHANGE THIS FUNC TO TAKE A CONTEXT POINTER?
 func (m TokenModel) DeleteAllForUserWithContext(username string, ctx context.Context) (err error) {
 	resp, err := m.Etcd.Get(ctx, fmt.Sprintf("%v", TokenPrefix), clientv3.WithPrefix())
 	if resp.Count == 0 {

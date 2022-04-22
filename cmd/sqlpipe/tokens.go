@@ -54,6 +54,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		app.serverErrorResponse(w, r, err)
 	}
 
+	// TODO: SHOULD I BE PASSING A POINTER HERE?
 	user, err := app.models.Users.GetUserWithPasswordWithContext(input.Username, ctx)
 	if err != nil {
 		switch {
