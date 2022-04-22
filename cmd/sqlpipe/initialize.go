@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -58,31 +57,35 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 	}
 
 	if err = user.SetPassword(sqlpipeAdminPassword); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 
 	data.ValidateUser(v, user)
 
 	if !v.Valid() {
-		log.Fatal(v.Errors)
+		log.Println(v.Errors)
+		return
 	}
+
+	globals.EtcdTimeout = time.Second * 10
 
 	etcd, err := clientv3.New(
 		clientv3.Config{
 			Endpoints:   etcdEndpoints,
-			DialTimeout: time.Second * 5,
+			DialTimeout: globals.EtcdTimeout,
 		},
 	)
 	if err != nil {
-		log.Fatal(
-			errors.New("unable to create an etcd client"),
-		)
+		log.Println("unable to create etcd client")
+		return
 	}
 	defer etcd.Close()
 
 	session, err := concurrency.NewSession(etcd)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	defer session.Close()
 
@@ -91,37 +94,48 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 	defer cancel()
 
 	if err = mutex.Lock(ctx); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 
 	resp, err := etcd.Get(ctx, "sqlpipe", clientv3.WithPrefix())
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
-	if resp.Count != 0 {
-		log.Fatal("there is already a sqlpipe directory (or sub-keys) initialized in this etcd cluster. to initialize, you must delete the sqlpipe node, all children nodes, sqlpipe user, and sqlpipe role")
+
+	if resp.Count > 1 {
+		log.Println("there is already a sqlpipe directory (or sub-keys) initialized in this etcd cluster. to initialize, you must delete the sqlpipe node, all children nodes, sqlpipe user, and sqlpipe role")
+		return
 	}
 
 	if _, err = etcd.Put(ctx, "sqlpipe", fmt.Sprint(time.Now())); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	if _, err = etcd.RoleAdd(ctx, "root"); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	if _, err = etcd.UserAdd(ctx, "root", etcdRootPassword); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	if _, err = etcd.UserGrantRole(ctx, "root", "root"); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	if _, err = etcd.RoleAdd(ctx, "sqlpipe"); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	if _, err = etcd.UserAdd(ctx, "sqlpipe", etcdSqlpipePassword); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	if _, err = etcd.UserGrantRole(ctx, "sqlpipe", "sqlpipe"); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	if _, err = etcd.RoleGrantPermission(
 		ctx,
@@ -130,17 +144,20 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 		"sqlpipf",
 		clientv3.PermissionType(clientv3.PermReadWrite),
 	); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 
 	m := data.NewModels(etcd)
 
 	if err = m.Users.Insert(user); err != nil {
-		log.Fatal(v.Errors)
+		log.Println(v.Errors)
+		return
 	}
 
 	if _, err = etcd.AuthEnable(ctx); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 
 	log.Printf("initialized etcd cluster for usage with SQLpipe, and created a SQLpipe user called 'admin'")
