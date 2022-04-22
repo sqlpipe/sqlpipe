@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"expvar"
 	"fmt"
@@ -152,10 +151,12 @@ func (app *application) metrics(next http.Handler) http.Handler {
 
 func (app *application) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Authorization")
+
 		username, password, ok := r.BasicAuth()
 		if !ok {
-			ctx := context.WithValue(r.Context(), userContextKey, data.AnonymousUser)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			r = app.contextSetUser(r, data.AnonymousUser)
+			next.ServeHTTP(w, r)
 			return
 		}
 
@@ -164,7 +165,7 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 		data.ValidatePassword(v, password)
 
 		if !v.Valid() {
-			app.failedValidationResponse(w, r, v.Errors)
+			app.invalidCredentialsResponse(w, r)
 			return
 		}
 

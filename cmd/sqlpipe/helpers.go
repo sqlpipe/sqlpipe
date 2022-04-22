@@ -31,7 +31,7 @@ func (app *application) readStringIdParam(r *http.Request, paramName string) (st
 
 	id := params.ByName(paramName)
 	if id == "" {
-		return "", fmt.Errorf("no %v parameter given", paramName)
+		return "", errors.New("no id value given")
 	}
 
 	return id, nil

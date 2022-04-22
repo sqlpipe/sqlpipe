@@ -42,6 +42,7 @@ type config struct {
 	cluster        bool
 	etcd           struct {
 		timeout          int
+		longTimeout      int
 		endpoints        []string
 		autoSyncInterval int
 		username         string
@@ -71,6 +72,7 @@ func init() {
 	ServeCmd.Flags().BoolVar(&cfg.cluster, "etcd-cluster", false, "Join a SQLpipe cluster with an etcd backend (default false)")
 	ServeCmd.Flags().StringSliceVar(&cfg.etcd.endpoints, "etcd-endpoints", []string{}, "etcd endpoints, comma separated no spaces")
 	ServeCmd.Flags().IntVar(&cfg.etcd.timeout, "etcd-timeout", 5, "Timeout in seconds for etcd operations")
+	ServeCmd.Flags().IntVar(&cfg.etcd.longTimeout, "etcd-timeout", 30, "Timeout in seconds for long etcd operations (such as deleting all login tokens for a user)")
 	ServeCmd.Flags().StringVar(&cfg.etcd.password, "etcd-password", "", "Password to access etcd cluster")
 	ServeCmd.Flags().StringVar(&cfg.etcd.username, "etcd-username", "sqlpipe", "Username to access etcd cluster")
 	ServeCmd.Flags().IntVar(&cfg.port, "port", 9000, "API server port")
@@ -104,6 +106,7 @@ func runServe(cmd *cobra.Command, args []string) {
 
 		// clientv3.SetLogger(grpclog.NewLoggerV2(os.Stderr, os.Stderr, os.Stderr))
 		globals.EtcdTimeout = time.Second * time.Duration(cfg.etcd.timeout)
+		globals.EtcdLongTimeout = time.Second * time.Duration(cfg.etcd.longTimeout)
 
 		etcd, err = clientv3.New(
 			clientv3.Config{

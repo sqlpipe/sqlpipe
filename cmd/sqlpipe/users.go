@@ -13,6 +13,10 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
+const (
+	UserPrefix = "sqlpipe/users/"
+)
+
 func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Username string `json:"username"`
@@ -99,17 +103,15 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 	defer session.Close()
 
-	userKey := fmt.Sprintf("sqlpipe/users/%v", username)
+	userKey := fmt.Sprintf("%v%v", UserPrefix, username)
 	mutex := concurrency.NewMutex(session, userKey)
-
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdLongTimeout)
 	defer cancel()
 
 	err = mutex.Lock(ctx)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
-	defer mutex.Unlock(ctx)
 
 	user, err := app.models.Users.Get(username)
 	if err != nil {
@@ -173,6 +175,11 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 			app.serverErrorResponse(w, r, err)
 		}
 		return
+	}
+
+	// If you changed the user's password, delete all of their outstanding authentication tokens
+	if input.Password != nil {
+		app.models.Tokens.DeleteAllForUser(user.Username)
 	}
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"user": user.Scrub()}, nil)

@@ -195,10 +195,6 @@ func (m UserModel) Update(user *User, ctx context.Context) (err error) {
 }
 
 func (m UserModel) Delete(username string) error {
-	if username == "" {
-		return ErrRecordNotFound
-	}
-
 	session, err := concurrency.NewSession(m.Etcd)
 	if err != nil {
 		return err
@@ -223,7 +219,7 @@ func (m UserModel) Delete(username string) error {
 		return err
 	}
 
-	if resp.Count == 1 {
+	if resp.Count == 0 {
 		return ErrRecordNotFound
 	}
 
