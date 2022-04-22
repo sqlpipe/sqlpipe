@@ -12,7 +12,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
@@ -63,52 +62,35 @@ type TokenModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m TokenModel) New(username string, ttl time.Duration, scope string) (*Token, error) {
+func (m TokenModel) New(username string, ttl time.Duration, scope string, ctx context.Context) (*Token, error) {
 	token, err := generateToken(username, ttl, scope)
 	if err != nil {
 		return nil, err
 	}
 
-	err = m.Insert(token)
+	err = m.Insert(token, ctx)
 	return token, err
 }
 
-func (m TokenModel) Insert(token *Token) (err error) {
+func (m TokenModel) Insert(token *Token, ctx context.Context) (err error) {
 	bytes, err := json.Marshal(token)
 	if err != nil {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	_, err = m.Etcd.Put(
 		ctx,
 		fmt.Sprintf("%v%v", TokenPrefix, token.Hash),
 		string(bytes),
 	)
-	cancel()
 	return err
 }
 
-func (m TokenModel) DeleteAllForUser(username string) (err error) {
-	session, err := concurrency.NewSession(m.Etcd)
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	mutex := concurrency.NewMutex(session, TokenPrefix)
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	defer cancel()
-	err = mutex.Lock(ctx)
-	if err != nil {
-		return err
-	}
-
+func (m TokenModel) DeleteAllForUserWithContext(username string, ctx context.Context) (err error) {
 	resp, err := m.Etcd.Get(ctx, fmt.Sprintf("%v", TokenPrefix), clientv3.WithPrefix())
 	if resp.Count == 0 {
 		return ErrRecordNotFound
 	}
-	cancel()
 	if err != nil {
 		return err
 	}
@@ -131,7 +113,7 @@ func (m TokenModel) DeleteAllForUser(username string) (err error) {
 	ch := make(chan *stringWithContext)
 	g := errgroup.Group{}
 
-	for t := 0; t < 10; t++ {
+	for t := 0; t < globals.EtcdMaxConcurrentRequests; t++ {
 		go m.asyncDeleteWorker(ch, &g)
 	}
 

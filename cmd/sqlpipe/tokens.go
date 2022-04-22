@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
@@ -34,7 +37,24 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
-	user, err := app.models.Users.Get(input.Username)
+	session, err := concurrency.NewSession(app.models.Tokens.Etcd)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+	defer session.Close()
+
+	userKey := fmt.Sprintf("%v%v", UserPrefix, input.Username)
+	mutex := concurrency.NewMutex(session, userKey)
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+
+	err = mutex.Lock(ctx)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+
+	user, err := app.models.Users.GetUserWithPasswordWithContext(input.Username, ctx)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -51,6 +71,8 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
+	scrubbedUser := user.Scrub()
+
 	if !match {
 		app.invalidCredentialsResponse(w, r)
 		return
@@ -65,7 +87,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		panic("unable to parse time duration")
 	}
 
-	token, err := app.models.Tokens.New(user.Username, duration, data.ScopeAuthentication)
+	token, err := app.models.Tokens.New(scrubbedUser.Username, duration, data.ScopeAuthentication, ctx)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

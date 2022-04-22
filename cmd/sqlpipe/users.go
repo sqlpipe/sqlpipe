@@ -24,8 +24,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		Admin    bool   `json:"admin"`
 	}
 
-	err := app.readJSON(w, r, &input)
-	if err != nil {
+	if err := app.readJSON(w, r, &input); err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
@@ -35,8 +34,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		Admin:    input.Admin,
 	}
 
-	err = user.SetPassword(input.Password)
-	if err != nil {
+	if err = user.SetPassword(input.Password); err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
@@ -48,8 +46,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.models.Users.Insert(user)
-	if err != nil {
+	if err = app.models.Users.Insert(user); err != nil {
 		switch {
 		case errors.Is(err, data.ErrDuplicateUsername):
 			v.AddError("username", "a user with this username already exists")
@@ -60,8 +57,9 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusAccepted, envelope{"user": user.Scrub()}, nil)
-	if err != nil {
+	scrubbedUser := user.Scrub()
+
+	if err = app.writeJSON(w, http.StatusAccepted, envelope{"user": scrubbedUser}, nil); err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 }
@@ -73,7 +71,7 @@ func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user, err := app.models.Users.Get(username)
+	scrubbedUser, err := app.models.Users.Get(username)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -84,7 +82,7 @@ func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"user": user.Scrub()}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"user": scrubbedUser}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -105,15 +103,15 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 
 	userKey := fmt.Sprintf("%v%v", UserPrefix, username)
 	mutex := concurrency.NewMutex(session, userKey)
+
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdLongTimeout)
 	defer cancel()
 
-	err = mutex.Lock(ctx)
-	if err != nil {
+	if err = mutex.Lock(ctx); err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 
-	user, err := app.models.Users.Get(username)
+	user, err := app.models.Users.GetUserWithPasswordWithContext(username, ctx)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -130,28 +128,27 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		Admin    *bool   `json:"admin"`
 	}
 
-	err = app.readJSON(w, r, &input)
-	if err != nil {
+	if err = app.readJSON(w, r, &input); err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
 
 	v := validator.New()
 
-	if input.Username != nil && *input.Username != user.Username {
-		err = errors.New("you cannot change a user's username")
-		app.badRequestResponse(w, r, err)
-		return
-	}
-
-	if input.Password != nil {
-		data.ValidatePassword(v, *input.Password)
-		if !v.Valid() {
+	if input.Username != nil {
+		if v.Check(input.Username == &user.Username, "username", "cannot be changed"); !v.Valid() {
 			app.failedValidationResponse(w, r, v.Errors)
 			return
 		}
-		err = user.SetPassword(*input.Password)
-		if err != nil {
+	}
+
+	if input.Password != nil {
+		if data.ValidatePassword(v, *input.Password); !v.Valid() {
+			app.failedValidationResponse(w, r, v.Errors)
+			return
+		}
+
+		if err = user.SetPassword(*input.Password); err != nil {
 			app.serverErrorResponse(w, r, err)
 			return
 		}
@@ -166,23 +163,23 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.models.Users.Update(user, ctx)
-	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrEditConflict):
-			app.editConflictResponse(w, r)
-		default:
-			app.serverErrorResponse(w, r, err)
-		}
+	if err = app.models.Users.Update(user, ctx); err != nil {
+		app.serverErrorResponse(w, r, err)
 		return
 	}
 
 	// If you changed the user's password, delete all of their outstanding authentication tokens
 	if input.Password != nil {
-		app.models.Tokens.DeleteAllForUser(user.Username)
+		if err = app.models.Tokens.DeleteAllForUserWithContext(user.Username, ctx); err != nil {
+			if err != data.ErrRecordNotFound {
+				app.serverErrorResponse(w, r, err)
+			}
+		}
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"user": user.Scrub()}, nil)
+	scrubbedUser := user.Scrub()
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"user": scrubbedUser}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
@@ -195,8 +192,7 @@ func (app *application) deleteUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.models.Users.Delete(username)
-	if err != nil {
+	if err = app.models.Users.Delete(username); err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
 			app.notFoundResponse(w, r)

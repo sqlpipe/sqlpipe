@@ -12,6 +12,7 @@ func (app *application) routes() http.Handler {
 	router := httprouter.New()
 
 	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit, app.authenticate)
+
 	requireAuthenticatedUser := alice.New(app.requireAuthenticatedUser)
 	requireAdmin := requireAuthenticatedUser.Append(app.requireAdmin)
 

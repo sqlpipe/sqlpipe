@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"reflect"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/spf13/cobra"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
@@ -29,46 +29,43 @@ var (
 )
 
 func init() {
+	InitializeCmd.Flags().StringSliceVar(&etcdEndpoints, "etcd-endpoints", []string{}, "etcd endpoints, comma separated no spaces")
 	InitializeCmd.Flags().StringVar(&etcdRootPassword, "etcd-root-password", "", "etcd root password")
 	InitializeCmd.Flags().StringVar(&etcdSqlpipePassword, "etcd-sqlpipe-password", "", "password for new 'sqlpipe' user in etcd")
 	InitializeCmd.Flags().StringVar(&sqlpipeAdminPassword, "sqlpipe-admin-password", "", "password for new 'admin' user in sqlpipe")
-	InitializeCmd.Flags().StringSliceVar(&etcdEndpoints, "etcd-endpoints", []string{}, "etcd endpoints, comma separated no spaces")
 }
 
 func initializeCmd(cmd *cobra.Command, args []string) {
-	if reflect.DeepEqual(etcdEndpoints, []string{}) {
-		log.Fatal(errors.New("--etcd-cluster flag given without specifying cluster endpoints"))
-	}
+	v := validator.New()
 
-	if etcdRootPassword == "" {
-		log.Fatal("--etcd-root-password empty")
-	}
+	v.Check(etcdRootPassword != "", "--etcd-root-password", "must be provided")
+	v.Check(len([]rune(etcdRootPassword)) >= 12, "--etcd-root-password", "must be at least 12 characters long")
+	v.Check(len([]rune(etcdRootPassword)) <= 32, "--etcd-root-password", "must not be more than 32 characters long")
 
-	if etcdSqlpipePassword == "" {
-		log.Fatal("--etcd-sqlpipe-password empty")
-	}
+	v.Check(etcdSqlpipePassword != "", "--etcd-sqlpipe-password", "must be provided")
+	v.Check(len([]rune(etcdSqlpipePassword)) >= 12, "--etcd-sqlpipe-password", "must be at least 12 characters long")
+	v.Check(len([]rune(etcdSqlpipePassword)) <= 32, "--etcd-sqlpipe-password", "must not be more than 32 characters long")
 
-	if sqlpipeAdminPassword == "" {
-		log.Fatal("--sqlpipe-admin-password empty")
-	}
+	v.Check(sqlpipeAdminPassword != "", "--sqlpipe-admin-password", "must be provided")
+	v.Check(len([]rune(sqlpipeAdminPassword)) >= 12, "--sqlpipe-admin-password", "must be at least 12 characters long")
+	v.Check(len([]rune(sqlpipeAdminPassword)) <= 32, "--sqlpipe-admin-password", "must not be more than 32 characters long")
+
+	v.Check(len(etcdEndpoints) != 0, "--etcd-endpoints", "must be provided")
 
 	user := &data.User{
 		Username: "admin",
 		Admin:    true,
 	}
 
-	err = user.SetPassword(sqlpipeAdminPassword)
-	if err != nil {
+	if err = user.SetPassword(sqlpipeAdminPassword); err != nil {
 		log.Fatal(err)
 	}
 
-	v := validator.New()
+	data.ValidateUser(v, user)
 
-	if data.ValidateUser(v, user); !v.Valid() {
+	if !v.Valid() {
 		log.Fatal(v.Errors)
 	}
-
-	globals.EtcdTimeout = time.Second * 5
 
 	etcd, err := clientv3.New(
 		clientv3.Config{
@@ -78,30 +75,36 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 	)
 	if err != nil {
 		log.Fatal(
-			errors.New("unable to connect to etcd"),
+			errors.New("unable to create an etcd client"),
 		)
 	}
 	defer etcd.Close()
 
+	session, err := concurrency.NewSession(etcd)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer session.Close()
+
+	mutex := concurrency.NewMutex(session, "sqlpipe")
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
-	resp, err := etcd.Get(ctx, "sqlpipe")
+
+	if err = mutex.Lock(ctx); err != nil {
+		log.Fatal(err)
+	}
+
+	resp, err := etcd.Get(ctx, "sqlpipe", clientv3.WithPrefix())
 	if err != nil {
 		log.Fatal(err)
 	}
 	if resp.Count != 0 {
-		log.Fatal("there is already a sqlpipe directory initialized in this etcd cluster. to initialize, you must delete the sqlpipe node, all children nodes, sqlpipe user, and sqlpipe role")
+		log.Fatal("there is already a sqlpipe directory (or sub-keys) initialized in this etcd cluster. to initialize, you must delete the sqlpipe node, all children nodes, sqlpipe user, and sqlpipe role")
 	}
 
-	_, err = etcd.Put(
-		ctx,
-		"sqlpipe",
-		fmt.Sprint(time.Now()),
-	)
-	if err != nil {
+	if _, err = etcd.Put(ctx, "sqlpipe", fmt.Sprint(time.Now())); err != nil {
 		log.Fatal(err)
 	}
-
 	if _, err = etcd.RoleAdd(ctx, "root"); err != nil {
 		log.Fatal(err)
 	}
@@ -111,7 +114,6 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 	if _, err = etcd.UserGrantRole(ctx, "root", "root"); err != nil {
 		log.Fatal(err)
 	}
-
 	if _, err = etcd.RoleAdd(ctx, "sqlpipe"); err != nil {
 		log.Fatal(err)
 	}
@@ -121,7 +123,6 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 	if _, err = etcd.UserGrantRole(ctx, "sqlpipe", "sqlpipe"); err != nil {
 		log.Fatal(err)
 	}
-
 	if _, err = etcd.RoleGrantPermission(
 		ctx,
 		"sqlpipe",
@@ -134,16 +135,8 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 
 	m := data.NewModels(etcd)
 
-	err = m.Users.Insert(user)
-
-	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrDuplicateUsername):
-			v.AddError("username", "a user with this username already exists")
-			log.Fatal(v.Errors)
-		default:
-			log.Fatal(v.Errors)
-		}
+	if err = m.Users.Insert(user); err != nil {
+		log.Fatal(v.Errors)
 	}
 
 	if _, err = etcd.AuthEnable(ctx); err != nil {

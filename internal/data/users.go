@@ -22,7 +22,13 @@ var (
 	ErrDuplicateUsername = errors.New("duplicate username")
 )
 
-var AnonymousUser = &User{}
+const UserPrefix = "sqlpipe/users/"
+
+func getUserKey(username string) string {
+	return fmt.Sprintf("%v%v", UserPrefix, username)
+}
+
+var AnonymousUser = &ScrubbedUser{}
 
 type User struct {
 	Username          string    `json:"username"`
@@ -52,7 +58,7 @@ func (user User) Scrub() ScrubbedUser {
 	}
 }
 
-func (u *User) IsAnonymous() bool {
+func (u *ScrubbedUser) IsAnonymous() bool {
 	return u == AnonymousUser
 }
 
@@ -107,31 +113,6 @@ type UserModel struct {
 }
 
 func (m UserModel) Insert(user *User) (err error) {
-	session, err := concurrency.NewSession(m.Etcd)
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	userKey := fmt.Sprintf("sqlpipe/users/%v", user.Username)
-	mutex := concurrency.NewMutex(session, userKey)
-
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	defer cancel()
-
-	err = mutex.Lock(ctx)
-	if err != nil {
-		return err
-	}
-	defer mutex.Unlock(ctx)
-
-	resp, err := m.Etcd.Get(ctx, userKey)
-	if err != nil {
-		return err
-	}
-	if resp.Count != 0 {
-		return ErrDuplicateUsername
-	}
 
 	creationTime := time.Now()
 	user.CreatedAt = creationTime
@@ -142,21 +123,71 @@ func (m UserModel) Insert(user *User) (err error) {
 		return err
 	}
 
-	_, err = m.Etcd.Put(
-		ctx,
-		userKey,
-		string(bytes),
-	)
+	userKey := fmt.Sprintf("%v%v", UserPrefix, user.Username)
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+
+	resp, err := m.Etcd.Txn(ctx).If(
+		clientv3.Compare(clientv3.CreateRevision(userKey), "=", 0),
+	).Then(
+		clientv3.OpPut(userKey, string(bytes)),
+	).Commit()
+	cancel()
 	if err != nil {
 		return err
 	}
+
+	if !resp.Succeeded {
+		return ErrDuplicateUsername
+	}
+
 	return nil
 }
 
-func (m UserModel) Get(username string) (*User, error) {
+func (m UserModel) Get(username string) (*ScrubbedUser, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	resp, err := m.Etcd.Get(ctx, getUserKey(username))
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	if resp.Count == 0 {
+		return nil, ErrRecordNotFound
+	}
+
+	var user User
+	if err = json.Unmarshal(resp.Kvs[0].Value, &user); err != nil {
+		return nil, err
+	}
+	user.Version = resp.Kvs[0].Version
+	scrubbedUser := user.Scrub()
+
+	return &scrubbedUser, nil
+}
+
+func (m UserModel) GetUserWithPassword(username string) (*User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
-	resp, err := m.Etcd.Get(ctx, fmt.Sprintf("sqlpipe/users/%v", username))
+	resp, err := m.Etcd.Get(ctx, getUserKey(username))
+	if err != nil {
+		return nil, err
+	}
+	if resp.Count == 0 {
+		return nil, ErrRecordNotFound
+	}
+
+	var user User
+	err = json.Unmarshal(resp.Kvs[0].Value, &user)
+	if err != nil {
+		return nil, err
+	}
+	user.Version = resp.Kvs[0].Version
+
+	return &user, nil
+}
+
+func (m UserModel) GetUserWithPasswordWithContext(username string, ctx context.Context) (*User, error) {
+	resp, err := m.Etcd.Get(ctx, getUserKey(username))
 	if err != nil {
 		return nil, err
 	}
@@ -175,9 +206,7 @@ func (m UserModel) Get(username string) (*User, error) {
 }
 
 func (m UserModel) Update(user *User, ctx context.Context) (err error) {
-
 	user.LastModified = time.Now()
-
 	bytes, err := json.Marshal(user)
 	if err != nil {
 		return err
@@ -185,13 +214,11 @@ func (m UserModel) Update(user *User, ctx context.Context) (err error) {
 
 	_, err = m.Etcd.Put(
 		ctx,
-		fmt.Sprintf("sqlpipe/users/%v", user.Username),
+		fmt.Sprintf("%v%v", UserPrefix, user.Username),
 		string(bytes),
 	)
-	if err != nil {
-		return err
-	}
-	return nil
+
+	return err
 }
 
 func (m UserModel) Delete(username string) error {
@@ -201,17 +228,15 @@ func (m UserModel) Delete(username string) error {
 	}
 	defer session.Close()
 
-	userKey := fmt.Sprintf("sqlpipe/users/%v", username)
+	userKey := getUserKey(username)
 	mutex := concurrency.NewMutex(session, userKey)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 
-	err = mutex.Lock(ctx)
-	if err != nil {
+	if err = mutex.Lock(ctx); err != nil {
 		return err
 	}
-	defer mutex.Unlock(ctx)
 
 	// count keys about to be deleted
 	resp, err := m.Etcd.Get(ctx, userKey, clientv3.WithPrefix())
@@ -224,18 +249,14 @@ func (m UserModel) Delete(username string) error {
 	}
 
 	_, err = m.Etcd.Delete(ctx, userKey, clientv3.WithPrefix())
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*ScrubbedUser, Metadata, error) {
 	metadata := Metadata{}
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
-	resp, err := m.Etcd.Get(ctx, "sqlpipe/users/", clientv3.WithPrefix())
+	resp, err := m.Etcd.Get(ctx, UserPrefix, clientv3.WithPrefix())
 	if err != nil {
 		return nil, metadata, err
 	}
@@ -245,7 +266,7 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Scr
 
 	for i := range resp.Kvs {
 		user := User{}
-		prefixStripped := strings.TrimPrefix(string(resp.Kvs[i].Key), "sqlpipe/users/")
+		prefixStripped := strings.TrimPrefix(string(resp.Kvs[i].Key), UserPrefix)
 		levels := strings.Split(prefixStripped, "/")
 		topLevel := levels[0]
 
@@ -306,42 +327,42 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Scr
 	return paginatedUsers, metadata, nil
 }
 
-func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
-	// tokenHash := sha256.Sum256([]byte(tokenPlaintext))
+// func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
+// tokenHash := sha256.Sum256([]byte(tokenPlaintext))
 
-	// query := `
-	//     SELECT users.id, users.created_at, users.name, users.email, users.password_hash, users.activated, users.version
-	//     FROM users
-	//     INNER JOIN tokens
-	//     ON users.id = tokens.user_id
-	//     WHERE tokens.hash = $1
-	//     AND tokens.scope = $2
-	//     AND tokens.expiry > $3`
+// query := `
+//     SELECT users.id, users.created_at, users.name, users.email, users.password_hash, users.activated, users.version
+//     FROM users
+//     INNER JOIN tokens
+//     ON users.id = tokens.user_id
+//     WHERE tokens.hash = $1
+//     AND tokens.scope = $2
+//     AND tokens.expiry > $3`
 
-	// args := []interface{}{tokenHash[:], tokenScope, time.Now()}
+// args := []interface{}{tokenHash[:], tokenScope, time.Now()}
 
-	// var user User
+// var user User
 
-	// ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	// defer cancel()
+// ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+// defer cancel()
 
-	// err := m.DB.QueryRowContext(ctx, query, args...).Scan(
-	// 	&user.ID,
-	// 	&user.CreatedAt,
-	// 	&user.Name,
-	// 	&user.Email,
-	// 	&user.Password.hash,
-	// 	&user.Activated,
-	// 	&user.Version,
-	// )
-	// if err != nil {
-	// 	switch {
-	// 	case errors.Is(err, sql.ErrNoRows):
-	// 		return nil, ErrRecordNotFound
-	// 	default:
-	// 		return nil, err
-	// 	}
-	// }
-	var user User
-	return &user, nil
-}
+// err := m.DB.QueryRowContext(ctx, query, args...).Scan(
+// 	&user.ID,
+// 	&user.CreatedAt,
+// 	&user.Name,
+// 	&user.Email,
+// 	&user.Password.hash,
+// 	&user.Activated,
+// 	&user.Version,
+// )
+// if err != nil {
+// 	switch {
+// 	case errors.Is(err, sql.ErrNoRows):
+// 		return nil, ErrRecordNotFound
+// 	default:
+// 		return nil, err
+// 	}
+// }
+// var user User
+// return &user, nil
+// }

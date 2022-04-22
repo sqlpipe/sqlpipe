@@ -169,7 +169,7 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		user, err := app.models.Users.Get(username)
+		user, err := app.models.Users.GetUserWithPassword(username)
 		if err != nil {
 			switch {
 			case errors.Is(err, data.ErrRecordNotFound):
@@ -191,7 +191,9 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		r = app.contextSetUser(r, user)
+		scrubbedUser := user.Scrub()
+
+		r = app.contextSetUser(r, &scrubbedUser)
 
 		next.ServeHTTP(w, r)
 	})
