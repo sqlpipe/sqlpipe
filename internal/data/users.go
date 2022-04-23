@@ -37,7 +37,6 @@ type User struct {
 	PlaintextPassword string    `json:"-"`
 	HashedPassword    []byte    `json:"hashedPassword"`
 	Admin             bool      `json:"admin"`
-	Version           int64     `json:"version"`
 }
 
 type ScrubbedUser struct {
@@ -45,7 +44,6 @@ type ScrubbedUser struct {
 	CreatedAt    time.Time `json:"createdAt"`
 	LastModified time.Time `json:"lastModified"`
 	Admin        bool      `json:"admin"`
-	Version      int64     `json:"version"`
 }
 
 func (user User) Scrub() ScrubbedUser {
@@ -54,7 +52,6 @@ func (user User) Scrub() ScrubbedUser {
 		CreatedAt:    user.CreatedAt,
 		LastModified: user.LastModified,
 		Admin:        user.Admin,
-		Version:      user.Version,
 	}
 }
 
@@ -159,7 +156,6 @@ func (m UserModel) Get(username string) (*ScrubbedUser, error) {
 	if err = json.Unmarshal(resp.Kvs[0].Value, &user); err != nil {
 		return nil, err
 	}
-	user.Version = resp.Kvs[0].Version
 	scrubbedUser := user.Scrub()
 
 	return &scrubbedUser, nil
@@ -181,14 +177,64 @@ func (m UserModel) GetUserWithPassword(username string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	user.Version = resp.Kvs[0].Version
+
+	return &user, nil
+}
+
+func (m UserModel) GetUserCheckToken(username string, inputToken string) (*ScrubbedUser, error) {
+	tokenPath := fmt.Sprintf("%v%v/tokens/%v", UserPrefix, username, inputToken)
+	userPath := getUserKey(username)
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+
+	resp, err := m.Etcd.Txn(ctx).If(
+		clientv3.Compare(clientv3.CreateRevision(userPath), ">", 0),
+		clientv3.Compare(clientv3.CreateRevision(tokenPath), ">", 0),
+	).Then(
+		clientv3.OpGet(tokenPath),
+		clientv3.OpGet(userPath),
+	).Commit()
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.Succeeded {
+		return nil, ErrRecordNotFound
+	}
+
+	var tokenBytes []byte
+	_, err = resp.Responses[0].GetResponse().MarshalTo(tokenBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	var token Token
+	if err = json.Unmarshal(tokenBytes, &token); err != nil {
+		return nil, err
+	}
+
+	if token.Expiry.Before(time.Now()) {
+		return nil, ErrRecordNotFound
+	}
+
+	var userBytes []byte
+	_, err = resp.Responses[0].GetResponse().MarshalTo(userBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	var user ScrubbedUser
+	if err = json.Unmarshal(userBytes, &user); err != nil {
+		return nil, err
+	}
 
 	return &user, nil
 }
 
 // TODO: SHOULD I CHANGE THIS FUNC TO TAKE A CONTEXT POINTER?
-func (m UserModel) GetUserWithPasswordWithContext(username string, ctx context.Context) (*User, error) {
-	resp, err := m.Etcd.Get(ctx, getUserKey(username))
+func (m UserModel) GetUserWithPasswordWithContext(username string, ctx *context.Context) (*User, error) {
+	resp, err := m.Etcd.Get(*ctx, getUserKey(username))
 	if err != nil {
 		return nil, err
 	}
@@ -201,12 +247,11 @@ func (m UserModel) GetUserWithPasswordWithContext(username string, ctx context.C
 	if err != nil {
 		return nil, err
 	}
-	user.Version = resp.Kvs[0].Version
 
 	return &user, nil
 }
 
-func (m UserModel) Update(user *User, ctx context.Context) (err error) {
+func (m UserModel) Update(user *User, ctx *context.Context) (err error) {
 	user.LastModified = time.Now()
 	bytes, err := json.Marshal(user)
 	if err != nil {
@@ -214,7 +259,7 @@ func (m UserModel) Update(user *User, ctx context.Context) (err error) {
 	}
 
 	_, err = m.Etcd.Put(
-		ctx,
+		*ctx,
 		fmt.Sprintf("%v%v", UserPrefix, user.Username),
 		string(bytes),
 	)
@@ -291,7 +336,6 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Scr
 			continue
 		}
 
-		user.Version = resp.Kvs[0].Version
 		scrubbedUser := user.Scrub()
 		users = append(users, &scrubbedUser)
 		totalRecords++
@@ -327,43 +371,3 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Scr
 
 	return paginatedUsers, metadata, nil
 }
-
-// func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
-// tokenHash := sha256.Sum256([]byte(tokenPlaintext))
-
-// query := `
-//     SELECT users.id, users.created_at, users.name, users.email, users.password_hash, users.activated, users.version
-//     FROM users
-//     INNER JOIN tokens
-//     ON users.id = tokens.user_id
-//     WHERE tokens.hash = $1
-//     AND tokens.scope = $2
-//     AND tokens.expiry > $3`
-
-// args := []interface{}{tokenHash[:], tokenScope, time.Now()}
-
-// var user User
-
-// ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-// defer cancel()
-
-// err := m.DB.QueryRowContext(ctx, query, args...).Scan(
-// 	&user.ID,
-// 	&user.CreatedAt,
-// 	&user.Name,
-// 	&user.Email,
-// 	&user.Password.hash,
-// 	&user.Activated,
-// 	&user.Version,
-// )
-// if err != nil {
-// 	switch {
-// 	case errors.Is(err, sql.ErrNoRows):
-// 		return nil, ErrRecordNotFound
-// 	default:
-// 		return nil, err
-// 	}
-// }
-// var user User
-// return &user, nil
-// }

@@ -55,7 +55,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 	}
 
 	// TODO: SHOULD I BE PASSING A POINTER HERE?
-	user, err := app.models.Users.GetUserWithPasswordWithContext(input.Username, ctx)
+	user, err := app.models.Users.GetUserWithPasswordWithContext(input.Username, &ctx)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -88,7 +88,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		panic("unable to parse time duration")
 	}
 
-	token, err := app.models.Tokens.New(scrubbedUser.Username, duration, data.ScopeAuthentication, ctx)
+	token, err := app.models.Tokens.New(scrubbedUser.Username, duration, data.ScopeAuthentication, &ctx)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

@@ -149,9 +149,57 @@ func (app *application) metrics(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) authenticate(next http.Handler) http.Handler {
+func (app *application) tryTokenAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Authorization")
+
+		username := r.Header.Get("Username")
+		token := r.Header.Get("AuthToken")
+
+		if token == "" {
+			r = app.contextSetUser(r, data.AnonymousUser)
+			next.ServeHTTP(w, r)
+			return
+		}
+		fmt.Println("HEEEERE")
+		fmt.Println(username)
+		fmt.Println(token)
+
+		v := validator.New()
+
+		data.ValidateUsername(v, username)
+		data.ValidateTokenPlaintext(v, token)
+
+		if !v.Valid() {
+			app.invalidCredentialsResponse(w, r)
+			return
+		}
+
+		user, err := app.models.Users.GetUserCheckToken(username, token)
+		if err != nil {
+			switch {
+			case errors.Is(err, data.ErrRecordNotFound):
+				app.invalidCredentialsResponse(w, r)
+			default:
+				app.serverErrorResponse(w, r, err)
+			}
+			return
+		}
+
+		r = app.contextSetUser(r, user)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) tryBasicAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		// check if they already authenticated with a token
+		if !app.contextGetUser(r).IsAnonymous() {
+			next.ServeHTTP(w, r)
+			return
+		}
 
 		username, password, ok := r.BasicAuth()
 		if !ok {

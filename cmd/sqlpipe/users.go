@@ -112,7 +112,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// TODO: SHOULD I BE PASSING A POINTER HERE?
-	user, err := app.models.Users.GetUserWithPasswordWithContext(username, ctx)
+	user, err := app.models.Users.GetUserWithPasswordWithContext(username, &ctx)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -164,7 +164,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = app.models.Users.Update(user, ctx); err != nil {
+	if err = app.models.Users.Update(user, &ctx); err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
@@ -172,7 +172,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	// If you changed the user's password, delete all of their outstanding authentication tokens
 	if input.Password != nil {
 		// TODO: SHOULD I BE PASSING A POINTER HERE?
-		if err = app.models.Tokens.DeleteAllForUserWithContext(user.Username, ctx); err != nil {
+		if err = app.models.Tokens.DeleteAllForUserWithContext(user.Username, &ctx); err != nil {
 			if err != data.ErrRecordNotFound {
 				app.serverErrorResponse(w, r, err)
 			}

@@ -62,33 +62,33 @@ type TokenModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m TokenModel) New(username string, ttl time.Duration, scope string, ctx context.Context) (*Token, error) {
+func (m TokenModel) New(username string, ttl time.Duration, scope string, ctx *context.Context) (*Token, error) {
 	token, err := generateToken(username, ttl, scope)
 	if err != nil {
 		return nil, err
 	}
 
-	err = m.Insert(token, ctx)
+	err = m.Insert(token, username, ctx)
 	return token, err
 }
 
-func (m TokenModel) Insert(token *Token, ctx context.Context) (err error) {
+func (m TokenModel) Insert(token *Token, username string, ctx *context.Context) (err error) {
 	bytes, err := json.Marshal(token)
 	if err != nil {
 		return err
 	}
 
 	_, err = m.Etcd.Put(
-		ctx,
-		fmt.Sprintf("%v%v", TokenPrefix, token.Hash),
+		*ctx,
+		fmt.Sprintf("%v%v/tokens/%v", UserPrefix, username, fmt.Sprint(token.Hash)),
 		string(bytes),
 	)
 	return err
 }
 
 // TODO: SHOULD I CHANGE THIS FUNC TO TAKE A CONTEXT POINTER?
-func (m TokenModel) DeleteAllForUserWithContext(username string, ctx context.Context) (err error) {
-	resp, err := m.Etcd.Get(ctx, fmt.Sprintf("%v", TokenPrefix), clientv3.WithPrefix())
+func (m TokenModel) DeleteAllForUserWithContext(username string, ctx *context.Context) (err error) {
+	resp, err := m.Etcd.Get(*ctx, fmt.Sprintf("%v", TokenPrefix), clientv3.WithPrefix())
 	if resp.Count == 0 {
 		return ErrRecordNotFound
 	}
@@ -119,7 +119,7 @@ func (m TokenModel) DeleteAllForUserWithContext(username string, ctx context.Con
 	}
 
 	for _, tokenHash := range tokenHashes {
-		ch <- &stringWithContext{tokenHash, &ctx}
+		ch <- &stringWithContext{tokenHash, ctx}
 	}
 
 	return g.Wait()
