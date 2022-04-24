@@ -213,14 +213,8 @@ func (m UserModel) GetUserCheckToken(
 		return scrubbedUser, ErrRecordNotFound
 	}
 
-	var tokenBytes []byte
-	_, err = resp.Responses[0].GetResponse().MarshalTo(tokenBytes)
-	if err != nil {
-		return scrubbedUser, err
-	}
-
 	var token Token
-	if err = json.Unmarshal(tokenBytes, &token); err != nil {
+	if err = json.Unmarshal(resp.Responses[0].GetResponseRange().Kvs[0].Value, &token); err != nil {
 		return scrubbedUser, err
 	}
 
@@ -228,14 +222,7 @@ func (m UserModel) GetUserCheckToken(
 		return scrubbedUser, ErrRecordNotFound
 	}
 
-	var userBytes []byte
-	_, err = resp.Responses[0].GetResponse().MarshalTo(userBytes)
-	if err != nil {
-		return scrubbedUser, err
-	}
-
-	var user ScrubbedUser
-	if err = json.Unmarshal(userBytes, &user); err != nil {
+	if err = json.Unmarshal(resp.Responses[1].GetResponseRange().Kvs[0].Value, &scrubbedUser); err != nil {
 		return scrubbedUser, err
 	}
 
@@ -298,6 +285,7 @@ func (m UserModel) Delete(username string) error {
 	if err = mutex.Lock(ctx); err != nil {
 		return err
 	}
+	defer mutex.Unlock(ctx)
 
 	// count keys about to be deleted
 	resp, err := m.Etcd.Get(ctx, userKey, clientv3.WithPrefix())

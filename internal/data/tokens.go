@@ -31,8 +31,8 @@ type Token struct {
 	Scope     string    `json:"-"`
 }
 
-func generateToken(username string, ttl time.Duration, scope string) (*Token, error) {
-	token := &Token{
+func generateToken(username string, ttl time.Duration, scope string) (Token, error) {
+	token := Token{
 		Username: username,
 		Expiry:   time.Now().Add(ttl),
 		Scope:    scope,
@@ -42,7 +42,7 @@ func generateToken(username string, ttl time.Duration, scope string) (*Token, er
 
 	_, err := rand.Read(randomBytes)
 	if err != nil {
-		return nil, err
+		return token, err
 	}
 
 	token.Plaintext = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(randomBytes)
@@ -62,28 +62,25 @@ type TokenModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m TokenModel) New(username string, ttl time.Duration, scope string, ctx *context.Context) (*Token, error) {
+func (m TokenModel) New(username string, ttl time.Duration, scope string, ctx *context.Context) (Token, error) {
 	token, err := generateToken(username, ttl, scope)
 	if err != nil {
-		return nil, err
+		return token, err
 	}
 
 	err = m.Insert(token, username, ctx)
 	return token, err
 }
 
-func (m TokenModel) Insert(token *Token, username string, ctx *context.Context) (err error) {
+func (m TokenModel) Insert(token Token, username string, ctx *context.Context) (err error) {
 	bytes, err := json.Marshal(token)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("TOKEN GOING IN")
-	fmt.Println(token.Hash)
-
 	_, err = m.Etcd.Put(
 		*ctx,
-		fmt.Sprintf("%v%v/tokens/%v", UserPrefix, username, fmt.Sprint(token.Hash)),
+		fmt.Sprintf("%v%v/tokens/%v", UserPrefix, username, token.Plaintext),
 		string(bytes),
 	)
 	return err

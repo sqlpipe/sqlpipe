@@ -110,6 +110,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	if err = mutex.Lock(ctx); err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+	defer mutex.Unlock(ctx)
 
 	// TODO: SHOULD I BE PASSING A POINTER HERE?
 	user, err := app.models.Users.GetUserWithPasswordWithContext(*username, &ctx)

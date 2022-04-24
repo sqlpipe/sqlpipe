@@ -97,6 +97,7 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 		log.Println(err)
 		return
 	}
+	defer mutex.Unlock(ctx)
 
 	resp, err := etcd.Get(ctx, "sqlpipe", clientv3.WithPrefix())
 	if err != nil {

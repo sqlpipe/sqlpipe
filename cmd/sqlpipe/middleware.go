@@ -161,9 +161,6 @@ func (app *application) tryTokenAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		fmt.Println("HEEEERE")
-		fmt.Println(username)
-		fmt.Println(token)
 
 		v := validator.New()
 

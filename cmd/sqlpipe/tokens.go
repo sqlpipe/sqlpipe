@@ -19,11 +19,13 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
-	if daysValidPointer == nil {
-		*daysValidPointer = 1
+	var daysValid int64
+	switch daysValidPointer {
+	case nil:
+		daysValid = 1
+	default:
+		daysValid = *daysValidPointer
 	}
-
-	daysValid := *daysValidPointer
 
 	v := validator.New()
 
@@ -53,8 +55,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 
-	err = mutex.Lock(ctx)
-	if err != nil {
+	if err = mutex.Lock(ctx); err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 
@@ -71,6 +72,12 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
+	}
+
+	err = mutex.Unlock(ctx)
+	if err != nil {
+		fmt.Println("COULDNT UNLOCK")
+		fmt.Println(err)
 	}
 
 	err = app.writeJSON(w, http.StatusCreated, envelope{"authentication_token": token}, nil)
