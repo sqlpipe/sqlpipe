@@ -61,6 +61,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 
 	if err = app.writeJSON(w, http.StatusAccepted, envelope{"user": scrubbedUser}, nil); err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
 }
 
@@ -82,9 +83,9 @@ func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, envelope{"user": scrubbedUser}, nil)
-	if err != nil {
+	if err = app.writeJSON(w, http.StatusOK, envelope{"user": scrubbedUser}, nil); err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
 }
 
@@ -98,6 +99,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	session, err := concurrency.NewSession(app.models.Users.Etcd)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
 	defer session.Close()
 
@@ -109,8 +111,8 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 
 	if err = mutex.Lock(ctx); err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
-	defer mutex.Unlock(ctx)
 
 	// TODO: SHOULD I BE PASSING A POINTER HERE?
 	user, err := app.models.Users.GetUserWithPasswordWithContext(*username, &ctx)
@@ -176,6 +178,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		if err = app.models.Tokens.DeleteAllForUserWithContext(user.Username, &ctx); err != nil {
 			if err != data.ErrRecordNotFound {
 				app.serverErrorResponse(w, r, err)
+				return
 			}
 		}
 	}
@@ -185,6 +188,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	err = app.writeJSON(w, http.StatusOK, envelope{"user": scrubbedUser}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
 }
 
@@ -208,6 +212,7 @@ func (app *application) deleteUserHandler(w http.ResponseWriter, r *http.Request
 	err = app.writeJSON(w, http.StatusOK, envelope{"message": fmt.Sprintf("%v deleted", username)}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
 }
 
@@ -247,5 +252,6 @@ func (app *application) listUsersHandler(w http.ResponseWriter, r *http.Request)
 	err = app.writeJSON(w, http.StatusOK, envelope{"users": users, "metadata": metadata}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
 }

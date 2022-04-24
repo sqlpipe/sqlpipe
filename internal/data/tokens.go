@@ -31,11 +31,10 @@ type Token struct {
 	Scope     string    `json:"-"`
 }
 
-func generateToken(username string, ttl time.Duration, scope string) (Token, error) {
+func generateToken(username string, ttl time.Duration) (Token, error) {
 	token := Token{
 		Username: username,
 		Expiry:   time.Now().Add(ttl),
-		Scope:    scope,
 	}
 
 	randomBytes := make([]byte, 16)
@@ -62,8 +61,8 @@ type TokenModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m TokenModel) New(username string, ttl time.Duration, scope string, ctx *context.Context) (Token, error) {
-	token, err := generateToken(username, ttl, scope)
+func (m TokenModel) New(username string, ttl time.Duration, ctx context.Context) (Token, error) {
+	token, err := generateToken(username, ttl)
 	if err != nil {
 		return token, err
 	}
@@ -72,14 +71,14 @@ func (m TokenModel) New(username string, ttl time.Duration, scope string, ctx *c
 	return token, err
 }
 
-func (m TokenModel) Insert(token Token, username string, ctx *context.Context) (err error) {
+func (m TokenModel) Insert(token Token, username string, ctx context.Context) (err error) {
 	bytes, err := json.Marshal(token)
 	if err != nil {
 		return err
 	}
 
 	_, err = m.Etcd.Put(
-		*ctx,
+		ctx,
 		fmt.Sprintf("%v%v/tokens/%v", UserPrefix, username, token.Plaintext),
 		string(bytes),
 	)
