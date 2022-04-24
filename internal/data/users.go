@@ -28,7 +28,7 @@ func getUserKey(username string) string {
 	return fmt.Sprintf("%v%v", UserPrefix, username)
 }
 
-var AnonymousUser = &ScrubbedUser{}
+var AnonymousUser = ScrubbedUser{}
 
 type User struct {
 	Username          string    `json:"username"`
@@ -55,7 +55,7 @@ func (user User) Scrub() ScrubbedUser {
 	}
 }
 
-func (u *ScrubbedUser) IsAnonymous() bool {
+func (u ScrubbedUser) IsAnonymous() bool {
 	return u == AnonymousUser
 }
 
@@ -85,7 +85,7 @@ func ValidateUsername(v *validator.Validator, username string) {
 	}
 }
 
-func ValidateUser(v *validator.Validator, user *User) {
+func ValidateUser(v *validator.Validator, user User) {
 	ValidateUsername(v, user.Username)
 	ValidatePassword(v, user.PlaintextPassword)
 
@@ -109,7 +109,7 @@ type UserModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m UserModel) Insert(user *User) (err error) {
+func (m UserModel) Insert(user User) (err error) {
 
 	creationTime := time.Now()
 	user.CreatedAt = creationTime
@@ -141,47 +141,57 @@ func (m UserModel) Insert(user *User) (err error) {
 	return nil
 }
 
-func (m UserModel) Get(username string) (*ScrubbedUser, error) {
+func (m UserModel) Get(
+	username string,
+) (
+	scrubbedUser ScrubbedUser,
+	err error,
+) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	resp, err := m.Etcd.Get(ctx, getUserKey(username))
 	cancel()
 	if err != nil {
-		return nil, err
+		return scrubbedUser, err
 	}
 	if resp.Count == 0 {
-		return nil, ErrRecordNotFound
+		return scrubbedUser, ErrRecordNotFound
 	}
 
 	var user User
 	if err = json.Unmarshal(resp.Kvs[0].Value, &user); err != nil {
-		return nil, err
+		return scrubbedUser, err
 	}
-	scrubbedUser := user.Scrub()
+	scrubbedUser = user.Scrub()
 
-	return &scrubbedUser, nil
+	return scrubbedUser, nil
 }
 
-func (m UserModel) GetUserWithPassword(username string) (*User, error) {
+func (m UserModel) GetUserWithPassword(username string) (user User, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 	resp, err := m.Etcd.Get(ctx, getUserKey(username))
 	if err != nil {
-		return nil, err
+		return user, err
 	}
 	if resp.Count == 0 {
-		return nil, ErrRecordNotFound
+		return user, ErrRecordNotFound
 	}
 
-	var user User
 	err = json.Unmarshal(resp.Kvs[0].Value, &user)
 	if err != nil {
-		return nil, err
+		return user, err
 	}
 
-	return &user, nil
+	return user, nil
 }
 
-func (m UserModel) GetUserCheckToken(username string, inputToken string) (*ScrubbedUser, error) {
+func (m UserModel) GetUserCheckToken(
+	username string,
+	inputToken string,
+) (
+	scrubbedUser ScrubbedUser,
+	err error,
+) {
 	tokenPath := fmt.Sprintf("%v%v/tokens/%v", UserPrefix, username, inputToken)
 	userPath := getUserKey(username)
 
@@ -196,62 +206,67 @@ func (m UserModel) GetUserCheckToken(username string, inputToken string) (*Scrub
 	).Commit()
 	cancel()
 	if err != nil {
-		return nil, err
+		return scrubbedUser, err
 	}
 
 	if !resp.Succeeded {
-		return nil, ErrRecordNotFound
+		return scrubbedUser, ErrRecordNotFound
 	}
 
 	var tokenBytes []byte
 	_, err = resp.Responses[0].GetResponse().MarshalTo(tokenBytes)
 	if err != nil {
-		return nil, err
+		return scrubbedUser, err
 	}
 
 	var token Token
 	if err = json.Unmarshal(tokenBytes, &token); err != nil {
-		return nil, err
+		return scrubbedUser, err
 	}
 
 	if token.Expiry.Before(time.Now()) {
-		return nil, ErrRecordNotFound
+		return scrubbedUser, ErrRecordNotFound
 	}
 
 	var userBytes []byte
 	_, err = resp.Responses[0].GetResponse().MarshalTo(userBytes)
 	if err != nil {
-		return nil, err
+		return scrubbedUser, err
 	}
 
 	var user ScrubbedUser
 	if err = json.Unmarshal(userBytes, &user); err != nil {
-		return nil, err
+		return scrubbedUser, err
 	}
 
-	return &user, nil
+	return scrubbedUser, nil
 }
 
 // TODO: SHOULD I CHANGE THIS FUNC TO TAKE A CONTEXT POINTER?
-func (m UserModel) GetUserWithPasswordWithContext(username string, ctx *context.Context) (*User, error) {
+func (m UserModel) GetUserWithPasswordWithContext(
+	username string,
+	ctx *context.Context,
+) (
+	user User,
+	err error,
+) {
 	resp, err := m.Etcd.Get(*ctx, getUserKey(username))
 	if err != nil {
-		return nil, err
+		return user, err
 	}
 	if resp.Count == 0 {
-		return nil, ErrRecordNotFound
+		return user, ErrRecordNotFound
 	}
 
-	var user User
 	err = json.Unmarshal(resp.Kvs[0].Value, &user)
 	if err != nil {
-		return nil, err
+		return user, err
 	}
 
-	return &user, nil
+	return user, nil
 }
 
-func (m UserModel) Update(user *User, ctx *context.Context) (err error) {
+func (m UserModel) Update(user User, ctx *context.Context) (err error) {
 	user.LastModified = time.Now()
 	bytes, err := json.Marshal(user)
 	if err != nil {
@@ -298,7 +313,7 @@ func (m UserModel) Delete(username string) error {
 	return err
 }
 
-func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*ScrubbedUser, Metadata, error) {
+func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]ScrubbedUser, Metadata, error) {
 	metadata := Metadata{}
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
@@ -307,7 +322,7 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Scr
 		return nil, metadata, err
 	}
 
-	users := []*ScrubbedUser{}
+	users := []ScrubbedUser{}
 	totalRecords := 0
 
 	for i := range resp.Kvs {
@@ -337,7 +352,7 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Scr
 		}
 
 		scrubbedUser := user.Scrub()
-		users = append(users, &scrubbedUser)
+		users = append(users, scrubbedUser)
 		totalRecords++
 	}
 
@@ -362,7 +377,7 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]*Scr
 	}
 
 	maxItem := pkg.Min(filters.offset()+filters.limit(), totalRecords)
-	paginatedUsers := []*ScrubbedUser{}
+	paginatedUsers := []ScrubbedUser{}
 	for i := filters.offset(); i < maxItem; i++ {
 		paginatedUsers = append(paginatedUsers, users[i])
 	}

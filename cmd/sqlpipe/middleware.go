@@ -241,7 +241,7 @@ func (app *application) tryBasicAuth(next http.Handler) http.Handler {
 
 		scrubbedUser := user.Scrub()
 
-		r = app.contextSetUser(r, &scrubbedUser)
+		r = app.contextSetUser(r, scrubbedUser)
 
 		next.ServeHTTP(w, r)
 	})

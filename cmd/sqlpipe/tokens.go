@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -14,23 +13,26 @@ import (
 )
 
 func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Username  string `json:"username"`
-		Password  string `json:"password"`
-		DaysValid int    `json:"daysValid"`
-	}
-
-	err := app.readJSON(w, r, &input)
+	daysValidPointer, err := app.readIntParam(r, "daysValid")
 	if err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
 
+	if daysValidPointer == nil {
+		*daysValidPointer = 1
+	}
+
+	daysValid := *daysValidPointer
+
 	v := validator.New()
 
-	v.Check(input.Username != "", "username", "must be provided")
-	v.Check(input.Password != "", "password", "must be provided")
-	v.Check(input.DaysValid <= 366, "daysValid", "must be less than or equal to 366")
+	if v.Check(daysValid > 0, "integerParameter", "must be greater than 0 (denotes how many days auth token will be valid)"); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	v.Check(daysValid <= 366, "integerParameter", "must be less than or equal to 366 (denotes how many days auth token will be valid)")
 
 	if !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
@@ -43,7 +45,9 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 	}
 	defer session.Close()
 
-	userKey := fmt.Sprintf("%v%v", UserPrefix, input.Username)
+	user := app.contextGetUser(r)
+
+	userKey := fmt.Sprintf("%v%v", UserPrefix, user.Username)
 	mutex := concurrency.NewMutex(session, userKey)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
@@ -54,41 +58,16 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		app.serverErrorResponse(w, r, err)
 	}
 
-	// TODO: SHOULD I BE PASSING A POINTER HERE?
-	user, err := app.models.Users.GetUserWithPasswordWithContext(input.Username, &ctx)
-	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrRecordNotFound):
-			app.invalidCredentialsResponse(w, r)
-		default:
-			app.serverErrorResponse(w, r, err)
-		}
-		return
+	if daysValid == 0 {
+		daysValid = 1
 	}
 
-	match, err := user.CheckPassword(input.Password)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-
-	scrubbedUser := user.Scrub()
-
-	if !match {
-		app.invalidCredentialsResponse(w, r)
-		return
-	}
-
-	if input.DaysValid == 0 {
-		input.DaysValid = 1
-	}
-
-	duration, err := time.ParseDuration(fmt.Sprintf("%vh", 24*input.DaysValid))
+	duration, err := time.ParseDuration(fmt.Sprintf("%vh", daysValid))
 	if err != nil {
 		panic("unable to parse time duration")
 	}
 
-	token, err := app.models.Tokens.New(scrubbedUser.Username, duration, data.ScopeAuthentication, &ctx)
+	token, err := app.models.Tokens.New(user.Username, duration, data.ScopeAuthentication, &ctx)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

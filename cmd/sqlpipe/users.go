@@ -29,7 +29,7 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	user := &data.User{
+	user := data.User{
 		Username: input.Username,
 		Admin:    input.Admin,
 	}
@@ -65,13 +65,13 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) {
-	username, err := app.readStringIdParam(r, "username")
-	if err != nil {
+	username, err := app.readStringParam(r, "username")
+	if err != nil || username == nil {
 		app.notFoundResponse(w, r)
 		return
 	}
 
-	scrubbedUser, err := app.models.Users.Get(username)
+	scrubbedUser, err := app.models.Users.Get(*username)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -89,8 +89,8 @@ func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request) {
-	username, err := app.readStringIdParam(r, "username")
-	if err != nil {
+	username, err := app.readStringParam(r, "username")
+	if err != nil || username == nil {
 		app.notFoundResponse(w, r)
 		return
 	}
@@ -112,7 +112,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// TODO: SHOULD I BE PASSING A POINTER HERE?
-	user, err := app.models.Users.GetUserWithPasswordWithContext(username, &ctx)
+	user, err := app.models.Users.GetUserWithPasswordWithContext(*username, &ctx)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -188,13 +188,13 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) deleteUserHandler(w http.ResponseWriter, r *http.Request) {
-	username, err := app.readStringIdParam(r, "username")
-	if err != nil {
+	username, err := app.readStringParam(r, "username")
+	if err != nil || username == nil {
 		app.notFoundResponse(w, r)
 		return
 	}
 
-	if err = app.models.Users.Delete(username); err != nil {
+	if err = app.models.Users.Delete(*username); err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
 			app.notFoundResponse(w, r)

@@ -78,6 +78,9 @@ func (m TokenModel) Insert(token *Token, username string, ctx *context.Context) 
 		return err
 	}
 
+	fmt.Println("TOKEN GOING IN")
+	fmt.Println(token.Hash)
+
 	_, err = m.Etcd.Put(
 		*ctx,
 		fmt.Sprintf("%v%v/tokens/%v", UserPrefix, username, fmt.Sprint(token.Hash)),

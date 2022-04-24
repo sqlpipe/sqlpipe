@@ -51,7 +51,7 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 
 	v.Check(len(etcdEndpoints) != 0, "--etcd-endpoints", "must be provided")
 
-	user := &data.User{
+	user := data.User{
 		Username: "admin",
 		Admin:    true,
 	}

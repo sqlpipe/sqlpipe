@@ -27,7 +27,7 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPatch, "/v2/users/:username", requireAdmin.ThenFunc(app.updateUserHandler))
 	router.Handler(http.MethodDelete, "/v2/users/:username", requireAdmin.ThenFunc(app.deleteUserHandler))
 
-	router.HandlerFunc(http.MethodPost, "/v2/tokens/authenticate", app.createAuthenticationTokenHandler)
+	router.Handler(http.MethodPost, "/v2/tokens/authenticate", requireAuthenticatedUser.ThenFunc(app.createAuthenticationTokenHandler))
 
 	router.Handler(http.MethodGet, "/v2/debug/vars", expvar.Handler())
 

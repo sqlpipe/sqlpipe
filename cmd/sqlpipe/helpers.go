@@ -15,26 +15,37 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-func (app *application) readIntIdParam(r *http.Request) (int64, error) {
+var (
+	RequiredParameterNotGiven = errors.New("required parameter not given")
+)
+
+func (app *application) readIntParam(r *http.Request, paramName string) (finalParam *int64, err error) {
 	params := httprouter.ParamsFromContext(r.Context())
 
-	id, err := strconv.ParseInt(params.ByName("id"), 10, 64)
-	if err != nil || id < 1 {
-		return 0, errors.New("invalid id parameter")
+	stringParam := params.ByName(paramName)
+
+	if stringParam == "" {
+		return nil, nil
 	}
 
-	return id, nil
+	intParam, err := strconv.ParseInt(stringParam, 10, 64)
+	if err != nil {
+		return nil, errors.New("invalid integer parameter")
+	}
+
+	return &intParam, nil
 }
 
-func (app *application) readStringIdParam(r *http.Request, paramName string) (string, error) {
+func (app *application) readStringParam(r *http.Request, paramName string) (*string, error) {
 	params := httprouter.ParamsFromContext(r.Context())
 
-	id := params.ByName(paramName)
-	if id == "" {
-		return "", errors.New("no id value given")
+	stringParam := params.ByName(paramName)
+
+	if stringParam == "" {
+		return nil, RequiredParameterNotGiven
 	}
 
-	return id, nil
+	return &stringParam, nil
 }
 
 type envelope map[string]interface{}
