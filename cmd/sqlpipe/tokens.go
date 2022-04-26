@@ -1,54 +1,85 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
 func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, r *http.Request) {
-	daysValidPointer, err := app.readIntParam(r, "daysValid")
+	var input struct {
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		DaysValid *int64 `json:"daysValid"`
+	}
+
+	err := app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
 
-	var daysValid int64
-	switch daysValidPointer {
-	case nil:
-		daysValid = 1
-	default:
-		daysValid = *daysValidPointer
-	}
-
 	v := validator.New()
 
-	if v.Check(daysValid > 0, "integerParameter", "must be greater than 0 (denotes how many days auth token will be valid)"); !v.Valid() {
+	var daysValid int64
+	switch input.DaysValid {
+	case nil:
+		daysValid = 0
+	default:
+		daysValid = *input.DaysValid
+	}
+
+	if v.Check(daysValid >= 0, "daysValid", "must be 0 <= daysInfinite < 366. 0 is infinite"); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
-	v.Check(daysValid <= 366, "integerParameter", "must be less than or equal to 366 (denotes how many days auth token will be valid)")
+	v.Check(daysValid <= 366, "daysValid", "must be 0 <= daysInfinite < 366. 0 is infinite")
 
 	if !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
-	user := app.contextGetUser(r)
-
-	if daysValid == 0 {
-		daysValid = 1
-	}
-
-	duration, err := time.ParseDuration(fmt.Sprintf("%vh", daysValid))
+	user, err := app.models.Users.GetUserWithPassword(input.Username)
 	if err != nil {
-		panic("unable to parse time duration")
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.invalidCredentialsResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
 	}
 
-	token, err := app.models.Tokens.New(user.Username, duration)
+	match, err := user.CheckPassword(input.Password)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	if !match {
+		app.invalidCredentialsResponse(w, r)
+		return
+	}
+
+	var expiry int64
+	switch daysValid {
+	case 0:
+		expiry = -1
+	default:
+		duration, err := time.ParseDuration(fmt.Sprintf("%vh", daysValid))
+		if err != nil {
+			panic("unable to parse time duration")
+		}
+		expiry = time.Now().Add(duration).Unix()
+	}
+
+	token, err := app.models.Tokens.New(user.Username, expiry)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

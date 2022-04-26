@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 	"github.com/sqlpipe/sqlpipe/pkg"
@@ -21,12 +20,6 @@ import (
 var (
 	ErrDuplicateUsername = errors.New("duplicate username")
 )
-
-const UserPrefix = "sqlpipe/users/"
-
-func getUserKey(username string) string {
-	return fmt.Sprintf("%v%v", UserPrefix, username)
-}
 
 var AnonymousUser = ScrubbedUser{}
 
@@ -120,16 +113,16 @@ func (m UserModel) Insert(user User) (err error) {
 		return err
 	}
 
-	userKey := fmt.Sprintf("%v%v", UserPrefix, user.Username)
-
+	userPath := globals.GetUserDataPath(user.Username)
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
 
 	resp, err := m.Etcd.Txn(ctx).If(
-		clientv3.Compare(clientv3.CreateRevision(userKey), "=", 0),
+		clientv3.Compare(clientv3.CreateRevision(userPath), "=", 0),
 	).Then(
-		clientv3.OpPut(userKey, string(bytes)),
+		clientv3.OpPut(userPath, string(bytes)),
 	).Commit()
-	cancel()
+
 	if err != nil {
 		return err
 	}
@@ -148,7 +141,7 @@ func (m UserModel) Get(
 	err error,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	resp, err := m.Etcd.Get(ctx, getUserKey(username))
+	resp, err := m.Etcd.Get(ctx, globals.GetUserDataPath(username))
 	cancel()
 	if err != nil {
 		return scrubbedUser, err
@@ -169,7 +162,7 @@ func (m UserModel) Get(
 func (m UserModel) GetUserWithPassword(username string) (user User, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
-	resp, err := m.Etcd.Get(ctx, getUserKey(username))
+	resp, err := m.Etcd.Get(ctx, globals.GetUserDataPath(username))
 	if err != nil {
 		return user, err
 	}
@@ -191,18 +184,18 @@ func (m UserModel) GetUserCheckToken(
 	scrubbedUser ScrubbedUser,
 	err error,
 ) {
-	tokenPath := fmt.Sprintf("%v%v/tokens/%v", UserPrefix, username, inputToken)
-	userPath := getUserKey(username)
+	userDataPath := globals.GetUserDataPath(username)
+	userTokenPath := fmt.Sprintf("%v/tokens", userDataPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 
 	resp, err := m.Etcd.Txn(ctx).If(
-		clientv3.Compare(clientv3.CreateRevision(userPath), ">", 0),
-		clientv3.Compare(clientv3.CreateRevision(tokenPath), ">", 0),
+		clientv3.Compare(clientv3.CreateRevision(userDataPath), ">", 0),
+		clientv3.Compare(clientv3.CreateRevision(userTokenPath), ">", 0),
 	).Then(
-		clientv3.OpGet(tokenPath),
-		clientv3.OpGet(userPath),
+		clientv3.OpGet(userTokenPath),
+		clientv3.OpGet(userDataPath),
 	).Commit()
 
 	if err != nil {
@@ -218,7 +211,7 @@ func (m UserModel) GetUserCheckToken(
 		return scrubbedUser, err
 	}
 
-	if token.Expiry.Before(time.Now()) {
+	if token.Expiry < time.Now().Unix() {
 		return scrubbedUser, ErrRecordNotFound
 	}
 
@@ -236,7 +229,7 @@ func (m UserModel) GetUserWithPasswordWithContext(
 	user User,
 	err error,
 ) {
-	resp, err := m.Etcd.Get(*ctx, getUserKey(username))
+	resp, err := m.Etcd.Get(*ctx, globals.GetUserDataPath(username))
 	if err != nil {
 		return user, err
 	}
@@ -252,7 +245,7 @@ func (m UserModel) GetUserWithPasswordWithContext(
 	return user, nil
 }
 
-func (m UserModel) Update(user User, ctx *context.Context) (err error) {
+func (m UserModel) UpdateNoLock(user User, ctx context.Context) (err error) {
 	user.LastModified = time.Now()
 	bytes, err := json.Marshal(user)
 	if err != nil {
@@ -260,8 +253,8 @@ func (m UserModel) Update(user User, ctx *context.Context) (err error) {
 	}
 
 	_, err = m.Etcd.Put(
-		*ctx,
-		fmt.Sprintf("%v%v", UserPrefix, user.Username),
+		ctx,
+		globals.GetUserDataPath(user.Username),
 		string(bytes),
 	)
 
@@ -269,27 +262,13 @@ func (m UserModel) Update(user User, ctx *context.Context) (err error) {
 }
 
 func (m UserModel) Delete(username string) error {
-	session, err := concurrency.NewSession(m.Etcd)
-	if err != nil {
-		return err
-	}
-	defer session.Close()
 
-	lockPath := fmt.Sprintf("%v%v", globals.LockPrefix, username)
-	mutex := concurrency.NewMutex(session, lockPath)
-
-	userKey := getUserKey(username)
+	userDataPath := globals.GetUserDataPath(username)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 
-	if err = mutex.Lock(ctx); err != nil {
-		return err
-	}
-	defer mutex.Unlock(ctx)
-
-	// count keys about to be deleted
-	resp, err := m.Etcd.Get(ctx, userKey, clientv3.WithPrefix())
+	resp, err := m.Etcd.Get(ctx, userDataPath, clientv3.WithPrefix())
 	if err != nil {
 		return err
 	}
@@ -298,7 +277,7 @@ func (m UserModel) Delete(username string) error {
 		return ErrRecordNotFound
 	}
 
-	_, err = m.Etcd.Delete(ctx, userKey, clientv3.WithPrefix())
+	_, err = m.Etcd.Delete(ctx, userDataPath, clientv3.WithPrefix())
 	return err
 }
 
@@ -306,7 +285,7 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]Scru
 	metadata := Metadata{}
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
-	resp, err := m.Etcd.Get(ctx, UserPrefix, clientv3.WithPrefix())
+	resp, err := m.Etcd.Get(ctx, "sqlpipe/data/users", clientv3.WithPrefix())
 	if err != nil {
 		return nil, metadata, err
 	}
@@ -316,7 +295,7 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]Scru
 
 	for i := range resp.Kvs {
 		user := User{}
-		prefixStripped := strings.TrimPrefix(string(resp.Kvs[i].Key), UserPrefix)
+		prefixStripped := strings.TrimPrefix(string(resp.Kvs[i].Key), "sqlpipe/data/users")
 		levels := strings.Split(prefixStripped, "/")
 		topLevel := levels[0]
 

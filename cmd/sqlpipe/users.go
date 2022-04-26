@@ -7,14 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
-)
-
-const (
-	UserPrefix = "sqlpipe/users/"
 )
 
 func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -96,26 +91,9 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	session, err := concurrency.NewSession(app.models.Users.Etcd)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-	defer session.Close()
-
-	lockPath := fmt.Sprintf("%v%v", globals.LockPrefix, username)
-	mutex := concurrency.NewMutex(session, lockPath)
-
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdLongTimeout)
 	defer cancel()
 
-	if err = mutex.Lock(ctx); err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-	defer mutex.Unlock(ctx)
-
-	// TODO: SHOULD I BE PASSING A POINTER HERE?
 	user, err := app.models.Users.GetUserWithPasswordWithContext(*username, &ctx)
 	if err != nil {
 		switch {
@@ -168,7 +146,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err = app.models.Users.Update(user, &ctx); err != nil {
+	if err = app.models.Users.UpdateNoLock(user, ctx); err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
@@ -176,7 +154,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	// If you changed the user's password, delete all of their outstanding authentication tokens
 	if input.Password != nil {
 		// TODO: SHOULD I BE PASSING A POINTER HERE?
-		if err = app.models.Tokens.DeleteAllForUserWithContext(user.Username, &ctx); err != nil {
+		if err = app.models.Tokens.DeleteAllForUserWithContext(user.Username, ctx); err != nil {
 			if err != data.ErrRecordNotFound {
 				app.serverErrorResponse(w, r, err)
 				return

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/spf13/cobra"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
@@ -82,22 +81,8 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 	}
 	defer etcd.Close()
 
-	session, err := concurrency.NewSession(etcd)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer session.Close()
-
-	mutex := concurrency.NewMutex(session, "sqlpipe")
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
-
-	if err = mutex.Lock(ctx); err != nil {
-		log.Println(err)
-		return
-	}
-	defer mutex.Unlock(ctx)
 
 	resp, err := etcd.Get(ctx, "sqlpipe", clientv3.WithPrefix())
 	if err != nil {

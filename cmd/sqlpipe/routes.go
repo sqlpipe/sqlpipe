@@ -11,7 +11,8 @@ import (
 func (app *application) routes() http.Handler {
 	router := httprouter.New()
 
-	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit, app.tryTokenAuth, app.tryBasicAuth)
+	// commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit, app.tryTokenAuth, app.tryBasicAuth)
+	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit)
 
 	requireAuthenticatedUser := alice.New(app.requireAuthenticatedUser)
 	requireAdmin := requireAuthenticatedUser.Append(app.requireAdmin)
@@ -27,8 +28,7 @@ func (app *application) routes() http.Handler {
 	router.Handler(http.MethodPatch, "/v2/users/:username", requireAdmin.ThenFunc(app.updateUserHandler))
 	router.Handler(http.MethodDelete, "/v2/users/:username", requireAdmin.ThenFunc(app.deleteUserHandler))
 
-	router.Handler(http.MethodGet, "/v2/tokens/authenticate", requireAuthenticatedUser.ThenFunc(app.createAuthenticationTokenHandler))
-	router.Handler(http.MethodGet, "/testLock", requireAuthenticatedUser.ThenFunc(app.testLock))
+	router.HandlerFunc(http.MethodPost, "/v2/tokens/authenticate", app.createAuthenticationTokenHandler)
 
 	router.Handler(http.MethodGet, "/v2/debug/vars", expvar.Handler())
 
