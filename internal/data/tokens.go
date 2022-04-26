@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
@@ -61,21 +62,37 @@ type TokenModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m TokenModel) New(username string, ttl time.Duration, ctx context.Context) (Token, error) {
+func (m TokenModel) New(username string, ttl time.Duration) (Token, error) {
 	token, err := generateToken(username, ttl)
 	if err != nil {
 		return token, err
 	}
 
-	err = m.Insert(token, username, ctx)
+	err = m.Insert(token, username)
 	return token, err
 }
 
-func (m TokenModel) Insert(token Token, username string, ctx context.Context) (err error) {
+func (m TokenModel) Insert(token Token, username string) (err error) {
 	bytes, err := json.Marshal(token)
 	if err != nil {
 		return err
 	}
+
+	session, err := concurrency.NewSession(m.Etcd)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+
+	lockPath := fmt.Sprintf("%v%v", globals.LockPrefix, username)
+	mutex := concurrency.NewMutex(session, lockPath)
+	if err = mutex.Lock(ctx); err != nil {
+		return err
+	}
+	defer mutex.Unlock(ctx)
 
 	_, err = m.Etcd.Put(
 		ctx,

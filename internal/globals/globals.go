@@ -8,3 +8,5 @@ var Analytics bool
 var EtcdTimeout time.Duration
 var EtcdLongTimeout time.Duration
 var EtcdMaxConcurrentRequests int
+
+const LockPrefix = "sqlpipe/locks/"

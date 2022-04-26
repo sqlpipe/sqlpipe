@@ -156,7 +156,7 @@ func (app *application) tryTokenAuth(next http.Handler) http.Handler {
 		username := r.Header.Get("Username")
 		token := r.Header.Get("AuthToken")
 
-		if token == "" {
+		if token == "" || username == "" {
 			r = app.contextSetUser(r, data.AnonymousUser)
 			next.ServeHTTP(w, r)
 			return
@@ -192,7 +192,6 @@ func (app *application) tryTokenAuth(next http.Handler) http.Handler {
 func (app *application) tryBasicAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		// check if they already authenticated with a token
 		if !app.contextGetUser(r).IsAnonymous() {
 			next.ServeHTTP(w, r)
 			return

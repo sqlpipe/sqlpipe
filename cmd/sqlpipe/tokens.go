@@ -1,13 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/coreos/etcd/clientv3/concurrency"
-	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
@@ -40,25 +37,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	defer cancel()
-
-	session, err := concurrency.NewSession(app.models.Tokens.Etcd)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-	defer session.Close()
-
 	user := app.contextGetUser(r)
-	userKey := fmt.Sprintf("%v%v", UserPrefix, user.Username)
-	mutex := concurrency.NewMutex(session, userKey)
-
-	if err = mutex.Lock(ctx); err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-	defer mutex.Unlock(ctx)
 
 	if daysValid == 0 {
 		daysValid = 1
@@ -69,7 +48,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		panic("unable to parse time duration")
 	}
 
-	token, err := app.models.Tokens.New(user.Username, duration, ctx)
+	token, err := app.models.Tokens.New(user.Username, duration)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

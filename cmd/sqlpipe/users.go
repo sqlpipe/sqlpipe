@@ -103,8 +103,8 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 	defer session.Close()
 
-	userKey := fmt.Sprintf("%v%v", UserPrefix, username)
-	mutex := concurrency.NewMutex(session, userKey)
+	lockPath := fmt.Sprintf("%v%v", globals.LockPrefix, username)
+	mutex := concurrency.NewMutex(session, lockPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdLongTimeout)
 	defer cancel()
@@ -113,6 +113,7 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 		app.serverErrorResponse(w, r, err)
 		return
 	}
+	defer mutex.Unlock(ctx)
 
 	// TODO: SHOULD I BE PASSING A POINTER HERE?
 	user, err := app.models.Users.GetUserWithPasswordWithContext(*username, &ctx)

@@ -177,8 +177,7 @@ func (m UserModel) GetUserWithPassword(username string) (user User, err error) {
 		return user, ErrRecordNotFound
 	}
 
-	err = json.Unmarshal(resp.Kvs[0].Value, &user)
-	if err != nil {
+	if err = json.Unmarshal(resp.Kvs[0].Value, &user); err != nil {
 		return user, err
 	}
 
@@ -196,6 +195,7 @@ func (m UserModel) GetUserCheckToken(
 	userPath := getUserKey(username)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
 
 	resp, err := m.Etcd.Txn(ctx).If(
 		clientv3.Compare(clientv3.CreateRevision(userPath), ">", 0),
@@ -204,7 +204,7 @@ func (m UserModel) GetUserCheckToken(
 		clientv3.OpGet(tokenPath),
 		clientv3.OpGet(userPath),
 	).Commit()
-	cancel()
+
 	if err != nil {
 		return scrubbedUser, err
 	}
@@ -229,7 +229,6 @@ func (m UserModel) GetUserCheckToken(
 	return scrubbedUser, nil
 }
 
-// TODO: SHOULD I CHANGE THIS FUNC TO TAKE A CONTEXT POINTER?
 func (m UserModel) GetUserWithPasswordWithContext(
 	username string,
 	ctx *context.Context,
@@ -276,8 +275,10 @@ func (m UserModel) Delete(username string) error {
 	}
 	defer session.Close()
 
+	lockPath := fmt.Sprintf("%v%v", globals.LockPrefix, username)
+	mutex := concurrency.NewMutex(session, lockPath)
+
 	userKey := getUserKey(username)
-	mutex := concurrency.NewMutex(session, userKey)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
