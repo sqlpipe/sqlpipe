@@ -24,35 +24,38 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	user := data.User{
+	newUser := data.User{
 		Username: input.Username,
 		Admin:    input.Admin,
 	}
 
-	if err = user.SetPassword(input.Password); err != nil {
+	if err = newUser.SetPassword(input.Password); err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
 
 	v := validator.New()
 
-	if data.ValidateUser(v, user); !v.Valid() {
+	if data.ValidateUser(v, newUser); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
-	if err = app.models.Users.Insert(user); err != nil {
+	callingUser := app.contextGetUser(r)
+
+	scrubbedUser, err := app.models.Users.InsertCheckToken(newUser, *callingUser)
+	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrDuplicateUsername):
 			v.AddError("username", "a user with this username already exists")
 			app.failedValidationResponse(w, r, v.Errors)
+		case errors.Is(err, data.ErrInvalidCredentials):
+			app.invalidAuthenticationTokenResponse(w, r)
 		default:
 			app.serverErrorResponse(w, r, err)
 		}
 		return
 	}
-
-	scrubbedUser := user.Scrub()
 
 	if err = app.writeJSON(w, http.StatusAccepted, envelope{"user": scrubbedUser}, nil); err != nil {
 		app.serverErrorResponse(w, r, err)

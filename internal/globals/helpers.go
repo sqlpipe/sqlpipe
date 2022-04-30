@@ -3,9 +3,9 @@ package globals
 import "fmt"
 
 func GetUserDataPath(username string) string {
-	return fmt.Sprintf("%v/users/%v", SqlpipeDataPath, username)
+	return fmt.Sprintf("%v/users/%v", SqlpipePath, username)
 }
 
-func GetUserLockPath(username string) string {
-	return fmt.Sprintf("%v/users/%v", SqlpipeLocksPath, username)
+func GetUserTokenPath(username string, authToken string) string {
+	return fmt.Sprintf("%v/users/%v/tokens/%v", SqlpipePath, username, authToken)
 }

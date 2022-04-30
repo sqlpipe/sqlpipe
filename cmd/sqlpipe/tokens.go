@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -70,7 +71,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 	var expiry int64
 	switch daysValid {
 	case 0:
-		expiry = -1
+		expiry = math.MaxInt64
 	default:
 		duration, err := time.ParseDuration(fmt.Sprintf("%vh", daysValid))
 		if err != nil {
@@ -79,7 +80,16 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		expiry = time.Now().Add(duration).Unix()
 	}
 
-	token, err := app.models.Tokens.New(user.Username, expiry)
+	expiryString := fmt.Sprint(expiry)
+	expiryStringLen := len(expiryString)
+	if expiryStringLen < 19 {
+		zerosToAdd := 19 - expiryStringLen
+		for i := 0; i < zerosToAdd; i++ {
+			expiryString = "0" + expiryString
+		}
+	}
+
+	token, err := app.models.Tokens.New(user.Username, expiryString)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

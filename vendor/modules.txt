@@ -12,7 +12,6 @@ github.com/coreos/etcd/clientv3/balancer
 github.com/coreos/etcd/clientv3/balancer/connectivity
 github.com/coreos/etcd/clientv3/balancer/picker
 github.com/coreos/etcd/clientv3/balancer/resolver/endpoint
-github.com/coreos/etcd/clientv3/concurrency
 github.com/coreos/etcd/clientv3/credentials
 github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes
 github.com/coreos/etcd/etcdserver/etcdserverpb
@@ -127,9 +126,6 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-## explicit
-golang.org/x/sync/errgroup
 # golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
 ## explicit; go 1.17
 golang.org/x/sys/internal/unsafeheader

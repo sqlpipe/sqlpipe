@@ -149,46 +149,6 @@ func (app *application) metrics(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) tryTokenAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Vary", "Authorization")
-
-		username := r.Header.Get("Username")
-		token := r.Header.Get("AuthToken")
-
-		if token == "" || username == "" {
-			r = app.contextSetUser(r, data.AnonymousUser)
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		v := validator.New()
-
-		data.ValidateUsername(v, username)
-		data.ValidateTokenPlaintext(v, token)
-
-		if !v.Valid() {
-			app.invalidCredentialsResponse(w, r)
-			return
-		}
-
-		user, err := app.models.Users.GetUserCheckToken(username, token)
-		if err != nil {
-			switch {
-			case errors.Is(err, data.ErrRecordNotFound):
-				app.invalidCredentialsResponse(w, r)
-			default:
-				app.serverErrorResponse(w, r, err)
-			}
-			return
-		}
-
-		r = app.contextSetUser(r, user)
-
-		next.ServeHTTP(w, r)
-	})
-}
-
 func (app *application) tryBasicAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -235,9 +195,7 @@ func (app *application) tryBasicAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		scrubbedUser := user.Scrub()
-
-		r = app.contextSetUser(r, scrubbedUser)
+		r = app.contextSetUser(r, &user)
 
 		next.ServeHTTP(w, r)
 	})
@@ -269,6 +227,38 @@ func (app *application) requireAdmin(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) getUserFromRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "SQLpipeUsername")
+		w.Header().Add("Vary", "SQLpipeAuthToken")
+
+		username := r.Header.Get("SQLpipeUsername")
+		authToken := r.Header.Get("SQLpipeAuthToken")
+
+		if username == "" || authToken == "" {
+			r = app.contextSetUser(r, data.AnonymousUser)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		v := validator.New()
+		data.ValidateUsername(v, username)
+		data.ValidateTokenPlaintext(v, authToken)
+		if !v.Valid() {
+			app.invalidCredentialsResponse(w, r)
+			return
+		}
+
+		user := data.User{
+			Username:  username,
+			AuthToken: authToken,
+		}
+
+		r = app.contextSetUser(r, &user)
 		next.ServeHTTP(w, r)
 	})
 }

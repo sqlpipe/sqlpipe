@@ -8,5 +8,4 @@ var Analytics bool
 var EtcdTimeout time.Duration
 var EtcdLongTimeout time.Duration
 var EtcdMaxConcurrentRequests int
-var SqlpipeDataPath = "sqlpipe/data"
-var SqlpipeLocksPath = "sqlpipe/data"
+var SqlpipePath = "sqlpipe"

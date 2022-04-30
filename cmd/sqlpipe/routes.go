@@ -11,22 +11,18 @@ import (
 func (app *application) routes() http.Handler {
 	router := httprouter.New()
 
-	// commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit, app.tryTokenAuth, app.tryBasicAuth)
-	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit)
-
-	requireAuthenticatedUser := alice.New(app.requireAuthenticatedUser)
-	requireAdmin := requireAuthenticatedUser.Append(app.requireAdmin)
+	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit, app.getUserFromRequest)
 
 	router.NotFound = http.HandlerFunc(app.notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 
 	router.HandlerFunc(http.MethodGet, "/v2/healthcheck", app.healthcheckHandler)
 
-	router.Handler(http.MethodPost, "/v2/users", requireAdmin.ThenFunc(app.createUserHandler))
-	router.Handler(http.MethodGet, "/v2/users/:username", requireAdmin.ThenFunc(app.showUserHandler))
-	router.Handler(http.MethodGet, "/v2/users", requireAdmin.ThenFunc(app.listUsersHandler))
-	router.Handler(http.MethodPatch, "/v2/users/:username", requireAdmin.ThenFunc(app.updateUserHandler))
-	router.Handler(http.MethodDelete, "/v2/users/:username", requireAdmin.ThenFunc(app.deleteUserHandler))
+	router.HandlerFunc(http.MethodPost, "/v2/users", app.createUserHandler)
+	router.HandlerFunc(http.MethodGet, "/v2/users/:username", app.showUserHandler)
+	router.HandlerFunc(http.MethodGet, "/v2/users", app.listUsersHandler)
+	router.HandlerFunc(http.MethodPatch, "/v2/users/:username", app.updateUserHandler)
+	router.HandlerFunc(http.MethodDelete, "/v2/users/:username", app.deleteUserHandler)
 
 	router.HandlerFunc(http.MethodPost, "/v2/tokens/authenticate", app.createAuthenticationTokenHandler)
 

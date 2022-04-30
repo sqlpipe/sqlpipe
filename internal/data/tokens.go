@@ -20,11 +20,11 @@ const (
 
 type Token struct {
 	Plaintext string `json:"token"`
-	Expiry    int64  `json:"expiry"`
+	Expiry    string `json:"expiry"`
 	Hash      []byte `json:"-"`
 }
 
-func generateToken(username string, ttl int64) (Token, error) {
+func generateToken(username string, ttl string) (Token, error) {
 	token := Token{
 		Expiry: ttl,
 	}
@@ -53,7 +53,7 @@ type TokenModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m TokenModel) New(username string, ttl int64) (Token, error) {
+func (m TokenModel) New(username string, ttl string) (Token, error) {
 	token, err := generateToken(username, ttl)
 	if err != nil {
 		return token, err
@@ -67,7 +67,8 @@ func (m TokenModel) Insert(token Token, username string) (err error) {
 	tokenPath := fmt.Sprintf("%v/tokens/%X", globals.GetUserDataPath(username), token.Hash)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	_, err = m.Etcd.Put(ctx, tokenPath, fmt.Sprint(token.Expiry))
+
+	_, err = m.Etcd.Put(ctx, tokenPath, token.Expiry)
 	cancel()
 
 	return err

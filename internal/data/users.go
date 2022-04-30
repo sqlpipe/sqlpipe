@@ -2,10 +2,12 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,10 +20,11 @@ import (
 )
 
 var (
-	ErrDuplicateUsername = errors.New("duplicate username")
+	ErrDuplicateUsername  = errors.New("duplicate username")
+	ErrInvalidCredentials = errors.New("invalid authentication credentials")
 )
 
-var AnonymousUser = ScrubbedUser{}
+var AnonymousUser = &User{}
 
 type User struct {
 	Username          string    `json:"username"`
@@ -29,6 +32,7 @@ type User struct {
 	LastModified      time.Time `json:"lastModified"`
 	PlaintextPassword string    `json:"-"`
 	HashedPassword    []byte    `json:"hashedPassword"`
+	AuthToken         string    `json:"-"`
 	Admin             bool      `json:"admin"`
 }
 
@@ -48,7 +52,7 @@ func (user User) Scrub() ScrubbedUser {
 	}
 }
 
-func (u ScrubbedUser) IsAnonymous() bool {
+func (u *User) IsAnonymous() bool {
 	return u == AnonymousUser
 }
 
@@ -102,25 +106,85 @@ type UserModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m UserModel) Insert(user User) (err error) {
+func (m UserModel) InsertCheckToken(newUser User, callingUser User) (scrubbedUser ScrubbedUser, err error) {
 
 	creationTime := time.Now()
-	user.CreatedAt = creationTime
-	user.LastModified = creationTime
+	newUser.CreatedAt = creationTime
+	newUser.LastModified = creationTime
 
-	bytes, err := json.Marshal(user)
+	bytes, err := json.Marshal(newUser)
 	if err != nil {
-		return err
+		return scrubbedUser, err
 	}
 
-	userPath := globals.GetUserDataPath(user.Username)
+	newUserPath := globals.GetUserDataPath(newUser.Username)
+	hashedToken := fmt.Sprintf("%X", sha256.Sum256([]byte(callingUser.AuthToken)))
+	callingUserTokenPath := globals.GetUserTokenPath(callingUser.Username, hashedToken)
+
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 
 	resp, err := m.Etcd.Txn(ctx).If(
-		clientv3.Compare(clientv3.CreateRevision(userPath), "=", 0),
+		clientv3.Compare(clientv3.CreateRevision(callingUserTokenPath), ">", 0),
+		clientv3.Compare(clientv3.Value(callingUserTokenPath), ">", fmt.Sprint(time.Now().Unix())),
+		clientv3.Compare(clientv3.CreateRevision(newUserPath), "=", 0),
 	).Then(
-		clientv3.OpPut(userPath, string(bytes)),
+		clientv3.OpPut(newUserPath, string(bytes)),
+	).Else(
+		clientv3.OpGet(callingUserTokenPath),
+		clientv3.OpGet(newUserPath),
+	).Commit()
+
+	if err != nil {
+		return scrubbedUser, err
+	}
+
+	if !resp.Succeeded {
+
+		if resp.Responses[0].GetResponseRange().Count == 0 {
+			return scrubbedUser, ErrInvalidCredentials
+		}
+
+		expiry, err := strconv.ParseInt(string(resp.Responses[0].GetResponseRange().Kvs[0].Value), 10, 64)
+		if err != nil {
+			return scrubbedUser, err
+		}
+		if expiry < time.Now().Unix() {
+			return scrubbedUser, ErrInvalidCredentials
+		}
+
+		if resp.Responses[1].GetResponseRange().Count != 0 {
+			return scrubbedUser, ErrDuplicateUsername
+		}
+
+		panic("inserting user failed with an unknown error. panic code 1")
+	}
+
+	scrubbedUser = newUser.Scrub()
+
+	return scrubbedUser, nil
+}
+
+func (m UserModel) Insert(newUser User) (err error) {
+
+	creationTime := time.Now()
+	newUser.CreatedAt = creationTime
+	newUser.LastModified = creationTime
+
+	bytes, err := json.Marshal(newUser)
+	if err != nil {
+		return err
+	}
+
+	newUserPath := globals.GetUserDataPath(newUser.Username)
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+
+	resp, err := m.Etcd.Txn(ctx).If(
+		clientv3.Compare(clientv3.CreateRevision(newUserPath), "=", 0),
+	).Then(
+		clientv3.OpPut(newUserPath, string(bytes)),
 	).Commit()
 
 	if err != nil {
@@ -211,7 +275,12 @@ func (m UserModel) GetUserCheckToken(
 		return scrubbedUser, err
 	}
 
-	if token.Expiry < time.Now().Unix() {
+	expiry, err := strconv.ParseInt(token.Expiry, 10, 64)
+	if err != nil {
+		return scrubbedUser, err
+	}
+
+	if expiry < time.Now().Unix() {
 		return scrubbedUser, ErrRecordNotFound
 	}
 
