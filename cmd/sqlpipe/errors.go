@@ -88,3 +88,8 @@ func (app *application) requireAdminResponse(w http.ResponseWriter, r *http.Requ
 	message := "you must authenticate as an admin to access this resource"
 	app.errorResponse(w, r, http.StatusUnauthorized, message)
 }
+
+func (app *application) corruptUserResponse(w http.ResponseWriter, r *http.Request) {
+	message := "the user identified by your credentials is corrupt"
+	app.errorResponse(w, r, http.StatusUnauthorized, message)
+}

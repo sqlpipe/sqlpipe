@@ -136,7 +136,7 @@ func initializeCmd(cmd *cobra.Command, args []string) {
 
 	m := data.NewModels(etcd)
 
-	if err = m.Users.Insert(user); err != nil {
+	if err = m.Users.InsertInitialUser(user); err != nil {
 		log.Println(v.Errors)
 		return
 	}

@@ -43,14 +43,18 @@ func (app *application) createUserHandler(w http.ResponseWriter, r *http.Request
 
 	callingUser := app.contextGetUser(r)
 
-	scrubbedUser, err := app.models.Users.InsertCheckToken(newUser, *callingUser)
+	scrubbedUser, err := app.models.Users.Insert(newUser, *callingUser)
 	if err != nil {
 		switch {
+		case errors.Is(err, data.ErrInvalidCredentials):
+			app.invalidAuthenticationTokenResponse(w, r)
+		case errors.Is(err, data.ErrCorruptUser):
+			app.corruptUserResponse(w, r)
+		case errors.Is(err, data.ErrNotPermitted):
+			app.notPermittedResponse(w, r)
 		case errors.Is(err, data.ErrDuplicateUsername):
 			v.AddError("username", "a user with this username already exists")
 			app.failedValidationResponse(w, r, v.Errors)
-		case errors.Is(err, data.ErrInvalidCredentials):
-			app.invalidAuthenticationTokenResponse(w, r)
 		default:
 			app.serverErrorResponse(w, r, err)
 		}
@@ -70,7 +74,9 @@ func (app *application) showUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	scrubbedUser, err := app.models.Users.Get(*username)
+	callingUser := app.contextGetUser(r)
+
+	scrubbedUser, err := app.models.Users.Get(*callingUser, *username)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):

@@ -22,6 +22,9 @@ import (
 var (
 	ErrDuplicateUsername  = errors.New("duplicate username")
 	ErrInvalidCredentials = errors.New("invalid authentication credentials")
+	ErrExpiredAuthToken   = errors.New("expired authentication token")
+	ErrCorruptUser        = errors.New("user data corrupted")
+	ErrNotPermitted       = errors.New("not permitted")
 )
 
 var AnonymousUser = &User{}
@@ -29,7 +32,7 @@ var AnonymousUser = &User{}
 type User struct {
 	Username          string `json:"username"`
 	PlaintextPassword string `json:"-"`
-	BcryptedPassword  []byte `json:"_"`
+	BcryptedPassword  []byte `json:"-"`
 	AuthToken         string `json:"-"`
 	Admin             bool   `json:"admin"`
 }
@@ -100,76 +103,119 @@ type UserModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m UserModel) InsertCheckToken(newUser User, callingUser User) (scrubbedUser ScrubbedUser, err error) {
+func (m UserModel) Insert(newUser User, callingUser User) (user User, err error) {
+	callingUserPath := globals.GetUserPath(callingUser.Username)
+	callingUserPasswordPath := globals.GetUserHashedPasswordPath(callingUser.Username)
+	callingUserAdminPath := globals.GetUserAdminPath(callingUser.Username)
+	callingUserTokenPath := globals.GetUserHashedTokenPath(callingUser.Username, globals.GetSha256Hash(callingUser.AuthToken))
 
-	newUserPath := globals.GetUserPath(newUser.Username)
+	targetUserPath := globals.GetUserPath(newUser.Username)
 	newUserAdminPath := globals.GetUserAdminPath(newUser.Username)
 	newUserHashedPasswordPath := globals.GetUserHashedPasswordPath(newUser.Username)
 	fastHashedPassword := fmt.Sprintf("%X", sha256.Sum256([]byte(newUser.BcryptedPassword)))
-	hashedToken := fmt.Sprintf("%X", sha256.Sum256([]byte(callingUser.AuthToken)))
-	callingUserTokenPath := globals.GetUserTokenPath(callingUser.Username, hashedToken)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 
 	resp, err := m.Etcd.Txn(ctx).If(
+		// authentication checks
 		clientv3.Compare(clientv3.CreateRevision(callingUserTokenPath), ">", 0),
-		clientv3.Compare(clientv3.Value(callingUserTokenPath), ">", fmt.Sprint(time.Now().Unix())),
+		clientv3.Compare(clientv3.Value(callingUserTokenPath), ">", globals.UnixTimeStringWithLeadingZeros(time.Now().Unix())),
+		// corruption checks
+		clientv3.Compare(clientv3.CreateRevision(callingUserPath), ">", 0),
+		clientv3.Compare(clientv3.CreateRevision(callingUserPasswordPath), ">", 0),
+		clientv3.Compare(clientv3.Value(callingUserAdminPath), "=", "true"),
+		// business logic checks
+		clientv3.Compare(clientv3.CreateRevision(targetUserPath), "=", 0),
+	).Then(
+		// create target user
+		clientv3.OpPut(targetUserPath, ""),
+		clientv3.OpPut(newUserHashedPasswordPath, fastHashedPassword),
+		clientv3.OpPut(newUserAdminPath, fmt.Sprint(newUser.Admin)),
+	).Else(
+		// authentication checks
+		clientv3.OpGet(callingUserTokenPath),
+		clientv3.OpGet(callingUserPath),
+		// corruption checks
+		clientv3.OpGet(callingUserPasswordPath),
+		clientv3.OpGet(callingUserAdminPath),
+		// business logic checks
+		clientv3.OpGet(targetUserPath),
+	).Commit()
+
+	if err != nil {
+		return user, err
+	}
+
+	if !resp.Succeeded {
+
+		for _, rr := range resp.Responses {
+			fmt.Println(fmt.Sprint(rr.GetResponseRange().Kvs[0].Version), string(rr.GetResponseRange().Kvs[0].Value))
+		}
+		// check if calling user token exists
+		if resp.Responses[0].GetResponseRange().Kvs[0].Version == 0 {
+			return user, ErrInvalidCredentials
+		}
+
+		// parse token expiry
+		expiry, err := strconv.ParseInt(string(resp.Responses[0].GetResponseRange().Kvs[0].Value), 10, 64)
+		if err != nil {
+			return user, err
+		}
+		// check if token expired
+		if expiry < time.Now().Unix() {
+			return user, ErrExpiredAuthToken
+		}
+
+		// check if calling user main node exists
+		if resp.Responses[1].GetResponseRange().Kvs[0].Version == 0 {
+			return user, ErrInvalidCredentials
+		}
+		// check if calling user password node exists
+		if resp.Responses[2].GetResponseRange().Kvs[0].Version == 0 {
+			return user, ErrCorruptUser
+		}
+		// check if calling user admin node exists
+		if resp.Responses[3].GetResponseRange().Kvs[0].Version == 0 {
+			return user, ErrCorruptUser
+		}
+		// check if calling user is an admin
+		isAdmin, err := strconv.ParseBool(string(resp.Responses[3].GetResponseRange().Kvs[0].Value))
+		if err != nil {
+			return user, err
+		}
+		if !isAdmin {
+			return user, ErrNotPermitted
+		}
+		// check if target user node exists
+		if resp.Responses[4].GetResponseRange().Kvs[0].Version == 0 {
+			return user, ErrDuplicateUsername
+		}
+
+		panic("an unknown error occured while creating a user")
+	}
+
+	return newUser, nil
+}
+
+func (m UserModel) InsertInitialUser(newUser User) (err error) {
+	newUserPath := globals.GetUserPath(newUser.Username)
+	newUserAdminPath := globals.GetUserAdminPath(newUser.Username)
+	newUserHashedPasswordPath := globals.GetUserHashedPasswordPath(newUser.Username)
+
+	fastHashedPassword := fmt.Sprintf("%X", sha256.Sum256([]byte(newUser.BcryptedPassword)))
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+
+	resp, err := m.Etcd.Txn(ctx).If(
 		clientv3.Compare(clientv3.CreateRevision(newUserPath), "=", 0),
 	).Then(
 		clientv3.OpPut(newUserPath, ""),
 		clientv3.OpPut(newUserHashedPasswordPath, fastHashedPassword),
 		clientv3.OpPut(newUserAdminPath, fmt.Sprint(newUser.Admin)),
 	).Else(
-		clientv3.OpGet(callingUserTokenPath),
 		clientv3.OpGet(newUserPath),
-	).Commit()
-
-	if err != nil {
-		return scrubbedUser, err
-	}
-
-	if !resp.Succeeded {
-
-		if resp.Responses[0].GetResponseRange().Count == 0 {
-			return scrubbedUser, ErrInvalidCredentials
-		}
-
-		expiry, err := strconv.ParseInt(string(resp.Responses[0].GetResponseRange().Kvs[0].Value), 10, 64)
-		if err != nil {
-			return scrubbedUser, err
-		}
-		if expiry < time.Now().Unix() {
-			return scrubbedUser, ErrInvalidCredentials
-		}
-
-		if resp.Responses[1].GetResponseRange().Count != 0 {
-			return scrubbedUser, ErrDuplicateUsername
-		}
-
-		panic("inserting user failed with an unknown error")
-	}
-
-	scrubbedUser = newUser.Scrub()
-
-	return scrubbedUser, nil
-}
-
-func (m UserModel) Insert(newUser User) (err error) {
-	newUserPath := globals.GetUserPath(newUser.Username)
-	newUserAdminPath := globals.GetUserAdminPath(newUser.Username)
-	newUserHashedPasswordPath := globals.GetUserHashedPasswordPath(newUser.Username)
-	hashedPassword := fmt.Sprintf("%X", sha256.Sum256([]byte(newUser.BcryptedPassword)))
-
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	defer cancel()
-
-	resp, err := m.Etcd.Txn(ctx).If(
-		clientv3.Compare(clientv3.CreateRevision(newUserPath), "=", 0),
-	).Then(
-		clientv3.OpPut(newUserPath, ""),
-		clientv3.OpPut(newUserHashedPasswordPath, hashedPassword),
-		clientv3.OpPut(newUserAdminPath, fmt.Sprint(newUser.Admin)),
 	).Commit()
 
 	if err != nil {
@@ -177,63 +223,156 @@ func (m UserModel) Insert(newUser User) (err error) {
 	}
 
 	if !resp.Succeeded {
-		return ErrDuplicateUsername
+		if resp.Responses[0].GetResponseRange().Count > 0 {
+			return ErrDuplicateUsername
+		}
+		panic("an unkown error occured while creating the initial user")
 	}
 
 	return nil
 }
 
 func (m UserModel) Get(
+	callingUser User,
 	username string,
 ) (
-	scrubbedUser ScrubbedUser,
+	user User,
 	err error,
 ) {
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	resp, err := m.Etcd.Get(ctx, globals.GetUserPath(username))
-	cancel()
-	if err != nil {
-		return scrubbedUser, err
-	}
-	if resp.Count == 0 {
-		return scrubbedUser, ErrRecordNotFound
-	}
+	callingUserPath := globals.GetUserPath(callingUser.Username)
+	callingUserPasswordPath := globals.GetUserHashedPasswordPath(callingUser.Username)
+	callingUserAdminPath := globals.GetUserAdminPath(callingUser.Username)
+	callingUserTokenPath := globals.GetUserHashedTokenPath(callingUser.Username, callingUser.AuthToken)
 
-	var user User
-	if err = json.Unmarshal(resp.Kvs[0].Value, &user); err != nil {
-		return scrubbedUser, err
-	}
-	scrubbedUser = user.Scrub()
+	targetUserPath := globals.GetUserPath(username)
 
-	return scrubbedUser, nil
-}
-
-func (m UserModel) GetUserWithPassword(username string) (user User, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 
-	resp, err := m.Etcd.Get(ctx, globals.GetUserPath(username), clientv3.WithPrefix())
+	resp, err := m.Etcd.Txn(ctx).If(
+		// authentication checks
+		clientv3.Compare(clientv3.CreateRevision(callingUserTokenPath), ">", 0),
+		clientv3.Compare(clientv3.Value(callingUserTokenPath), ">", fmt.Sprint(time.Now().Unix())),
+		// corruption checks
+		clientv3.Compare(clientv3.CreateRevision(callingUserPath), ">", 0),
+		clientv3.Compare(clientv3.CreateRevision(callingUserPasswordPath), ">", 0),
+		clientv3.Compare(clientv3.Value(callingUserAdminPath), "=", "true"),
+		// business logic checks
+		clientv3.Compare(clientv3.CreateRevision(targetUserPath), "=", 0),
+	).Then(
+		// create target user
+		clientv3.OpGet(targetUserPath),
+	).Else(
+		// authentication checks
+		clientv3.OpGet(callingUserTokenPath),
+		clientv3.OpGet(callingUserPath),
+		// corruption checks
+		clientv3.OpGet(callingUserPasswordPath),
+		clientv3.OpGet(callingUserAdminPath),
+		// business logic checks
+		clientv3.OpGet(targetUserPath),
+	).Commit()
+
 	if err != nil {
 		return user, err
 	}
 
-	if resp.Count == 0 {
-		return user, ErrRecordNotFound
-	}
+	if !resp.Succeeded {
 
-	user.Username = username
-
-	for _, kv := range resp.Kvs {
-		switch string(kv.Key) {
-		case "admin":
-			user.Admin, err = strconv.ParseBool(string(kv.Value))
-			if err != nil {
-				return user, err
-			}
-		case "hashed_password":
-			user.BcryptedPassword = kv.Value
+		// check if calling user token exists
+		if resp.Responses[0].GetResponseRange().Count == 0 {
+			return user, ErrInvalidCredentials
 		}
+
+		// parse token expiry
+		expiry, err := strconv.ParseInt(string(resp.Responses[0].GetResponseRange().Kvs[0].Value), 10, 64)
+		if err != nil {
+			return user, err
+		}
+		// check if token expired
+		if expiry < time.Now().Unix() {
+			return user, ErrExpiredAuthToken
+		}
+		// check if calling user main node exists
+		if resp.Responses[1].GetResponseRange().Count == 0 {
+			return user, ErrInvalidCredentials
+		}
+		// check if calling user password node exists
+		if resp.Responses[2].GetResponseRange().Count == 0 {
+			return user, ErrCorruptUser
+		}
+		// check if calling user admin node exists
+		if resp.Responses[3].GetResponseRange().Count == 0 {
+			return user, ErrCorruptUser
+		}
+		// check if calling user is an admin
+		isAdmin, err := strconv.ParseBool(string(resp.Responses[3].GetResponseRange().Kvs[0].Value))
+		if err != nil {
+			return user, err
+		}
+		if !isAdmin {
+			return user, ErrNotPermitted
+		}
+		// check if target user node exists
+		if resp.Responses[4].GetResponseRange().Count == 0 {
+			return user, ErrRecordNotFound
+		}
+
+		panic("an unknown error occured while getting a user")
 	}
+
+	return user, nil
+}
+
+func (m UserModel) GetWithoutToken(
+	callingUser User,
+) (
+	user User,
+	err error,
+) {
+	callingUserPath := globals.GetUserPath(callingUser.Username)
+	callingUserAdminPath := globals.GetUserAdminPath(callingUser.Username)
+	callingUserPasswordPath := globals.GetUserHashedPasswordPath(callingUser.Username)
+
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
+
+	resp, err := m.Etcd.Txn(ctx).If(
+		clientv3.Compare(clientv3.CreateRevision(callingUserPath), ">", 0),
+		clientv3.Compare(clientv3.CreateRevision(callingUserPasswordPath), ">", 0),
+		clientv3.Compare(clientv3.CreateRevision(callingUserAdminPath), ">", 0),
+	).Then(
+		clientv3.OpGet(callingUserPasswordPath),
+	).Else(
+		clientv3.OpGet(callingUserPath),
+		clientv3.OpGet(callingUserPasswordPath),
+		clientv3.OpGet(callingUserAdminPath),
+	).Commit()
+
+	if err != nil {
+		return user, err
+	}
+
+	if !resp.Succeeded {
+
+		// check if calling user main node exists
+		if resp.Responses[0].GetResponseRange().Count == 0 {
+			return user, ErrInvalidCredentials
+		}
+		// check if calling user password node exists
+		if resp.Responses[1].GetResponseRange().Count == 0 {
+			return user, ErrCorruptUser
+		}
+		// check if calling user admin node exists
+		if resp.Responses[2].GetResponseRange().Count == 0 {
+			return user, ErrCorruptUser
+		}
+
+		panic("an unknown error occured while creating a user")
+	}
+
+	user = callingUser
+	user.BcryptedPassword = resp.Responses[0].GetResponseRange().Kvs[0].Value
 
 	return user, nil
 }

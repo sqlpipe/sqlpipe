@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
@@ -33,23 +34,19 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 
 	v := validator.New()
 
-	if v.Check(daysValid >= 0, "daysValid", "must be 0 <= daysInfinite < 366. 0 is infinite"); !v.Valid() {
-		app.failedValidationResponse(w, r, v.Errors)
-		return
+	user := data.User{
+		Username: input.Username,
 	}
 
+	data.ValidateUsername(v, user.Username)
+
+	v.Check(daysValid >= 0, "daysValid", "must be 0 <= daysInfinite < 366. 0 is infinite")
 	v.Check(daysValid <= 366, "daysValid", "must be 0 <= daysInfinite < 366. 0 is infinite")
 
 	if !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
-
-	user := data.User{
-		Username: input.Username,
-	}
-
-	user.SetPassword(input.Password)
 
 	var expiryUnixTime int64
 	switch daysValid {
@@ -63,14 +60,9 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		expiryUnixTime = time.Now().Add(duration).Unix()
 	}
 
-	expiryString := fmt.Sprint(expiryUnixTime)
-	expiryStringLen := len(expiryString)
-	if expiryStringLen < 19 {
-		zerosToAdd := 19 - expiryStringLen
-		for i := 0; i < zerosToAdd; i++ {
-			expiryString = "0" + expiryString
-		}
-	}
+	expiryString := globals.UnixTimeStringWithLeadingZeros(expiryUnixTime)
+
+	user, err = app.models.Users.GetWithoutToken(user)
 
 	token, err := app.models.Tokens.New(user, expiryString)
 	if err != nil {

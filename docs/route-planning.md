@@ -1,5 +1,25 @@
 # sqlpipe route, data model, and locks planning
 
+## create initial user
+- etcd transaction
+    - if
+        <!-- business logic check -->
+        - check that target user main node does not exist
+    - then
+        - create target user
+    - else
+        <!-- business logic checks -->
+        - read target user node
+- check if txn succeeded
+    - if not
+        - for responses
+            <!-- business logic checks -->
+            - target user main node
+                - if exists, error duplicate username
+            <!-- panic -->
+            - panic("an unknown error occured while creating a user")
+- return the user
+
 ## create a user
 `POST /v2/users`
 - etcd transaction
@@ -14,7 +34,6 @@
         <!-- business logic check -->
         - check that target user main node does not exist
     - then
-        - delete target user prefix
         - create target user
     - else
         <!-- authentication checks -->
@@ -272,7 +291,7 @@
         <!-- integrity check -->
         - check if main user node exists
         - check if password node exists
-        - check if admin node is true
+        - check if admin node exists
     - then
         - read password node
     - else

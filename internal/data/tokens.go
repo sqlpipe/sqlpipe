@@ -64,44 +64,11 @@ func (m TokenModel) New(user User, ttl string) (Token, error) {
 }
 
 func (m TokenModel) Insert(token Token, user User) (err error) {
-	newTokenPath := fmt.Sprintf("%v/tokens/%X", globals.GetUserPath(user.Username), token.Hash)
-	callingUserPath := globals.GetUserPath(user.Username)
-	callingUserPasswordPath := globals.GetUserHashedPasswordPath(user.Username)
-	fastHashedPassword := fmt.Sprintf("%X", sha256.Sum256([]byte(user.BcryptedPassword)))
-	// hashedPassword :=  fmt.Sprintf("%X", sha256.Sum256([]byte(user.BcryptedPassword)))
-
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
 
-	resp, err := m.Etcd.Txn(ctx).If(
-		clientv3.Compare(clientv3.CreateRevision(callingUserPath), ">", 0),
-		clientv3.Compare(clientv3.Value(callingUserPasswordPath), "=", fastHashedPassword),
-	).Then(
-		clientv3.OpPut(newTokenPath, token.ExpiryUnixTime),
-	).Else(
-		clientv3.OpGet(callingUserPath),
-		clientv3.OpGet(callingUserPasswordPath),
-	).Commit()
-
-	if err != nil {
-		return err
-	}
-
-	if !resp.Succeeded {
-		if resp.Responses[0].GetResponseRange().Count == 0 {
-			return ErrRecordNotFound
-		}
-
-		storedFastHashPassword := string(resp.Responses[1].GetResponseRange().Kvs[0].Value)
-		if storedFastHashPassword != fastHashedPassword {
-			fmt.Println(storedFastHashPassword)
-			fmt.Println(fastHashedPassword)
-			return ErrInvalidCredentials
-		}
-
-		panic("inserting token failed with an unknown error")
-	}
-
+	newTokenPath := globals.GetUserHashedTokenPath(user.Username, fmt.Sprintf("%X", string(token.Hash)))
+	_, err = m.Etcd.Put(ctx, newTokenPath, token.ExpiryUnixTime)
 	return err
 }
 
