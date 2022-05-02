@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"expvar"
 	"fmt"
 	"net/http"
@@ -149,58 +149,6 @@ func (app *application) metrics(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) tryBasicAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		if !app.contextGetUser(r).IsAnonymous() {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			r = app.contextSetUser(r, data.AnonymousUser)
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		v := validator.New()
-		data.ValidateUsername(v, username)
-		data.ValidatePassword(v, password)
-
-		if !v.Valid() {
-			app.invalidCredentialsResponse(w, r)
-			return
-		}
-
-		user, err := app.models.Users.GetUserWithPassword(username)
-		if err != nil {
-			switch {
-			case errors.Is(err, data.ErrRecordNotFound):
-				app.invalidCredentialsResponse(w, r)
-			default:
-				app.serverErrorResponse(w, r, err)
-			}
-			return
-		}
-
-		match, err := user.CheckPassword(password)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
-			return
-		}
-
-		if !match {
-			app.invalidCredentialsResponse(w, r)
-			return
-		}
-
-		r = app.contextSetUser(r, &user)
-
-		next.ServeHTTP(w, r)
-	})
-}
-
 func (app *application) logRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		app.logger.PrintInfo(
@@ -231,7 +179,7 @@ func (app *application) requireAdmin(next http.Handler) http.Handler {
 	})
 }
 
-func (app *application) getUserFromRequest(next http.Handler) http.Handler {
+func (app *application) setContextUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "SQLpipeUsername")
 		w.Header().Add("Vary", "SQLpipeAuthToken")
@@ -239,9 +187,8 @@ func (app *application) getUserFromRequest(next http.Handler) http.Handler {
 		username := r.Header.Get("SQLpipeUsername")
 		authToken := r.Header.Get("SQLpipeAuthToken")
 
-		if username == "" || authToken == "" {
-			r = app.contextSetUser(r, data.AnonymousUser)
-			next.ServeHTTP(w, r)
+		if username == "" && authToken == "" {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey, data.AnonymousUser)))
 			return
 		}
 
@@ -258,7 +205,8 @@ func (app *application) getUserFromRequest(next http.Handler) http.Handler {
 			AuthToken: authToken,
 		}
 
-		r = app.contextSetUser(r, &user)
+		r = r.WithContext(context.WithValue(r.Context(), userContextKey, &user))
+
 		next.ServeHTTP(w, r)
 	})
 }

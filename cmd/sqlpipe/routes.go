@@ -11,7 +11,7 @@ import (
 func (app *application) routes() http.Handler {
 	router := httprouter.New()
 
-	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit, app.getUserFromRequest)
+	commonMiddleware := alice.New(app.metrics, app.recoverPanic, app.enableCORS, app.logRequest, app.rateLimit, app.setContextUser)
 
 	router.NotFound = http.HandlerFunc(app.notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)

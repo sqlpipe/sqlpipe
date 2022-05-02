@@ -27,28 +27,22 @@ var (
 var AnonymousUser = &User{}
 
 type User struct {
-	Username          string    `json:"username"`
-	CreatedAt         time.Time `json:"createdAt"`
-	LastModified      time.Time `json:"lastModified"`
-	PlaintextPassword string    `json:"-"`
-	HashedPassword    []byte    `json:"hashedPassword"`
-	AuthToken         string    `json:"-"`
-	Admin             bool      `json:"admin"`
+	Username          string `json:"username"`
+	PlaintextPassword string `json:"-"`
+	BcryptedPassword  []byte `json:"_"`
+	AuthToken         string `json:"-"`
+	Admin             bool   `json:"admin"`
 }
 
 type ScrubbedUser struct {
-	Username     string    `json:"username"`
-	CreatedAt    time.Time `json:"createdAt"`
-	LastModified time.Time `json:"lastModified"`
-	Admin        bool      `json:"admin"`
+	Username string `json:"username"`
+	Admin    bool   `json:"admin"`
 }
 
 func (user User) Scrub() ScrubbedUser {
 	return ScrubbedUser{
-		Username:     user.Username,
-		CreatedAt:    user.CreatedAt,
-		LastModified: user.LastModified,
-		Admin:        user.Admin,
+		Username: user.Username,
+		Admin:    user.Admin,
 	}
 }
 
@@ -56,19 +50,19 @@ func (u *User) IsAnonymous() bool {
 	return u == AnonymousUser
 }
 
-func (u *User) CheckPassword(plaintextPassword string) (bool, error) {
-	err := bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(plaintextPassword))
-	if err != nil {
-		switch {
-		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
-			return false, nil
-		default:
-			return false, err
-		}
-	}
+// func (u *User) CheckPassword(plaintextPassword string) (bool, error) {
+// 	err := bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(plaintextPassword))
+// 	if err != nil {
+// 		switch {
+// 		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
+// 			return false, nil
+// 		default:
+// 			return false, err
+// 		}
+// 	}
 
-	return true, nil
-}
+// 	return true, nil
+// }
 
 func ValidatePassword(v *validator.Validator, password string) {
 	v.Check(password != "", "password", "must be provided")
@@ -86,7 +80,7 @@ func ValidateUser(v *validator.Validator, user User) {
 	ValidateUsername(v, user.Username)
 	ValidatePassword(v, user.PlaintextPassword)
 
-	if user.HashedPassword == nil {
+	if user.BcryptedPassword == nil {
 		panic("missing password hash for user")
 	}
 }
@@ -98,7 +92,7 @@ func (u *User) SetPassword(plaintextPassword string) error {
 	}
 
 	u.PlaintextPassword = plaintextPassword
-	u.HashedPassword = hash
+	u.BcryptedPassword = hash
 	return nil
 }
 
@@ -108,16 +102,10 @@ type UserModel struct {
 
 func (m UserModel) InsertCheckToken(newUser User, callingUser User) (scrubbedUser ScrubbedUser, err error) {
 
-	creationTime := time.Now()
-	newUser.CreatedAt = creationTime
-	newUser.LastModified = creationTime
-
-	bytes, err := json.Marshal(newUser)
-	if err != nil {
-		return scrubbedUser, err
-	}
-
-	newUserPath := globals.GetUserDataPath(newUser.Username)
+	newUserPath := globals.GetUserPath(newUser.Username)
+	newUserAdminPath := globals.GetUserAdminPath(newUser.Username)
+	newUserHashedPasswordPath := globals.GetUserHashedPasswordPath(newUser.Username)
+	fastHashedPassword := fmt.Sprintf("%X", sha256.Sum256([]byte(newUser.BcryptedPassword)))
 	hashedToken := fmt.Sprintf("%X", sha256.Sum256([]byte(callingUser.AuthToken)))
 	callingUserTokenPath := globals.GetUserTokenPath(callingUser.Username, hashedToken)
 
@@ -129,7 +117,9 @@ func (m UserModel) InsertCheckToken(newUser User, callingUser User) (scrubbedUse
 		clientv3.Compare(clientv3.Value(callingUserTokenPath), ">", fmt.Sprint(time.Now().Unix())),
 		clientv3.Compare(clientv3.CreateRevision(newUserPath), "=", 0),
 	).Then(
-		clientv3.OpPut(newUserPath, string(bytes)),
+		clientv3.OpPut(newUserPath, ""),
+		clientv3.OpPut(newUserHashedPasswordPath, fastHashedPassword),
+		clientv3.OpPut(newUserAdminPath, fmt.Sprint(newUser.Admin)),
 	).Else(
 		clientv3.OpGet(callingUserTokenPath),
 		clientv3.OpGet(newUserPath),
@@ -157,7 +147,7 @@ func (m UserModel) InsertCheckToken(newUser User, callingUser User) (scrubbedUse
 			return scrubbedUser, ErrDuplicateUsername
 		}
 
-		panic("inserting user failed with an unknown error. panic code 1")
+		panic("inserting user failed with an unknown error")
 	}
 
 	scrubbedUser = newUser.Scrub()
@@ -166,17 +156,10 @@ func (m UserModel) InsertCheckToken(newUser User, callingUser User) (scrubbedUse
 }
 
 func (m UserModel) Insert(newUser User) (err error) {
-
-	creationTime := time.Now()
-	newUser.CreatedAt = creationTime
-	newUser.LastModified = creationTime
-
-	bytes, err := json.Marshal(newUser)
-	if err != nil {
-		return err
-	}
-
-	newUserPath := globals.GetUserDataPath(newUser.Username)
+	newUserPath := globals.GetUserPath(newUser.Username)
+	newUserAdminPath := globals.GetUserAdminPath(newUser.Username)
+	newUserHashedPasswordPath := globals.GetUserHashedPasswordPath(newUser.Username)
+	hashedPassword := fmt.Sprintf("%X", sha256.Sum256([]byte(newUser.BcryptedPassword)))
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
@@ -184,7 +167,9 @@ func (m UserModel) Insert(newUser User) (err error) {
 	resp, err := m.Etcd.Txn(ctx).If(
 		clientv3.Compare(clientv3.CreateRevision(newUserPath), "=", 0),
 	).Then(
-		clientv3.OpPut(newUserPath, string(bytes)),
+		clientv3.OpPut(newUserPath, ""),
+		clientv3.OpPut(newUserHashedPasswordPath, hashedPassword),
+		clientv3.OpPut(newUserAdminPath, fmt.Sprint(newUser.Admin)),
 	).Commit()
 
 	if err != nil {
@@ -205,7 +190,7 @@ func (m UserModel) Get(
 	err error,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	resp, err := m.Etcd.Get(ctx, globals.GetUserDataPath(username))
+	resp, err := m.Etcd.Get(ctx, globals.GetUserPath(username))
 	cancel()
 	if err != nil {
 		return scrubbedUser, err
@@ -226,16 +211,28 @@ func (m UserModel) Get(
 func (m UserModel) GetUserWithPassword(username string) (user User, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
-	resp, err := m.Etcd.Get(ctx, globals.GetUserDataPath(username))
+
+	resp, err := m.Etcd.Get(ctx, globals.GetUserPath(username), clientv3.WithPrefix())
 	if err != nil {
 		return user, err
 	}
+
 	if resp.Count == 0 {
 		return user, ErrRecordNotFound
 	}
 
-	if err = json.Unmarshal(resp.Kvs[0].Value, &user); err != nil {
-		return user, err
+	user.Username = username
+
+	for _, kv := range resp.Kvs {
+		switch string(kv.Key) {
+		case "admin":
+			user.Admin, err = strconv.ParseBool(string(kv.Value))
+			if err != nil {
+				return user, err
+			}
+		case "hashed_password":
+			user.BcryptedPassword = kv.Value
+		}
 	}
 
 	return user, nil
@@ -248,7 +245,7 @@ func (m UserModel) GetUserCheckToken(
 	scrubbedUser ScrubbedUser,
 	err error,
 ) {
-	userDataPath := globals.GetUserDataPath(username)
+	userDataPath := globals.GetUserPath(username)
 	userTokenPath := fmt.Sprintf("%v/tokens", userDataPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
@@ -275,7 +272,7 @@ func (m UserModel) GetUserCheckToken(
 		return scrubbedUser, err
 	}
 
-	expiry, err := strconv.ParseInt(token.Expiry, 10, 64)
+	expiry, err := strconv.ParseInt(token.ExpiryUnixTime, 10, 64)
 	if err != nil {
 		return scrubbedUser, err
 	}
@@ -298,7 +295,7 @@ func (m UserModel) GetUserWithPasswordWithContext(
 	user User,
 	err error,
 ) {
-	resp, err := m.Etcd.Get(*ctx, globals.GetUserDataPath(username))
+	resp, err := m.Etcd.Get(*ctx, globals.GetUserPath(username))
 	if err != nil {
 		return user, err
 	}
@@ -315,7 +312,6 @@ func (m UserModel) GetUserWithPasswordWithContext(
 }
 
 func (m UserModel) UpdateNoLock(user User, ctx context.Context) (err error) {
-	user.LastModified = time.Now()
 	bytes, err := json.Marshal(user)
 	if err != nil {
 		return err
@@ -323,7 +319,7 @@ func (m UserModel) UpdateNoLock(user User, ctx context.Context) (err error) {
 
 	_, err = m.Etcd.Put(
 		ctx,
-		globals.GetUserDataPath(user.Username),
+		globals.GetUserPath(user.Username),
 		string(bytes),
 	)
 
@@ -332,7 +328,7 @@ func (m UserModel) UpdateNoLock(user User, ctx context.Context) (err error) {
 
 func (m UserModel) Delete(username string) error {
 
-	userDataPath := globals.GetUserDataPath(username)
+	userDataPath := globals.GetUserPath(username)
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
 	defer cancel()
@@ -396,14 +392,6 @@ func (m UserModel) GetAll(username string, admin *bool, filters Filters) ([]Scru
 	switch filters.sortColumn() {
 	case "-username":
 		sort.Slice(users, func(i, j int) bool { return users[i].Username > users[j].Username })
-	case "created_at":
-		sort.Slice(users, func(i, j int) bool { return users[i].CreatedAt.Before(users[j].CreatedAt) })
-	case "-created_at":
-		sort.Slice(users, func(i, j int) bool { return users[j].CreatedAt.Before(users[i].CreatedAt) })
-	case "last_modified":
-		sort.Slice(users, func(i, j int) bool { return users[i].LastModified.Before(users[j].LastModified) })
-	case "-last_modified":
-		sort.Slice(users, func(i, j int) bool { return users[j].LastModified.Before(users[i].LastModified) })
 	default:
 		sort.Slice(users, func(i, j int) bool { return users[i].Username < users[j].Username })
 	}

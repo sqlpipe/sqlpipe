@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -24,15 +23,15 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
-	v := validator.New()
-
 	var daysValid int64
 	switch input.DaysValid {
 	case nil:
-		daysValid = 0
+		daysValid = 1
 	default:
 		daysValid = *input.DaysValid
 	}
+
+	v := validator.New()
 
 	if v.Check(daysValid >= 0, "daysValid", "must be 0 <= daysInfinite < 366. 0 is infinite"); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
@@ -46,41 +45,25 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
-	user, err := app.models.Users.GetUserWithPassword(input.Username)
-	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrRecordNotFound):
-			app.invalidCredentialsResponse(w, r)
-		default:
-			app.serverErrorResponse(w, r, err)
-		}
-		return
+	user := data.User{
+		Username: input.Username,
 	}
 
-	match, err := user.CheckPassword(input.Password)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
+	user.SetPassword(input.Password)
 
-	if !match {
-		app.invalidCredentialsResponse(w, r)
-		return
-	}
-
-	var expiry int64
+	var expiryUnixTime int64
 	switch daysValid {
 	case 0:
-		expiry = math.MaxInt64
+		expiryUnixTime = math.MaxInt64
 	default:
-		duration, err := time.ParseDuration(fmt.Sprintf("%vh", daysValid))
+		duration, err := time.ParseDuration(fmt.Sprintf("%vh", daysValid*24))
 		if err != nil {
 			panic("unable to parse time duration")
 		}
-		expiry = time.Now().Add(duration).Unix()
+		expiryUnixTime = time.Now().Add(duration).Unix()
 	}
 
-	expiryString := fmt.Sprint(expiry)
+	expiryString := fmt.Sprint(expiryUnixTime)
 	expiryStringLen := len(expiryString)
 	if expiryStringLen < 19 {
 		zerosToAdd := 19 - expiryStringLen
@@ -89,10 +72,16 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		}
 	}
 
-	token, err := app.models.Tokens.New(user.Username, expiryString)
+	token, err := app.models.Tokens.New(user, expiryString)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
+		switch err {
+		case data.ErrInvalidCredentials, data.ErrRecordNotFound:
+			app.invalidAuthenticationTokenResponse(w, r)
+			return
+		default:
+			app.serverErrorResponse(w, r, err)
+			return
+		}
 	}
 
 	if err = app.writeJSON(w, http.StatusCreated, envelope{"authentication_token": token}, nil); err != nil {

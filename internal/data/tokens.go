@@ -19,14 +19,14 @@ const (
 )
 
 type Token struct {
-	Plaintext string `json:"token"`
-	Expiry    string `json:"expiry"`
-	Hash      []byte `json:"-"`
+	Plaintext      string `json:"token"`
+	ExpiryUnixTime string `json:"expiryUnixTime"`
+	Hash           []byte `json:"-"`
 }
 
-func generateToken(username string, ttl string) (Token, error) {
+func generateToken(ttl string) (Token, error) {
 	token := Token{
-		Expiry: ttl,
+		ExpiryUnixTime: ttl,
 	}
 
 	randomBytes := make([]byte, 16)
@@ -53,29 +53,60 @@ type TokenModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m TokenModel) New(username string, ttl string) (Token, error) {
-	token, err := generateToken(username, ttl)
+func (m TokenModel) New(user User, ttl string) (Token, error) {
+	token, err := generateToken(ttl)
 	if err != nil {
 		return token, err
 	}
 
-	err = m.Insert(token, username)
+	err = m.Insert(token, user)
 	return token, err
 }
 
-func (m TokenModel) Insert(token Token, username string) (err error) {
-	tokenPath := fmt.Sprintf("%v/tokens/%X", globals.GetUserDataPath(username), token.Hash)
+func (m TokenModel) Insert(token Token, user User) (err error) {
+	newTokenPath := fmt.Sprintf("%v/tokens/%X", globals.GetUserPath(user.Username), token.Hash)
+	callingUserPath := globals.GetUserPath(user.Username)
+	callingUserPasswordPath := globals.GetUserHashedPasswordPath(user.Username)
+	fastHashedPassword := fmt.Sprintf("%X", sha256.Sum256([]byte(user.BcryptedPassword)))
+	// hashedPassword :=  fmt.Sprintf("%X", sha256.Sum256([]byte(user.BcryptedPassword)))
 
 	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
 
-	_, err = m.Etcd.Put(ctx, tokenPath, token.Expiry)
-	cancel()
+	resp, err := m.Etcd.Txn(ctx).If(
+		clientv3.Compare(clientv3.CreateRevision(callingUserPath), ">", 0),
+		clientv3.Compare(clientv3.Value(callingUserPasswordPath), "=", fastHashedPassword),
+	).Then(
+		clientv3.OpPut(newTokenPath, token.ExpiryUnixTime),
+	).Else(
+		clientv3.OpGet(callingUserPath),
+		clientv3.OpGet(callingUserPasswordPath),
+	).Commit()
+
+	if err != nil {
+		return err
+	}
+
+	if !resp.Succeeded {
+		if resp.Responses[0].GetResponseRange().Count == 0 {
+			return ErrRecordNotFound
+		}
+
+		storedFastHashPassword := string(resp.Responses[1].GetResponseRange().Kvs[0].Value)
+		if storedFastHashPassword != fastHashedPassword {
+			fmt.Println(storedFastHashPassword)
+			fmt.Println(fastHashedPassword)
+			return ErrInvalidCredentials
+		}
+
+		panic("inserting token failed with an unknown error")
+	}
 
 	return err
 }
 
 func (m TokenModel) DeleteAllForUserWithContext(username string, ctx context.Context) (err error) {
-	usersTokenPrefix := fmt.Sprintf("%v/tokens", globals.GetUserDataPath(username))
+	usersTokenPrefix := fmt.Sprintf("%v/tokens", globals.GetUserPath(username))
 	_, err = m.Etcd.Delete(ctx, usersTokenPrefix, clientv3.WithPrefix())
 	return err
 }
