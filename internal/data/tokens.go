@@ -53,20 +53,17 @@ type TokenModel struct {
 	Etcd *clientv3.Client
 }
 
-func (m TokenModel) New(user User, ttl string) (Token, error) {
+func (m TokenModel) New(user User, ttl string, ctx context.Context) (Token, error) {
 	token, err := generateToken(ttl)
 	if err != nil {
 		return token, err
 	}
 
-	err = m.Insert(token, user)
+	err = m.Insert(token, user, ctx)
 	return token, err
 }
 
-func (m TokenModel) Insert(token Token, user User) (err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	defer cancel()
-
+func (m TokenModel) Insert(token Token, user User, ctx context.Context) (err error) {
 	newTokenPath := globals.GetUserHashedTokenPath(user.Username, fmt.Sprintf("%X", string(token.Hash)))
 	_, err = m.Etcd.Put(ctx, newTokenPath, token.ExpiryUnixTime)
 	return err

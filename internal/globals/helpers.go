@@ -13,6 +13,10 @@ func GetUserAdminPath(username string) string {
 	return fmt.Sprintf("%v/users/%v/admin", SqlpipePath, username)
 }
 
+func GetUserLockPath(username string) string {
+	return fmt.Sprintf("%v/users/%v/lock", SqlpipePath, username)
+}
+
 func GetUserHashedPasswordPath(username string) string {
 	return fmt.Sprintf("%v/users/%v/hashed_password", SqlpipePath, username)
 }

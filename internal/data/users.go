@@ -326,6 +326,7 @@ func (m UserModel) Get(
 
 func (m UserModel) GetWithoutToken(
 	callingUser User,
+	ctx context.Context,
 ) (
 	user User,
 	err error,
@@ -334,8 +335,8 @@ func (m UserModel) GetWithoutToken(
 	callingUserAdminPath := globals.GetUserAdminPath(callingUser.Username)
 	callingUserPasswordPath := globals.GetUserHashedPasswordPath(callingUser.Username)
 
-	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
-	defer cancel()
+	// ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	// defer cancel()
 
 	resp, err := m.Etcd.Txn(ctx).If(
 		clientv3.Compare(clientv3.CreateRevision(callingUserPath), ">", 0),

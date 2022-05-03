@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net/http"
 	"time"
 
+	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/globals"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
@@ -62,9 +64,32 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 
 	expiryString := globals.UnixTimeStringWithLeadingZeros(expiryUnixTime)
 
-	user, err = app.models.Users.GetWithoutToken(user)
+	ctx, cancel := context.WithTimeout(context.Background(), globals.EtcdTimeout)
+	defer cancel()
 
-	token, err := app.models.Tokens.New(user, expiryString)
+	// create two separate sessions for lock competition
+	session, err := concurrency.NewSession(app.models.Tokens.Etcd)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	defer session.Close()
+	mutex := concurrency.NewMutex(session, globals.GetUserLockPath(user.Username))
+
+	if err := mutex.Lock(ctx); err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	defer func() {
+		if err := mutex.Unlock(ctx); err != nil {
+			app.serverErrorResponse(w, r, err)
+		}
+	}()
+
+	user, err = app.models.Users.GetWithoutToken(user, ctx)
+
+	token, err := app.models.Tokens.New(user, expiryString, ctx)
 	if err != nil {
 		switch err {
 		case data.ErrInvalidCredentials, data.ErrRecordNotFound:
