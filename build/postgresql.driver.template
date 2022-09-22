@@ -1,0 +1,3 @@
+[PostgreSQL] 
+Description     = PostgreSQL driver
+Driver          =/usr/local/lib/psqlodbcw.so
