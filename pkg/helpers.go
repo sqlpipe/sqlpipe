@@ -1,35 +1,86 @@
 package pkg
 
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
+import (
+	"crypto/rand"
+	"math/big"
+)
 
-func Min64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
+func RandomCharacters(length int) (string, error) {
+	randomString := ""
 
-func Max(a, b int) int {
-	if a > b {
-		return a
+	possibleCharacters := []string{
+		"a",
+		"b",
+		"c",
+		"d",
+		"e",
+		"f",
+		"g",
+		"h",
+		"i",
+		"j",
+		"k",
+		"l",
+		"m",
+		"n",
+		"o",
+		"p",
+		"q",
+		"r",
+		"s",
+		"t",
+		"u",
+		"v",
+		"w",
+		"x",
+		"y",
+		"z",
+		"A",
+		"B",
+		"C",
+		"D",
+		"E",
+		"F",
+		"G",
+		"H",
+		"I",
+		"J",
+		"K",
+		"L",
+		"M",
+		"N",
+		"O",
+		"P",
+		"Q",
+		"R",
+		"S",
+		"T",
+		"U",
+		"V",
+		"W",
+		"X",
+		"Y",
+		"Z",
+		"1",
+		"2",
+		"3",
+		"4",
+		"5",
+		"6",
+		"7",
+		"8",
+		"9",
 	}
-	return b
-}
 
-func Max64(a, b int64) int64 {
-	if a > b {
-		return a
+	for i := 0; i < length; i++ {
+		nBig, err := rand.Int(rand.Reader, big.NewInt(61))
+		if err != nil {
+			return "", err
+		}
+		randomInt := int(nBig.Int64())
+
+		randomString = randomString + possibleCharacters[randomInt]
 	}
-	return b
-}
 
-func Background(fn func()) {
-	go func() {
-		fn()
-	}()
+	return randomString, nil
 }

@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	UsernameRX = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]\w{3,29}$`)
+	EmailRX = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 )
 
 type Validator struct {
@@ -32,9 +32,9 @@ func (v *Validator) Check(ok bool, key, message string) {
 	}
 }
 
-func In(value string, list ...string) bool {
-	for i := range list {
-		if value == list[i] {
+func PermittedValue[T comparable](value T, permittedValues ...T) bool {
+	for i := range permittedValues {
+		if value == permittedValues[i] {
 			return true
 		}
 	}
@@ -45,22 +45,12 @@ func Matches(value string, rx *regexp.Regexp) bool {
 	return rx.MatchString(value)
 }
 
-func Unique(values []string) bool {
-	uniqueValues := make(map[string]bool)
+func Unique[T comparable](values []T) bool {
+	uniqueValues := make(map[T]bool)
 
 	for _, value := range values {
 		uniqueValues[value] = true
 	}
 
 	return len(values) == len(uniqueValues)
-}
-
-// Implement a Get() method to retrieve the first error message for a given
-// field from the map.
-func (v Validator) Get(field string) string {
-	err, ok := v.Errors[field]
-	if ok {
-		return err
-	}
-	return ""
 }
