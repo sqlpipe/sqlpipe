@@ -1,17 +1,19 @@
+# github.com/alexbrainman/odbc v0.0.0-20211220213544-9c9a2e61c5e2
+## explicit
+github.com/alexbrainman/odbc
+github.com/alexbrainman/odbc/api
 # github.com/felixge/httpsnoop v1.0.3
 ## explicit; go 1.13
 github.com/felixge/httpsnoop
 # github.com/julienschmidt/httprouter v1.3.0
 ## explicit; go 1.7
 github.com/julienschmidt/httprouter
-# github.com/lib/pq v1.10.6
-## explicit; go 1.13
-github.com/lib/pq
-github.com/lib/pq/oid
-github.com/lib/pq/scram
 # github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
 ## explicit
 github.com/tomasen/realip
+# golang.org/x/sys v0.0.0-20190916202348-b4ddaad3f8a3
+## explicit; go 1.12
+golang.org/x/sys/windows
 # golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 ## explicit
 golang.org/x/time/rate

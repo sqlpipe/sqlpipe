@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"expvar"
 	"flag"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 	"github.com/sqlpipe/sqlpipe/pkg"
 
-	_ "github.com/lib/pq"
+	_ "github.com/alexbrainman/odbc"
 )
 
 var (
@@ -89,7 +90,21 @@ func main() {
 		logger: logger,
 	}
 
-	err := app.serve()
+	db, err := sql.Open(
+		"odbc",
+		"Driver={PostgreSQL};Server=postgresql;Port=5432;Database=postgres;Uid=postgres;Pwd=Mypass123;",
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	time.Sleep(time.Second * 3)
+
+	if err = db.Ping(); err != nil {
+		panic(err)
+	}
+
+	err = app.serve()
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}

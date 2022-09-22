@@ -1,4 +1,6 @@
-FROM ubuntu:22.04
+FROM golang:1.19.1-bullseye
+
+WORKDIR /
 
 RUN apt-get update
 RUN apt-get remove libodbc1 unixodbc unixodbc-dev
@@ -37,6 +39,22 @@ RUN ./configure --with-unixodbc
 RUN make
 RUN make install
 COPY build/postgresql.driver.template /driver-templates
-COPY bin/linux_arm64/sqlpipe /
+RUN odbcinst -i -d -f /driver-templates/postgresql.driver.template
+RUN mkdir /go/src/sqlpipe
+COPY cmd /go/src/sqlpipe/cmd
+COPY internal /go/src/sqlpipe/internal
+COPY pkg /go/src/sqlpipe/pkg
+COPY vendor /go/src/sqlpipe/vendor
+COPY go.mod /go/src/sqlpipe
+COPY go.sum /go/src/sqlpipe
+WORKDIR /go/src/sqlpipe
+RUN go build -ldflags="-s" -o=/sqlpipe ./cmd/sqlpipe
+
 WORKDIR /
-CMD ./sqlpipe
+
+ARG SECURE="--secure=false"
+ENV SECURE="${SECURE}"
+
+CMD ./sqlpipe ${SECURE}
+
+# CMD bash
