@@ -111,6 +111,12 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 		valPtrs[i] = &vals[i]
 	}
 
+	colTypes, err := rows.ColumnTypes()
+
+	for _, colType := range colTypes {
+		fmt.Println(colType.DatabaseTypeName())
+	}
+
 	for i := 0; rows.Next(); i++ {
 		rows.Scan(valPtrs...)
 		for j := 0; j < numCols; j++ {
@@ -127,7 +133,7 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 
 	headers := make(http.Header)
 
-	fmt.Println(fileBuilder.String())
+	// fmt.Println(fileBuilder.String())
 
 	err = app.writeJSON(w, http.StatusCreated, envelope{"transfer": transfer}, headers)
 	if err != nil {

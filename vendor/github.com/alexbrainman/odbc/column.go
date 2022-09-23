@@ -37,6 +37,7 @@ type Column interface {
 	Name() string
 	Bind(h api.SQLHSTMT, idx int) (bool, error)
 	Value(h api.SQLHSTMT, idx int) (driver.Value, error)
+	Type() string
 }
 
 func describeColumn(h api.SQLHSTMT, idx int, namebuf []uint16) (namelen int, sqltype api.SQLSMALLINT, size api.SQLULEN, ret api.SQLRETURN) {
@@ -119,6 +120,10 @@ type BaseColumn struct {
 
 func (c *BaseColumn) Name() string {
 	return c.name
+}
+
+func (c *BaseColumn) Type() string {
+	return fmt.Sprint(c.SQLType)
 }
 
 func (c *BaseColumn) Value(buf []byte) (driver.Value, error) {

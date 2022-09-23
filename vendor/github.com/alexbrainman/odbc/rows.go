@@ -23,6 +23,10 @@ func (r *Rows) Columns() []string {
 	return names
 }
 
+func (r *Rows) ColumnTypeDatabaseTypeName(index int) string {
+	return r.os.Cols[index].Type()
+}
+
 func (r *Rows) Next(dest []driver.Value) error {
 	ret := api.SQLFetch(r.os.h)
 	if ret == api.SQL_NO_DATA {
