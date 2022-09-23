@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
@@ -105,16 +104,16 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 	vals := make([]interface{}, numCols)
 	valPtrs := make([]interface{}, numCols)
 
-	var fileBuilder strings.Builder
+	// var fileBuilder strings.Builder
 
 	for i := 0; i < numCols; i++ {
 		valPtrs[i] = &vals[i]
 	}
 
 	colTypes, err := rows.ColumnTypes()
-
+	colDbTypes := []string{}
 	for _, colType := range colTypes {
-		fmt.Println(colType.DatabaseTypeName())
+		colDbTypes = append(colDbTypes, colType.DatabaseTypeName())
 	}
 
 	for i := 0; rows.Next(); i++ {
@@ -122,11 +121,12 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 		for j := 0; j < numCols; j++ {
 			switch v := vals[j].(type) {
 			case []uint8:
-				fileBuilder.Write(v)
+				// fileBuilder.Write(v)
+				fmt.Printf("%v: %v\n", colDbTypes[j], string(v))
 			case nil:
-				fileBuilder.WriteString("")
+				fmt.Printf("%v: \n", colDbTypes[j])
 			default:
-				fileBuilder.WriteString(fmt.Sprint(v))
+				fmt.Printf("%v: %v\n", colDbTypes[j], v)
 			}
 		}
 	}

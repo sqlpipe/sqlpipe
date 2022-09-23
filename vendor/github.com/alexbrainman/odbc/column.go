@@ -123,7 +123,72 @@ func (c *BaseColumn) Name() string {
 }
 
 func (c *BaseColumn) Type() string {
-	return fmt.Sprint(c.SQLType)
+	var sqlType string
+	switch fmt.Sprint(c.SQLType) {
+	case "0":
+		sqlType = "UNKNOWN_TYPE"
+	case "1":
+		sqlType = "CHAR"
+	case "2":
+		sqlType = "NUMERIC"
+	case "3":
+		sqlType = "DECIMAL"
+	case "4":
+		sqlType = "INTEGER"
+	case "5":
+		sqlType = "SMALLINT"
+	case "6":
+		sqlType = "FLOAT"
+	case "7":
+		sqlType = "REAL"
+	case "8":
+		sqlType = "DOUBLE"
+	case "9":
+		sqlType = "DATETIME"
+	case "10":
+		sqlType = "TIME"
+	case "12":
+		sqlType = "VARCHAR"
+	case "91":
+		sqlType = "DATE"
+	case "92":
+		sqlType = "TIME"
+	case "93":
+		sqlType = "TIMESTAMP"
+	case "11":
+		sqlType = "TIMESTAMP"
+	case "-1":
+		sqlType = "LONGVARCHAR"
+	case "-2":
+		sqlType = "BINARY"
+	case "-3":
+		sqlType = "VARBINARY"
+	case "-4":
+		sqlType = "LONGVARBINARY"
+	case "-5":
+		sqlType = "BIGINT"
+	case "-6":
+		sqlType = "TINYINT"
+	case "-7":
+		sqlType = "BIT"
+	case "-8":
+		sqlType = "WCHAR"
+	case "-9":
+		sqlType = "WVARCHAR"
+	case "-10":
+		sqlType = "WLONGVARCHAR"
+	case "-11":
+		sqlType = "GUID"
+	case "-20":
+		sqlType = "SIGNED_OFFSET"
+	case "-22":
+		sqlType = "UNSIGNED_OFFSET"
+	case "-152":
+		sqlType = "SS_XML"
+	case "-154":
+		sqlType = "SS_TIME2"
+	}
+	return sqlType
 }
 
 func (c *BaseColumn) Value(buf []byte) (driver.Value, error) {
