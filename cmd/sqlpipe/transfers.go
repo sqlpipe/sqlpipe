@@ -9,8 +9,9 @@ import (
 
 func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Source data.Source `json:"source"`
-		Target data.Target `json:"target"`
+		Source data.DataSystem `json:"source"`
+		Target data.DataSystem `json:"target"`
+		Query  string          `json:"query"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -19,7 +20,11 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	transfer := &data.Transfer{}
+	transfer := &data.Transfer{
+		Source: input.Source,
+		Target: input.Target,
+		Query:  input.Query,
+	}
 
 	v := validator.New()
 
@@ -32,6 +37,6 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 
 	err = app.writeJSON(w, http.StatusCreated, envelope{"transfer": transfer}, headers)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
 	}
 }

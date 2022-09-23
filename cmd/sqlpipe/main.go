@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"expvar"
 	"flag"
 	"fmt"
@@ -90,21 +89,7 @@ func main() {
 		logger: logger,
 	}
 
-	db, err := sql.Open(
-		"odbc",
-		"Driver={PostgreSQL};Server=postgresql;Port=5432;Database=postgres;Uid=postgres;Pwd=Mypass123;",
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	time.Sleep(time.Second * 3)
-
-	if err = db.Ping(); err != nil {
-		panic(err)
-	}
-
-	err = app.serve()
+	err := app.serve()
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}

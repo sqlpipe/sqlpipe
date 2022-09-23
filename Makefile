@@ -5,12 +5,18 @@ include .envrc
 run/sqlpipe:
 	go run ./cmd/sqlpipe -secure=false
 
-## run/docker: run sqlpipe in docker
+## run/docker: run sqlpipe testing stack in docker
 .PHONY: run/docker
 run/docker: 
 	POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
 		docker-compose down -v \
 		&& docker-compose up --build -d \
+		&& docker-compose logs -f
+
+## restart/docker: restart sqlpipe in docker
+.PHONY: restart/docker
+restart/docker: 
+		docker-compose up --build -d sqlpipe \
 		&& docker-compose logs -f
 
 ## audit: tidy and vendor dependencies and format, vet and test all code

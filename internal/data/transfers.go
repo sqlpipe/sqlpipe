@@ -1,19 +1,17 @@
 package data
 
 import (
-	"time"
-
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
 type Transfer struct {
-	Id        string    `json:"transfer_id"`
-	CreatedAt time.Time `json:"transfer_created_at"`
-	Source    Source    `json:"transfer_source"`
-	Target    Target    `json:"transfer_target"`
-	Query     string    `json:"query"`
+	Source DataSystem `json:"source"`
+	Target DataSystem `json:"target"`
+	Query  string     `json:"query"`
 }
 
 func ValidateTransfer(v *validator.Validator, transfer *Transfer) {
-
+	ValidateDataSystem(v, transfer.Source, "source")
+	ValidateDataSystem(v, transfer.Target, "target")
+	v.Check(transfer.Query != "", "query", "must be provided")
 }
