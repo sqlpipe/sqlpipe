@@ -52,7 +52,7 @@ RUN go build -ldflags="-s" -o=/sqlpipe ./cmd/sqlpipe
 
 WORKDIR /
 
-ARG SECURE="--secure=false"
+ARG SECURE="-secure=false"
 ENV SECURE="${SECURE}"
 
 CMD ./sqlpipe ${SECURE}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/shomali11/xsql"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
@@ -43,23 +44,46 @@ func (app *application) createQueryHandler(w http.ResponseWriter, r *http.Reques
 		query.Target.Password,
 	)
 
-	db, err := sql.Open(
+	targetDb, err := sql.Open(
 		"odbc",
 		dsn,
 	)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
+		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if err = db.Ping(); err != nil {
-		app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
+	query.Target.Db = *targetDb
+	err = query.Target.Db.Ping()
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	headers := make(http.Header)
 
-	err = app.writeJSON(w, http.StatusCreated, envelope{"query": query}, headers)
+	rows, err := query.Target.Db.QueryContext(r.Context(), query.Query)
+	if err != nil {
+		switch {
+		case err.Error() == `Stmt did not create a result set`:
+			err = app.writeJSON(w, http.StatusCreated, envelope{"message": "Query ran successfully, but there is no result set"}, headers)
+			if err != nil {
+				app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
+			}
+			return
+		default:
+			app.errorResponse(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
+	prettyRows, err := xsql.Pretty(rows)
+	if err != nil {
+		app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	err = app.writeResponse(w, http.StatusCreated, prettyRows, headers)
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
 	}

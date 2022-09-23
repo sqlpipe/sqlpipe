@@ -30,6 +30,15 @@ func (app *application) writeJSON(w http.ResponseWriter, status int, data envelo
 	return nil
 }
 
+func (app *application) writeResponse(w http.ResponseWriter, status int, response string, headers http.Header) error {
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(status)
+	w.Write([]byte(response))
+
+	return nil
+}
+
 func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	maxBytes := 1_048_576
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
