@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
@@ -12,9 +11,9 @@ import (
 
 func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Source data.DataSystem `json:"source"`
-		Target data.DataSystem `json:"target"`
-		Query  string          `json:"query"`
+		Source data.Source `json:"source"`
+		Target data.Target `json:"target"`
+		Query  string      `json:"query"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -36,61 +35,48 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	sourceDsn := fmt.Sprintf(
-		"Driver={%v};Server=%v;Port=%v;Database=%v;Uid=%v;Pwd=%v;",
-		transfer.Source.DriverName,
-		transfer.Source.Host,
-		transfer.Source.Port,
-		transfer.Source.DbName,
-		transfer.Source.Username,
-		transfer.Source.Password,
-	)
-
-	sourceDb, err := sql.Open(
+	var sourceDb *sql.DB
+	sourceDb, err = sql.Open(
 		"odbc",
-		sourceDsn,
+		transfer.Source.OdbcDsn,
 	)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
+		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	transfer.Source.Db = *sourceDb
 	err = transfer.Source.Db.Ping()
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
+		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	targetDsn := fmt.Sprintf(
-		"Driver={%v};Server=%v;Port=%v;Database=%v;Uid=%v;Pwd=%v;",
-		transfer.Target.DriverName,
-		transfer.Target.Host,
-		transfer.Target.Port,
-		transfer.Target.DbName,
-		transfer.Target.Username,
-		transfer.Target.Password,
-	)
-
-	targetDb, err := sql.Open(
-		"odbc",
-		targetDsn,
-	)
-	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
-		return
+	var targetDb *sql.DB
+	if transfer.Target.SystemType != "csv" {
+		targetDb, err = sql.Open(
+			"odbc",
+			transfer.Target.OdbcDsn,
+		)
+		if err != nil {
+			app.errorResponse(w, r, http.StatusBadRequest, err)
+			return
+		}
+		transfer.Target.Db = *targetDb
+		err = transfer.Target.Db.Ping()
+		if err != nil {
+			app.errorResponse(w, r, http.StatusBadRequest, err)
+			return
+		}
 	}
 
-	transfer.Target.Db = *targetDb
-	err = transfer.Target.Db.Ping()
-	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
-		return
+	if transfer.Target.Writers == "" {
+		transfer.Target.Writers = "default"
 	}
 
 	result, statusCode, err := engine.RunTransfer(r.Context(), *transfer)
 	if err != nil {
-		app.errorResponse(w, r, statusCode, err.Error())
+		app.errorResponse(w, r, statusCode, err)
 		return
 	}
 
@@ -98,6 +84,6 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 
 	err = app.writeJSON(w, http.StatusOK, result, headers)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
+		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}
 }

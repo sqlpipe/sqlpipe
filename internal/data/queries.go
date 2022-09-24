@@ -5,11 +5,11 @@ import (
 )
 
 type Query struct {
-	Target DataSystem `json:"target"`
-	Query  string     `json:"query"`
+	Source Source `json:"source"`
+	Query  string `json:"query"`
 }
 
 func ValidateQuery(v *validator.Validator, query *Query) {
-	ValidateDataSystem(v, query.Target, "target")
+	ValidateSource(v, query.Source)
 	v.Check(query.Query != "", "query", "must be provided")
 }

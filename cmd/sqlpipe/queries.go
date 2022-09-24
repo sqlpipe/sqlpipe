@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
@@ -12,8 +11,8 @@ import (
 
 func (app *application) createQueryHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Target data.DataSystem `json:"target"`
-		Query  string          `json:"query"`
+		Source data.Source `json:"source"`
+		Query  string      `json:"query"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -23,7 +22,7 @@ func (app *application) createQueryHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	query := &data.Query{
-		Target: input.Target,
+		Source: input.Source,
 		Query:  input.Query,
 	}
 
@@ -34,29 +33,29 @@ func (app *application) createQueryHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	dsn := fmt.Sprintf(
-		"Driver={%v};Server=%v;Port=%v;Database=%v;Uid=%v;Pwd=%v;",
-		query.Target.DriverName,
-		query.Target.Host,
-		query.Target.Port,
-		query.Target.DbName,
-		query.Target.Username,
-		query.Target.Password,
-	)
+	// dsn := fmt.Sprintf(
+	// 	"Driver={%v};Server=%v;Port=%v;Database=%v;Uid=%v;Pwd=%v;",
+	// 	query.Source.DriverName,
+	// 	query.Source.Host,
+	// 	query.Source.Port,
+	// 	query.Source.DbName,
+	// 	query.Source.Username,
+	// 	query.Source.Password,
+	// )
 
 	targetDb, err := sql.Open(
 		"odbc",
-		dsn,
+		query.Source.OdbcDsn,
 	)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
+		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	query.Target.Db = *targetDb
-	err = query.Target.Db.Ping()
+	query.Source.Db = *targetDb
+	err = query.Source.Db.Ping()
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
+		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -70,6 +69,6 @@ func (app *application) createQueryHandler(w http.ResponseWriter, r *http.Reques
 
 	err = app.writeJSON(w, http.StatusOK, result, headers)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
+		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}
 }

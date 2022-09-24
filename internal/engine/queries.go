@@ -8,7 +8,7 @@ import (
 )
 
 func RunQuery(ctx context.Context, query data.Query) (map[string]any, int, error) {
-	_, err := query.Target.Db.ExecContext(ctx, query.Query)
+	_, err := query.Source.Db.ExecContext(ctx, query.Query)
 	if err != nil {
 		switch {
 		case err.Error() == `Stmt did not create a result set`:
