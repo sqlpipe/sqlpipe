@@ -9,9 +9,7 @@ import (
 	"strings"
 )
 
-type envelope map[string]any
-
-func (app *application) writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
+func (app *application) writeJSON(w http.ResponseWriter, status int, data map[string]any, headers http.Header) error {
 	js, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
 		return err
@@ -26,15 +24,6 @@ func (app *application) writeJSON(w http.ResponseWriter, status int, data envelo
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	w.Write(js)
-
-	return nil
-}
-
-func (app *application) writeResponse(w http.ResponseWriter, status int, response string, headers http.Header) error {
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(status)
-	w.Write([]byte(response))
 
 	return nil
 }

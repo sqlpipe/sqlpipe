@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
+	"github.com/sqlpipe/sqlpipe/internal/engine"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
@@ -57,7 +58,7 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 	transfer.Source.Db = *sourceDb
 	err = transfer.Source.Db.Ping()
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err)
+		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -83,59 +84,19 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 	transfer.Target.Db = *targetDb
 	err = transfer.Target.Db.Ping()
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err)
+		app.errorResponse(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	rows, err := transfer.Source.Db.QueryContext(r.Context(), transfer.Query)
+	result, statusCode, err := engine.RunTransfer(r.Context(), *transfer)
 	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err)
+		app.errorResponse(w, r, statusCode, err.Error())
 		return
-	}
-
-	columnNames, err := rows.Columns()
-	if err != nil {
-		app.errorResponse(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	numCols := len(columnNames)
-
-	vals := make([]interface{}, numCols)
-	valPtrs := make([]interface{}, numCols)
-
-	// var fileBuilder strings.Builder
-
-	for i := 0; i < numCols; i++ {
-		valPtrs[i] = &vals[i]
-	}
-
-	colTypes, err := rows.ColumnTypes()
-	colDbTypes := []string{}
-	for _, colType := range colTypes {
-		colDbTypes = append(colDbTypes, colType.DatabaseTypeName())
-	}
-
-	for i := 0; rows.Next(); i++ {
-		rows.Scan(valPtrs...)
-		for j := 0; j < numCols; j++ {
-			switch v := vals[j].(type) {
-			case []uint8:
-				// fileBuilder.Write(v)
-				fmt.Printf("%v: %v\n", colDbTypes[j], string(v))
-			case nil:
-				fmt.Printf("%v: \n", colDbTypes[j])
-			default:
-				fmt.Printf("%v: %v\n", colDbTypes[j], v)
-			}
-		}
 	}
 
 	headers := make(http.Header)
 
-	// fmt.Println(fileBuilder.String())
-
-	err = app.writeJSON(w, http.StatusCreated, envelope{"transfer": transfer}, headers)
+	err = app.writeJSON(w, http.StatusOK, result, headers)
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err.Error())
 	}

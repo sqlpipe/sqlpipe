@@ -123,72 +123,72 @@ func (c *BaseColumn) Name() string {
 }
 
 func (c *BaseColumn) Type() string {
-	var sqlType string
+	var dbType string
 	switch fmt.Sprint(c.SQLType) {
 	case "0":
-		sqlType = "UNKNOWN_TYPE"
+		dbType = "SQL_UNKNOWN_TYPE"
 	case "1":
-		sqlType = "CHAR"
+		dbType = "SQL_CHAR"
 	case "2":
-		sqlType = "NUMERIC"
+		dbType = "SQL_NUMERIC"
 	case "3":
-		sqlType = "DECIMAL"
+		dbType = "SQL_DECIMAL"
 	case "4":
-		sqlType = "INTEGER"
+		dbType = "SQL_INTEGER"
 	case "5":
-		sqlType = "SMALLINT"
+		dbType = "SQL_SMALLINT"
 	case "6":
-		sqlType = "FLOAT"
+		dbType = "SQL_FLOAT"
 	case "7":
-		sqlType = "REAL"
+		dbType = "SQL_REAL"
 	case "8":
-		sqlType = "DOUBLE"
+		dbType = "SQL_DOUBLE"
 	case "9":
-		sqlType = "DATETIME"
+		dbType = "SQL_DATETIME"
 	case "10":
-		sqlType = "TIME"
+		dbType = "SQL_TIME"
 	case "12":
-		sqlType = "VARCHAR"
+		dbType = "SQL_VARCHAR"
 	case "91":
-		sqlType = "DATE"
+		dbType = "SQL_TYPE_DATE"
 	case "92":
-		sqlType = "TIME"
+		dbType = "SQL_TYPE_TIME"
 	case "93":
-		sqlType = "TIMESTAMP"
+		dbType = "SQL_TYPE_TIMESTAMP"
 	case "11":
-		sqlType = "TIMESTAMP"
+		dbType = "SQL_TIMESTAMP"
 	case "-1":
-		sqlType = "LONGVARCHAR"
+		dbType = "SQL_LONGVARCHAR"
 	case "-2":
-		sqlType = "BINARY"
+		dbType = "SQL_BINARY"
 	case "-3":
-		sqlType = "VARBINARY"
+		dbType = "SQL_VARBINARY"
 	case "-4":
-		sqlType = "LONGVARBINARY"
+		dbType = "SQL_LONGVARBINARY"
 	case "-5":
-		sqlType = "BIGINT"
+		dbType = "SQL_BIGINT"
 	case "-6":
-		sqlType = "TINYINT"
+		dbType = "SQL_TINYINT"
 	case "-7":
-		sqlType = "BIT"
+		dbType = "SQL_BIT"
 	case "-8":
-		sqlType = "WCHAR"
+		dbType = "SQL_WCHAR"
 	case "-9":
-		sqlType = "WVARCHAR"
+		dbType = "SQL_WVARCHAR"
 	case "-10":
-		sqlType = "WLONGVARCHAR"
+		dbType = "SQL_WLONGVARCHAR"
 	case "-11":
-		sqlType = "GUID"
+		dbType = "SQL_GUID"
 	case "-20":
-		sqlType = "SIGNED_OFFSET"
+		dbType = "SQL_SIGNED_OFFSET"
 	case "-22":
-		sqlType = "UNSIGNED_OFFSET"
+		dbType = "SQL_UNSIGNED_OFFSET"
 	case "-152":
-		sqlType = "SS_XML"
+		dbType = "SQL_SS_XML"
 	case "-154":
-		sqlType = "SS_TIME2"
+		dbType = "SQL_SS_TIME2"
 	}
-	return sqlType
+	return dbType
 }
 
 func (c *BaseColumn) Value(buf []byte) (driver.Value, error) {
