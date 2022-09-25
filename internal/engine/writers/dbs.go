@@ -1,54 +1,113 @@
 package writers
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
 
-var CreateWriters = map[string]map[string]func(value interface{}, terminator string) (string, error){
-	"default": {
-		"SQL_UNKNOWN_TYPE":    quotedTextCreateWriter,
-		"SQL_CHAR":            quotedTextCreateWriter,
-		"SQL_NUMERIC":         quotedTextCreateWriter,
-		"SQL_DECIMAL":         quotedTextCreateWriter,
-		"SQL_INTEGER":         quotedTextCreateWriter,
-		"SQL_SMALLINT":        quotedTextCreateWriter,
-		"SQL_FLOAT":           quotedTextCreateWriter,
-		"SQL_REAL":            quotedTextCreateWriter,
-		"SQL_DOUBLE":          quotedTextCreateWriter,
-		"SQL_DATETIME":        quotedTextCreateWriter,
-		"SQL_TIME":            quotedTextCreateWriter,
-		"SQL_VARCHAR":         quotedTextCreateWriter,
-		"SQL_TYPE_DATE":       quotedTextCreateWriter,
-		"SQL_TYPE_TIME":       quotedTextCreateWriter,
-		"SQL_TYPE_TIMESTAMP":  quotedTextCreateWriter,
-		"SQL_TIMESTAMP":       quotedTextCreateWriter,
-		"SQL_LONGVARCHAR":     quotedTextCreateWriter,
-		"SQL_BINARY":          quotedTextCreateWriter,
-		"SQL_VARBINARY":       quotedTextCreateWriter,
-		"SQL_LONGVARBINARY":   quotedTextCreateWriter,
-		"SQL_BIGINT":          quotedTextCreateWriter,
-		"SQL_TINYINT":         quotedTextCreateWriter,
-		"SQL_BIT":             quotedTextCreateWriter,
-		"SQL_WCHAR":           quotedTextCreateWriter,
-		"SQL_WVARCHAR":        quotedTextCreateWriter,
-		"SQL_WLONGVARCHAR":    quotedTextCreateWriter,
-		"SQL_GUID":            quotedTextCreateWriter,
-		"SQL_SIGNED_OFFSET":   quotedTextCreateWriter,
-		"SQL_UNSIGNED_OFFSET": quotedTextCreateWriter,
-		"SQL_SS_XML":          quotedTextCreateWriter,
-		"SQL_SS_TIME2":        quotedTextCreateWriter,
+var DbDropTableCommands = map[string]string{
+	"postgresql": "drop table if exists",
+}
+
+var DbNullStrings = map[string]string{
+	"postgresql": "null",
+}
+
+var DbCreateWriters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
+	// name string,  nullable bool, length int64, precision int64, scale int64, terminator string) (string, error){
+	"postgresql": {
+		"SQL_UNKNOWN_TYPE":    textCreateWriter,
+		"SQL_CHAR":            textCreateWriter,
+		"SQL_NUMERIC":         numericCreateWriter,
+		"SQL_DECIMAL":         numericCreateWriter,
+		"SQL_INTEGER":         intCreateWriter,
+		"SQL_SMALLINT":        smallIntCreateWriter,
+		"SQL_FLOAT":           doubleCreateWriter,
+		"SQL_REAL":            doubleCreateWriter,
+		"SQL_DOUBLE":          doubleCreateWriter,
+		"SQL_DATETIME":        timestampCreateWriter,
+		"SQL_TIME":            timeCreateWriter,
+		"SQL_VARCHAR":         textCreateWriter,
+		"SQL_TYPE_DATE":       dateCreateWriter,
+		"SQL_TYPE_TIME":       timeCreateWriter,
+		"SQL_TYPE_TIMESTAMP":  timestampCreateWriter,
+		"SQL_TIMESTAMP":       timestampCreateWriter,
+		"SQL_LONGVARCHAR":     textCreateWriter,
+		"SQL_BINARY":          byteaCreateWriter,
+		"SQL_VARBINARY":       byteaCreateWriter,
+		"SQL_LONGVARBINARY":   byteaCreateWriter,
+		"SQL_BIGINT":          bigIntCreateWriter,
+		"SQL_TINYINT":         smallIntCreateWriter,
+		"SQL_BIT":             boolCreateWriter,
+		"SQL_WCHAR":           textCreateWriter,
+		"SQL_WVARCHAR":        textCreateWriter,
+		"SQL_WLONGVARCHAR":    textCreateWriter,
+		"SQL_GUID":            uuidCreateWriter,
+		"SQL_SIGNED_OFFSET":   textCreateWriter,
+		"SQL_UNSIGNED_OFFSET": textCreateWriter,
+		"SQL_SS_XML":          xmlCreateWriter,
+		"SQL_SS_TIME2":        timeCreateWriter,
 	},
 }
 
-func quotedTextCreateWriter(value interface{}, terminator string) (string, error) {
-	return fmt.Sprintf("%v text%v", value, terminator), nil
+func textCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v text%v", column.Name(), terminator), nil
 }
 
-var ValWriters = map[string]map[string]func(value interface{}, terminator string, nullString string) (string, error){
-	"default": {
+func numericCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	precision, scale, _ := column.DecimalSize()
+	return fmt.Sprintf("%v numeric(%v,%v)%v", column.Name(), precision, scale, terminator), nil
+}
+
+func smallIntCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v smallint%v", column.Name(), terminator), nil
+}
+
+func intCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v int%v", column.Name(), terminator), nil
+}
+
+func bigIntCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v bigint%v", column.Name(), terminator), nil
+}
+
+func doubleCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v double precision%v", column.Name(), terminator), nil
+}
+
+func timestampCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v timestamp%v", column.Name(), terminator), nil
+}
+
+func timeCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v time%v", column.Name(), terminator), nil
+}
+
+func dateCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v date%v", column.Name(), terminator), nil
+}
+
+func byteaCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v bytea%v", column.Name(), terminator), nil
+}
+
+func boolCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v bool%v", column.Name(), terminator), nil
+}
+
+func uuidCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v uuid%v", column.Name(), terminator), nil
+}
+
+func xmlCreateWriter(column *sql.ColumnType, terminator string) (string, error) {
+	return fmt.Sprintf("%v xml%v", column.Name(), terminator), nil
+}
+
+var DbValWriters = map[string]map[string]func(value interface{}, terminator string, nullString string) (string, error){
+	"postgresql": {
 		"SQL_UNKNOWN_TYPE":    printRaw,
 		"SQL_CHAR":            printRaw,
 		"SQL_NUMERIC":         printRaw,
@@ -106,16 +165,7 @@ func castToBoolWriteBinaryEquivalent(value interface{}, terminator string, nullS
 		return "", errors.New("castToBool unable to cast value to bool")
 	}
 
-	var valToReturn string
-
-	switch valBool {
-	case true:
-		valToReturn = fmt.Sprintf("1%v", terminator)
-	case false:
-		valToReturn = fmt.Sprintf("0%v", terminator)
-	}
-
-	return valToReturn, nil
+	return fmt.Sprintf("%v%v", valBool, terminator), nil
 }
 
 func castToBytesCastToStringPrintQuoted(value interface{}, terminator string, nullString string) (string, error) {

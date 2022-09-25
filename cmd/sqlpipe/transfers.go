@@ -70,10 +70,6 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if transfer.Target.Writers == "" {
-		transfer.Target.Writers = "default"
-	}
-
 	result, statusCode, err := engine.RunTransfer(r.Context(), *transfer)
 	if err != nil {
 		app.errorResponse(w, r, statusCode, err)

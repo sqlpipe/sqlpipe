@@ -17,7 +17,7 @@ run/docker:
 .PHONY: restart/docker
 restart/docker: 
 		docker-compose up --build -d sqlpipe \
-		&& docker-compose logs -f
+		&& docker-compose logs -f sqlpipe
 
 ## audit: tidy and vendor dependencies and format, vet and test all code
 .PHONY: audit

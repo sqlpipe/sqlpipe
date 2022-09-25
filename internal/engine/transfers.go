@@ -12,7 +12,6 @@ import (
 )
 
 func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, int, error) {
-	fmt.Println(transfer.Query)
 	rows, err := transfer.Source.Db.QueryContext(ctx, transfer.Query)
 	if err != nil {
 		return map[string]any{"": ""}, http.StatusBadRequest, err
@@ -40,6 +39,13 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 	var valWriters map[string]func(value interface{}, terminator string, nullString string) (string, error)
 	var batchEnder string
 
+	schemaSpecifier := ""
+	switch transfer.Target.Schema {
+	case "":
+	default:
+		schemaSpecifier = fmt.Sprintf("%v.", transfer.Target.Schema)
+	}
+
 	var f *os.File
 
 	switch transfer.Target.SystemType {
@@ -63,9 +69,40 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}
 	default:
-		valWriters = writers.ValWriters[transfer.Target.Writers]
+		valWriters = writers.DbValWriters[transfer.Target.SystemType]
 		batchEnder = ")"
-		// createWriters := writers.GeneralCreateWriters
+		createWriters := writers.DbCreateWriters[transfer.Target.SystemType]
+		createQuery := fmt.Sprintf("create table %v%v(", schemaSpecifier, transfer.Target.Table)
+
+		for i := 0; i < numCols-1; i++ {
+			columnSpecifier, err := createWriters[colDbTypes[i]](colTypes[i], ",")
+			if err != nil {
+				return map[string]any{"": ""}, http.StatusInternalServerError, err
+			}
+			createQuery = createQuery + columnSpecifier
+		}
+		columnSpecifier, err := createWriters[colDbTypes[numCols-1]](colTypes[numCols-1], ")")
+		if err != nil {
+			return map[string]any{"": ""}, http.StatusInternalServerError, err
+		}
+		createQuery = createQuery + columnSpecifier
+
+		dropTableCommand := fmt.Sprintf(
+			"%v %v%v",
+			writers.DbDropTableCommands[transfer.Target.SystemType],
+			transfer.Target.Table,
+			schemaSpecifier,
+		)
+
+		_, err = transfer.Target.Db.ExecContext(ctx, dropTableCommand)
+		if err != nil {
+			return map[string]any{"": ""}, http.StatusInternalServerError, err
+		}
+
+		_, err = transfer.Target.Db.ExecContext(ctx, createQuery)
+		if err != nil {
+			return map[string]any{"": ""}, http.StatusInternalServerError, err
+		}
 	}
 
 	var batchBuilder strings.Builder
@@ -74,16 +111,11 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		valPtrs[i] = &vals[i]
 	}
 
-	schemaSpecifier := ""
-	switch transfer.Target.Schema {
-	case "":
-	default:
-		schemaSpecifier = fmt.Sprintf("%v.", transfer.Target.Schema)
-	}
 	columnNamesString := strings.Join(columnNames, ",")
 
 	isFirstRow := true
 	dataRemaining := false
+	nullString := writers.DbNullStrings[transfer.Target.SystemType]
 
 	for i := 1; rows.Next(); i++ {
 		dataRemaining = true
@@ -99,13 +131,13 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		}
 		isFirstRow = false
 		for j := 0; j < numCols-1; j++ {
-			valToWrite, err := valWriters[colDbTypes[j]](vals[j], ",", transfer.Target.NullString)
+			valToWrite, err := valWriters[colDbTypes[j]](vals[j], ",", nullString)
 			if err != nil {
 				return map[string]any{"": ""}, http.StatusInternalServerError, err
 			}
 			batchBuilder.WriteString(valToWrite)
 		}
-		valToWrite, err := valWriters[colDbTypes[numCols-1]](vals[numCols-1], batchEnder, transfer.Target.NullString)
+		valToWrite, err := valWriters[colDbTypes[numCols-1]](vals[numCols-1], batchEnder, nullString)
 		if err != nil {
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}

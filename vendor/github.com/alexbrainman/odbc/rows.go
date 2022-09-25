@@ -27,6 +27,18 @@ func (r *Rows) ColumnTypeDatabaseTypeName(index int) string {
 	return r.os.Cols[index].Type()
 }
 
+func (r *Rows) ColumnTypeLength(index int) (int64, bool) {
+	return r.os.Cols[index].Length()
+}
+
+func (r *Rows) ColumnTypeNullable(index int) (bool, bool) {
+	return r.os.Cols[index].Nullable()
+}
+
+func (r *Rows) ColumnTypePrecisionScale(index int) (int64, int64, bool) {
+	return r.os.Cols[index].PrecisionScale()
+}
+
 func (r *Rows) Next(dest []driver.Value) error {
 	ret := api.SQLFetch(r.os.h)
 	if ret == api.SQL_NO_DATA {

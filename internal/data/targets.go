@@ -15,15 +15,12 @@ type Target struct {
 	Table            string `json:"table"`
 	CsvWriteLocation string `json:"csv_write_location"`
 	RowsPerWrite     int    `json:"rows_per_write"`
-	NullString       string `json:"null_string"`
-	Writers          string `json:"writers"`
 	Db               sql.DB `json:"-"`
 }
 
 func ValidateTarget(v *validator.Validator, target Target) {
 	v.Check(target.SystemType != "", "target.system_type", "must be provided")
 	v.Check(target.RowsPerWrite != 0, "target.rows_per_write", "must be provided")
-	v.Check(target.Writers != "", "target.writers", "must be provided")
 
 	switch target.SystemType {
 	case "csv":
@@ -32,7 +29,6 @@ func ValidateTarget(v *validator.Validator, target Target) {
 	default:
 		v.Check(target.OdbcDsn != "", "target.odbc_dsn", "must be provided")
 		v.Check(target.Table != "", "target.table", "must be provided")
-		v.Check(target.NullString != "", "target.null_string", "must be provided")
 	}
 }
 

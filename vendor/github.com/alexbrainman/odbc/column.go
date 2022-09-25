@@ -5,6 +5,7 @@
 package odbc
 
 import (
+	"C"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -38,26 +39,29 @@ type Column interface {
 	Bind(h api.SQLHSTMT, idx int) (bool, error)
 	Value(h api.SQLHSTMT, idx int) (driver.Value, error)
 	Type() string
+	Length() (int64, bool)
+	Nullable() (bool, bool)
+	PrecisionScale() (int64, int64, bool)
 }
 
-func describeColumn(h api.SQLHSTMT, idx int, namebuf []uint16) (namelen int, sqltype api.SQLSMALLINT, size api.SQLULEN, ret api.SQLRETURN) {
+func describeColumn(h api.SQLHSTMT, idx int, namebuf []uint16) (namelen int, sqltype api.SQLSMALLINT, size api.SQLULEN, ret api.SQLRETURN, decimalUInt int64, nullableUInt int64) {
 	var l, decimal, nullable api.SQLSMALLINT
 	ret = api.SQLDescribeCol(h, api.SQLUSMALLINT(idx+1),
 		(*api.SQLWCHAR)(unsafe.Pointer(&namebuf[0])),
 		api.SQLSMALLINT(len(namebuf)), &l,
 		&sqltype, &size, &decimal, &nullable)
-	return int(l), sqltype, size, ret
+	return int(l), sqltype, size, ret, int64(C.int(decimal)), int64(C.int(nullable))
 }
 
 // TODO(brainman): did not check for MS SQL timestamp
 
 func NewColumn(h api.SQLHSTMT, idx int) (Column, error) {
 	namebuf := make([]uint16, 150)
-	namelen, sqltype, size, ret := describeColumn(h, idx, namebuf)
+	namelen, sqltype, size, ret, decimal, nullable := describeColumn(h, idx, namebuf)
 	if ret == api.SQL_SUCCESS_WITH_INFO && namelen > len(namebuf) {
 		// try again with bigger buffer
 		namebuf = make([]uint16, namelen)
-		namelen, sqltype, size, ret = describeColumn(h, idx, namebuf)
+		namelen, sqltype, size, ret, decimal, nullable = describeColumn(h, idx, namebuf)
 	}
 	if IsError(ret) {
 		return nil, NewError("SQLDescribeCol", h)
@@ -66,9 +70,18 @@ func NewColumn(h api.SQLHSTMT, idx int) (Column, error) {
 		// still complaining about buffer size
 		return nil, errors.New("Failed to allocate column name buffer")
 	}
+
+	nullableIsTrue := false
+	if nullable == 1 {
+		nullableIsTrue = true
+	}
+
 	b := &BaseColumn{
-		name:    api.UTF16ToString(namebuf[:namelen]),
-		SQLType: sqltype,
+		name:     api.UTF16ToString(namebuf[:namelen]),
+		SQLType:  sqltype,
+		length:   int64(C.uint(size)),
+		decimal:  decimal,
+		nullable: nullableIsTrue,
 	}
 	switch sqltype {
 	case api.SQL_BIT:
@@ -113,13 +126,28 @@ func NewColumn(h api.SQLHSTMT, idx int) (Column, error) {
 
 // BaseColumn implements common column functionality.
 type BaseColumn struct {
-	name    string
-	SQLType api.SQLSMALLINT
-	CType   api.SQLSMALLINT
+	name     string
+	SQLType  api.SQLSMALLINT
+	CType    api.SQLSMALLINT
+	length   int64
+	decimal  int64
+	nullable bool
 }
 
 func (c *BaseColumn) Name() string {
 	return c.name
+}
+
+func (c *BaseColumn) Length() (int64, bool) {
+	return c.length, true
+}
+
+func (c *BaseColumn) Nullable() (bool, bool) {
+	return c.nullable, true
+}
+
+func (c *BaseColumn) PrecisionScale() (int64, int64, bool) {
+	return int64(c.length), int64(c.decimal), true
 }
 
 func (c *BaseColumn) Type() string {
