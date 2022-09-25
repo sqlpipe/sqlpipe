@@ -7,13 +7,12 @@ import (
 )
 
 type Target struct {
-	SystemType       string `json:"system_type"`
-	OdbcDsn          string `json:"odbc_dsn"`
-	Schema           string `json:"schema"`
-	Table            string `json:"table"`
-	CsvWriteLocation string `json:"csv_write_location"`
-	RowsPerWrite     int    `json:"rows_per_write"`
-	Db               sql.DB `json:"-"`
+	SystemType   string `json:"system_type"`
+	OdbcDsn      string `json:"odbc_dsn"`
+	Schema       string `json:"schema"`
+	Table        string `json:"table"`
+	RowsPerWrite int    `json:"rows_per_write"`
+	Db           sql.DB `json:"-"`
 }
 
 func ValidateTarget(v *validator.Validator, target Target) {

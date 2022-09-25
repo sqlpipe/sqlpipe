@@ -19,7 +19,6 @@ var NullStrings = map[string]string{
 }
 
 var CreateWriters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
-	// name string,  nullable bool, length int64, precision int64, scale int64, terminator string) (string, error){
 	"postgresql": {
 		"SQL_UNKNOWN_TYPE":    textCreateWriter,
 		"SQL_CHAR":            textCreateWriter,

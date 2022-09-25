@@ -53,21 +53,19 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	var targetDb *sql.DB
-	if transfer.Target.SystemType != "csv" {
-		targetDb, err = sql.Open(
-			"odbc",
-			transfer.Target.OdbcDsn,
-		)
-		if err != nil {
-			app.errorResponse(w, r, http.StatusBadRequest, err)
-			return
-		}
-		transfer.Target.Db = *targetDb
-		err = transfer.Target.Db.Ping()
-		if err != nil {
-			app.errorResponse(w, r, http.StatusBadRequest, err)
-			return
-		}
+	targetDb, err = sql.Open(
+		"odbc",
+		transfer.Target.OdbcDsn,
+	)
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, err)
+		return
+	}
+	transfer.Target.Db = *targetDb
+	err = transfer.Target.Db.Ping()
+	if err != nil {
+		app.errorResponse(w, r, http.StatusBadRequest, err)
+		return
 	}
 
 	result, statusCode, err := engine.RunTransfer(r.Context(), *transfer)
