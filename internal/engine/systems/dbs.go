@@ -1,4 +1,4 @@
-package writers
+package systems
 
 import (
 	"database/sql"
@@ -8,15 +8,17 @@ import (
 	"time"
 )
 
-var DbDropTableCommands = map[string]string{
+var dbValReplacer = strings.NewReplacer(`'`, `''`, "{", "(", "}", ")")
+
+var DropTableCommands = map[string]string{
 	"postgresql": "drop table if exists",
 }
 
-var DbNullStrings = map[string]string{
+var NullStrings = map[string]string{
 	"postgresql": "null",
 }
 
-var DbCreateWriters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
+var CreateWriters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
 	// name string,  nullable bool, length int64, precision int64, scale int64, terminator string) (string, error){
 	"postgresql": {
 		"SQL_UNKNOWN_TYPE":    textCreateWriter,
@@ -106,7 +108,7 @@ func xmlCreateWriter(column *sql.ColumnType, terminator string) (string, error) 
 	return fmt.Sprintf("%v xml%v", column.Name(), terminator), nil
 }
 
-var DbValWriters = map[string]map[string]func(value interface{}, terminator string, nullString string) (string, error){
+var ValWriters = map[string]map[string]func(value interface{}, terminator string, nullString string) (string, error){
 	"postgresql": {
 		"SQL_UNKNOWN_TYPE":    printRaw,
 		"SQL_CHAR":            printRaw,
@@ -177,10 +179,8 @@ func castToBytesCastToStringPrintQuoted(value interface{}, terminator string, nu
 		return "", errors.New("castToBytesCastToStringPrintQuoted unable to cast value to bytes")
 	}
 	valString := string(valBytes)
-	quotesEscaped := strings.ReplaceAll(valString, "'", "''")
-	quotesEscaped = strings.ReplaceAll(quotesEscaped, "{", "(")
-	quotesEscaped = strings.ReplaceAll(quotesEscaped, "}", ")")
-	return fmt.Sprintf("'%v'%v", quotesEscaped, terminator), nil
+	escaped := dbValReplacer.Replace(valString)
+	return fmt.Sprintf("'%v'%v", escaped, terminator), nil
 }
 
 func castToTimeFormatToDateString(value interface{}, terminator string, nullString string) (string, error) {

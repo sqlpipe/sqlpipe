@@ -1,4 +1,4 @@
-package writers
+package systems
 
 import (
 	"errors"
@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 )
+
+var csvValReplacer = strings.NewReplacer(`"`, `""`)
 
 var CsvValWriters = map[string]func(value interface{}, terminator string, nullString string) (string, error){
 	`SQL_UNKNOWN_TYPE`:    csvPrintRaw,
@@ -85,10 +87,8 @@ func csvCastToBytesCastToStringPrintQuoted(value interface{}, terminator string,
 		return ``, errors.New(`castToBytesCastToStringPrintQuoted unable to cast value to bytes`)
 	}
 	valString := string(valBytes)
-	quotesEscaped := strings.ReplaceAll(valString, `"`, `""`)
-	quotesEscaped = strings.ReplaceAll(quotesEscaped, `{`, `(`)
-	quotesEscaped = strings.ReplaceAll(quotesEscaped, `}`, `)`)
-	return fmt.Sprintf(`"%v"%v`, quotesEscaped, terminator), nil
+	escaped := csvValReplacer.Replace(valString)
+	return fmt.Sprintf(`"%v"%v`, escaped, terminator), nil
 }
 
 func csvCastToTimeFormatToDateString(value interface{}, terminator string, nullString string) (string, error) {

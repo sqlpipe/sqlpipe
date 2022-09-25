@@ -12,5 +12,5 @@ type Source struct {
 }
 
 func ValidateSource(v *validator.Validator, source Source) {
-	v.Check(source.OdbcDsn != "", "source.odbc_dsn", "must be provided")
+	v.Check(source.OdbcDsn != "", "source->odbc_dsn", "must be provided")
 }
