@@ -10,7 +10,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/alexbrainman/odbc/api"
+	"github.com/sqlpipe/odbc/api"
 )
 
 type Parameter struct {

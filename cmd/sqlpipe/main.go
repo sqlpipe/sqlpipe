@@ -14,7 +14,7 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 	"github.com/sqlpipe/sqlpipe/pkg"
 
-	_ "github.com/alexbrainman/odbc"
+	_ "github.com/sqlpipe/odbc"
 )
 
 var (
