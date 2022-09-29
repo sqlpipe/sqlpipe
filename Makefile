@@ -48,4 +48,4 @@ vendor:
 build/sqlpipe:
 	@echo 'Building cmd/sqlpipe...'
 	go build -ldflags="-s" -o=./bin/sqlpipe ./cmd/sqlpipe
-	GOOS=linux GOARCH=arm64 go build -ldflags="-s" -o=./bin/linux_arm64/sqlpipe ./cmd/sqlpipe
+# GOOS=linux GOARCH=arm64 go build -ldflags="-s" -o=./bin/linux_arm64/sqlpipe ./cmd/sqlpipe

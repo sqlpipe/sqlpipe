@@ -9,7 +9,7 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
-func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Source data.Source `json:"source"`
 		Target data.Target `json:"target"`
@@ -45,7 +45,7 @@ func (app *application) createTransferHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	transfer.Source.Db = *sourceDb
+	transfer.Source.Db = sourceDb
 	err = transfer.Source.Db.Ping()
 	if err != nil {
 		app.errorResponse(w, r, http.StatusBadRequest, err)

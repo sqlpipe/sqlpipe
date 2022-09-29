@@ -9,7 +9,7 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
-func (app *application) createExportHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) runExportHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Source    data.Source    `json:"source"`
 		CsvTarget data.CsvTarget `json:"csv_target"`
@@ -45,7 +45,7 @@ func (app *application) createExportHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	export.Source.Db = *sourceDb
+	export.Source.Db = sourceDb
 	err = export.Source.Db.Ping()
 	if err != nil {
 		app.errorResponse(w, r, http.StatusBadRequest, err)

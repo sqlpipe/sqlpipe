@@ -7,8 +7,8 @@ import (
 )
 
 type Source struct {
-	OdbcDsn string `json:"odbc_dsn"`
-	Db      sql.DB `json:"-"`
+	OdbcDsn string  `json:"odbc_dsn"`
+	Db      *sql.DB `json:"-"`
 }
 
 func ValidateSource(v *validator.Validator, source Source) {

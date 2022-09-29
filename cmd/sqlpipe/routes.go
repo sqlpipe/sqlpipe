@@ -15,9 +15,9 @@ func (app *application) routes() http.Handler {
 
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
 
-	router.HandlerFunc(http.MethodPost, "/v1/queries", app.authenticate(app.createQueryHandler))
-	router.HandlerFunc(http.MethodPost, "/v1/transfers", app.authenticate(app.createTransferHandler))
-	router.HandlerFunc(http.MethodPost, "/v1/exports", app.authenticate(app.createExportHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/queries", app.authenticate(app.runQueryHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/transfers", app.authenticate(app.runTransferHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/exports", app.authenticate(app.runExportHandler))
 
 	router.Handler(http.MethodGet, "/debug/vars", expvar.Handler())
 

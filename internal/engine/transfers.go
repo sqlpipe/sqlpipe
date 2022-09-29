@@ -35,7 +35,7 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		colDbTypes = append(colDbTypes, colType.DatabaseTypeName())
 	}
 
-	var valWriters map[string]func(value interface{}, terminator string, nullString string) (string, error)
+	var systemValFormatters map[string]func(value interface{}, terminator string, nullString string) (string, error)
 	var batchEnder string
 
 	schemaSpecifier := ""
@@ -45,19 +45,19 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		schemaSpecifier = fmt.Sprintf("%v.", transfer.Target.Schema)
 	}
 
-	valWriters = systems.ValWriters[transfer.Target.SystemType]
+	systemValFormatters = systems.ValFormatters[transfer.Target.SystemType]
 	batchEnder = ")"
-	createWriters := systems.CreateWriters[transfer.Target.SystemType]
+	createFormatters := systems.CreateFormatters[transfer.Target.SystemType]
 	createQuery := fmt.Sprintf("create table %v%v(", schemaSpecifier, transfer.Target.Table)
 
 	for i := 0; i < numCols-1; i++ {
-		columnSpecifier, err := createWriters[colDbTypes[i]](colTypes[i], ",")
+		columnSpecifier, err := createFormatters[colDbTypes[i]](colTypes[i], ",")
 		if err != nil {
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}
 		createQuery = createQuery + columnSpecifier
 	}
-	columnSpecifier, err := createWriters[colDbTypes[numCols-1]](colTypes[numCols-1], ")")
+	columnSpecifier, err := createFormatters[colDbTypes[numCols-1]](colTypes[numCols-1], ")")
 	if err != nil {
 		return map[string]any{"": ""}, http.StatusInternalServerError, err
 	}
@@ -65,7 +65,7 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 
 	dropTableCommand := fmt.Sprintf(
 		"%v %v%v",
-		systems.DropTableCommands[transfer.Target.SystemType],
+		systems.DropTableCommandStarters[transfer.Target.SystemType],
 		transfer.Target.Table,
 		schemaSpecifier,
 	)
@@ -103,13 +103,13 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		}
 		isFirstRow = false
 		for j := 0; j < numCols-1; j++ {
-			valToWrite, err := valWriters[colDbTypes[j]](vals[j], ",", nullString)
+			valToWrite, err := systemValFormatters[colDbTypes[j]](vals[j], ",", nullString)
 			if err != nil {
 				return map[string]any{"": ""}, http.StatusInternalServerError, err
 			}
 			batchBuilder.WriteString(valToWrite)
 		}
-		valToWrite, err := valWriters[colDbTypes[numCols-1]](vals[numCols-1], batchEnder, nullString)
+		valToWrite, err := systemValFormatters[colDbTypes[numCols-1]](vals[numCols-1], batchEnder, nullString)
 		if err != nil {
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}

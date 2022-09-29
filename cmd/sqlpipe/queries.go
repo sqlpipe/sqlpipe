@@ -9,7 +9,7 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
-func (app *application) createQueryHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) runQueryHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Source data.Source `json:"source"`
 		Query  string      `json:"query"`
@@ -33,17 +33,7 @@ func (app *application) createQueryHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// dsn := fmt.Sprintf(
-	// 	"Driver={%v};Server=%v;Port=%v;Database=%v;Uid=%v;Pwd=%v;",
-	// 	query.Source.DriverName,
-	// 	query.Source.Host,
-	// 	query.Source.Port,
-	// 	query.Source.DbName,
-	// 	query.Source.Username,
-	// 	query.Source.Password,
-	// )
-
-	targetDb, err := sql.Open(
+	sourceDb, err := sql.Open(
 		"odbc",
 		query.Source.OdbcDsn,
 	)
@@ -52,7 +42,7 @@ func (app *application) createQueryHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	query.Source.Db = *targetDb
+	query.Source.Db = sourceDb
 	err = query.Source.Db.Ping()
 	if err != nil {
 		app.errorResponse(w, r, http.StatusBadRequest, err)

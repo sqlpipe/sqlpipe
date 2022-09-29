@@ -9,7 +9,7 @@ import (
 
 var csvValReplacer = strings.NewReplacer(`"`, `""`)
 
-var CsvValWriters = map[string]func(value interface{}, terminator string, nullString string) (string, error){
+var CsvValFormatters = map[string]func(value interface{}, terminator string, nullString string) (string, error){
 	`SQL_UNKNOWN_TYPE`:    csvPrintRaw,
 	`SQL_CHAR`:            csvPrintRaw,
 	`SQL_NUMERIC`:         csvPrintRaw,
@@ -21,7 +21,7 @@ var CsvValWriters = map[string]func(value interface{}, terminator string, nullSt
 	`SQL_DOUBLE`:          csvPrintRaw,
 	`SQL_DATETIME`:        csvPrintRaw,
 	`SQL_TIME`:            csvPrintRaw,
-	`SQL_VARCHAR`:         csvCastToBytesCastToStringPrintQuoted,
+	`SQL_VARCHAR`:         csvCastToBytesCastToStringEscapePrintQuoted,
 	`SQL_TYPE_DATE`:       csvCastToTimeFormatToDateString,
 	`SQL_TYPE_TIME`:       csvCastToTimeFormatToTimeString,
 	`SQL_TYPE_TIMESTAMP`:  csvCastToTimeFormatToTimetampString,
@@ -33,9 +33,9 @@ var CsvValWriters = map[string]func(value interface{}, terminator string, nullSt
 	`SQL_BIGINT`:          csvPrintRaw,
 	`SQL_TINYINT`:         csvPrintRaw,
 	`SQL_BIT`:             csvCastToBoolWriteBinaryEquivalent,
-	`SQL_WCHAR`:           csvCastToBytesCastToStringPrintQuoted,
-	`SQL_WVARCHAR`:        csvCastToBytesCastToStringPrintQuoted,
-	`SQL_WLONGVARCHAR`:    csvCastToBytesCastToStringPrintQuoted,
+	`SQL_WCHAR`:           csvCastToBytesCastToStringEscapePrintQuoted,
+	`SQL_WVARCHAR`:        csvCastToBytesCastToStringEscapePrintQuoted,
+	`SQL_WLONGVARCHAR`:    csvCastToBytesCastToStringEscapePrintQuoted,
 	`SQL_GUID`:            csvPrintRawQuoted,
 	`SQL_SIGNED_OFFSET`:   csvPrintRaw,
 	`SQL_UNSIGNED_OFFSET`: csvPrintRaw,
@@ -78,7 +78,7 @@ func csvCastToBoolWriteBinaryEquivalent(value interface{}, terminator string, nu
 	return valToReturn, nil
 }
 
-func csvCastToBytesCastToStringPrintQuoted(value interface{}, terminator string, nullString string) (string, error) {
+func csvCastToBytesCastToStringEscapePrintQuoted(value interface{}, terminator string, nullString string) (string, error) {
 	if value == nil {
 		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
 	}
