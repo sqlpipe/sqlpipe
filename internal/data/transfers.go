@@ -5,9 +5,10 @@ import (
 )
 
 type Transfer struct {
-	Source Source `json:"source"`
-	Target Target `json:"target"`
-	Query  string `json:"query"`
+	Source          Source `json:"source"`
+	Target          Target `json:"target"`
+	Query           string `json:"query"`
+	DropTargetTable bool   `json:"drop_target_table"`
 }
 
 func ValidateTransfer(v *validator.Validator, transfer *Transfer) {

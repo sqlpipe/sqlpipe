@@ -1,4 +1,4 @@
-package formatters
+package shared
 
 import (
 	"database/sql"

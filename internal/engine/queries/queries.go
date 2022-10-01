@@ -1,4 +1,4 @@
-package engine
+package queries
 
 import (
 	"context"

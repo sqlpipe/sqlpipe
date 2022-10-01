@@ -1,13 +1,14 @@
-package engine
+package transfers
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
-	"github.com/sqlpipe/sqlpipe/internal/engine/systems"
+	"github.com/sqlpipe/sqlpipe/internal/engine/transfers/formatters"
 )
 
 func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, int, error) {
@@ -35,8 +36,8 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		colDbTypes = append(colDbTypes, colType.DatabaseTypeName())
 	}
 
-	var systemValFormatters map[string]func(value interface{}, terminator string, nullString string) (string, error)
-	var batchEnder string
+	var midStringValFormatters map[string]func(value interface{}) (string, error)
+	var endStringValFormatters map[string]func(value interface{}) (string, error)
 
 	schemaSpecifier := ""
 	switch transfer.Target.Schema {
@@ -45,9 +46,9 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		schemaSpecifier = fmt.Sprintf("%v.", transfer.Target.Schema)
 	}
 
-	systemValFormatters = systems.ValFormatters[transfer.Target.SystemType]
-	batchEnder = ")"
-	createFormatters := systems.CreateFormatters[transfer.Target.SystemType]
+	midStringValFormatters = systemMidStringValFormatters[transfer.Target.SystemType]
+	endStringValFormatters = systemEndStringValFormatters[transfer.Target.SystemType]
+	createFormatters := createFormatters[transfer.Target.SystemType]
 	createQuery := fmt.Sprintf("create table %v%v(", schemaSpecifier, transfer.Target.Table)
 
 	for i := 0; i < numCols-1; i++ {
@@ -63,16 +64,17 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 	}
 	createQuery = createQuery + columnSpecifier
 
-	dropTableCommand := fmt.Sprintf(
-		"%v %v%v",
-		systems.DropTableCommandStarters[transfer.Target.SystemType],
-		transfer.Target.Table,
-		schemaSpecifier,
-	)
+	if transfer.DropTargetTable {
+		dropTableCommand := fmt.Sprintf(
+			"drop table %v%v",
+			transfer.Target.Table,
+			schemaSpecifier,
+		)
 
-	_, err = transfer.Target.Db.ExecContext(ctx, dropTableCommand)
-	if err != nil {
-		return map[string]any{"": ""}, http.StatusInternalServerError, err
+		_, err = transfer.Target.Db.ExecContext(ctx, dropTableCommand)
+		if err != nil {
+			return map[string]any{"": ""}, http.StatusInternalServerError, err
+		}
 	}
 
 	_, err = transfer.Target.Db.ExecContext(ctx, createQuery)
@@ -90,7 +92,6 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 
 	isFirstRow := true
 	dataRemaining := false
-	nullString := systems.NullStrings[transfer.Target.SystemType]
 
 	for i := 1; rows.Next(); i++ {
 		dataRemaining = true
@@ -103,13 +104,13 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		}
 		isFirstRow = false
 		for j := 0; j < numCols-1; j++ {
-			valToWrite, err := systemValFormatters[colDbTypes[j]](vals[j], ",", nullString)
+			valToWrite, err := midStringValFormatters[colDbTypes[j]](vals[j])
 			if err != nil {
 				return map[string]any{"": ""}, http.StatusInternalServerError, err
 			}
 			batchBuilder.WriteString(valToWrite)
 		}
-		valToWrite, err := systemValFormatters[colDbTypes[numCols-1]](vals[numCols-1], batchEnder, nullString)
+		valToWrite, err := endStringValFormatters[colDbTypes[numCols-1]](vals[numCols-1])
 		if err != nil {
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}
@@ -139,4 +140,16 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 	}
 
 	return map[string]any{"message": "success"}, http.StatusOK, nil
+}
+
+var createFormatters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
+	"postgresql": formatters.PostgresqlCreateFormatters,
+}
+
+var systemMidStringValFormatters = map[string]map[string]func(value interface{}) (string, error){
+	"postgresql": formatters.PostgresqlMidStringValFormatters,
+}
+
+var systemEndStringValFormatters = map[string]map[string]func(value interface{}) (string, error){
+	"postgresql": formatters.PostgresqlEndStringValFormatters,
 }

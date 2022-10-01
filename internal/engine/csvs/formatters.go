@@ -1,4 +1,4 @@
-package systems
+package csvs
 
 import (
 	"errors"
@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-var csvValReplacer = strings.NewReplacer(`"`, `""`)
+var replacer = strings.NewReplacer(`"`, `""`)
 
-var CsvValFormatters = map[string]func(value interface{}, terminator string, nullString string) (string, error){
+var formatters = map[string]func(value interface{}, terminator string) (string, error){
 	`SQL_UNKNOWN_TYPE`:    csvPrintRaw,
 	`SQL_CHAR`:            csvPrintRaw,
 	`SQL_NUMERIC`:         csvPrintRaw,
@@ -43,23 +43,23 @@ var CsvValFormatters = map[string]func(value interface{}, terminator string, nul
 	`SQL_SS_TIME2`:        csvPrintRaw,
 }
 
-func csvPrintRaw(value interface{}, terminator string, nullString string) (string, error) {
+func csvPrintRaw(value interface{}, terminator string) (string, error) {
 	if value == nil {
-		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
+		return terminator, nil
 	}
 	return fmt.Sprintf(`%v%v`, value, terminator), nil
 }
 
-func csvPrintRawQuoted(value interface{}, terminator string, nullString string) (string, error) {
+func csvPrintRawQuoted(value interface{}, terminator string) (string, error) {
 	if value == nil {
-		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
+		return terminator, nil
 	}
 	return fmt.Sprintf(`"%v"%v`, value, terminator), nil
 }
 
-func csvCastToBoolWriteBinaryEquivalent(value interface{}, terminator string, nullString string) (string, error) {
+func csvCastToBoolWriteBinaryEquivalent(value interface{}, terminator string) (string, error) {
 	if value == nil {
-		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
+		return terminator, nil
 	}
 	valBool, ok := value.(bool)
 	if !ok {
@@ -78,22 +78,22 @@ func csvCastToBoolWriteBinaryEquivalent(value interface{}, terminator string, nu
 	return valToReturn, nil
 }
 
-func csvCastToBytesCastToStringEscapePrintQuoted(value interface{}, terminator string, nullString string) (string, error) {
+func csvCastToBytesCastToStringEscapePrintQuoted(value interface{}, terminator string) (string, error) {
 	if value == nil {
-		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
+		return terminator, nil
 	}
 	valBytes, ok := value.([]byte)
 	if !ok {
 		return ``, errors.New(`castToBytesCastToStringPrintQuoted unable to cast value to bytes`)
 	}
 	valString := string(valBytes)
-	escaped := csvValReplacer.Replace(valString)
+	escaped := replacer.Replace(valString)
 	return fmt.Sprintf(`"%v"%v`, escaped, terminator), nil
 }
 
-func csvCastToTimeFormatToDateString(value interface{}, terminator string, nullString string) (string, error) {
+func csvCastToTimeFormatToDateString(value interface{}, terminator string) (string, error) {
 	if value == nil {
-		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
+		return terminator, nil
 	}
 	valTime, ok := value.(time.Time)
 	if !ok {
@@ -102,9 +102,9 @@ func csvCastToTimeFormatToDateString(value interface{}, terminator string, nullS
 	return fmt.Sprintf(`"%v"%v`, valTime.Format(`2006/01/02`), terminator), nil
 }
 
-func csvCastToTimeFormatToTimeString(value interface{}, terminator string, nullString string) (string, error) {
+func csvCastToTimeFormatToTimeString(value interface{}, terminator string) (string, error) {
 	if value == nil {
-		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
+		return terminator, nil
 	}
 	valTime, ok := value.(time.Time)
 	if !ok {
@@ -113,9 +113,9 @@ func csvCastToTimeFormatToTimeString(value interface{}, terminator string, nullS
 	return fmt.Sprintf(`"%v"%v`, valTime.Format(`15:04:05.999999999`), terminator), nil
 }
 
-func csvCastToTimeFormatToTimetampString(value interface{}, terminator string, nullString string) (string, error) {
+func csvCastToTimeFormatToTimetampString(value interface{}, terminator string) (string, error) {
 	if value == nil {
-		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
+		return terminator, nil
 	}
 	valTime, ok := value.(time.Time)
 	if !ok {
@@ -124,9 +124,9 @@ func csvCastToTimeFormatToTimetampString(value interface{}, terminator string, n
 	return fmt.Sprintf(`"%v"%v`, valTime.Format(time.RFC3339Nano), terminator), nil
 }
 
-func csvCastToBytesCastToStringPrintQuotedHex(value interface{}, terminator string, nullString string) (string, error) {
+func csvCastToBytesCastToStringPrintQuotedHex(value interface{}, terminator string) (string, error) {
 	if value == nil {
-		return fmt.Sprintf(`%v%v`, nullString, terminator), nil
+		return terminator, nil
 	}
 	valBytes, ok := value.([]byte)
 	if !ok {

@@ -15,9 +15,11 @@ func (app *application) routes() http.Handler {
 
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
 
-	router.HandlerFunc(http.MethodPost, "/v1/queries", app.authenticate(app.runQueryHandler))
-	router.HandlerFunc(http.MethodPost, "/v1/transfers", app.authenticate(app.runTransferHandler))
-	router.HandlerFunc(http.MethodPost, "/v1/exports", app.authenticate(app.runExportHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/query", app.authenticate(app.runQueryHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/transfer", app.authenticate(app.runTransferHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/csv/download", app.authenticate(app.runCsvDownloadHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/csv/local", app.authenticate(app.runCsvExportHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/csv/s3", app.authenticate(app.runS3ExportHandler))
 
 	router.Handler(http.MethodGet, "/debug/vars", expvar.Handler())
 

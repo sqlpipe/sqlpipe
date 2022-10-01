@@ -5,11 +5,11 @@ import (
 	"net/http"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
-	"github.com/sqlpipe/sqlpipe/internal/engine"
+	"github.com/sqlpipe/sqlpipe/internal/engine/csvs"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
-func (app *application) runExportHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) runCsvExportHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Source    data.Source    `json:"source"`
 		CsvTarget data.CsvTarget `json:"csv_target"`
@@ -52,7 +52,7 @@ func (app *application) runExportHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result, statusCode, err := engine.RunExport(r.Context(), *export)
+	result, statusCode, err := csvs.RunCsvExport(r.Context(), *export)
 	if err != nil {
 		app.errorResponse(w, r, statusCode, err)
 		return
@@ -61,6 +61,28 @@ func (app *application) runExportHandler(w http.ResponseWriter, r *http.Request)
 	headers := make(http.Header)
 
 	err = app.writeJSON(w, http.StatusOK, result, headers)
+	if err != nil {
+		app.errorResponse(w, r, http.StatusInternalServerError, err)
+	}
+}
+
+func (app *application) runCsvDownloadHandler(w http.ResponseWriter, r *http.Request) {
+	// todo
+
+	headers := make(http.Header)
+
+	err := app.writeJSON(w, http.StatusOK, map[string]any{}, headers)
+	if err != nil {
+		app.errorResponse(w, r, http.StatusInternalServerError, err)
+	}
+}
+
+func (app *application) runS3ExportHandler(w http.ResponseWriter, r *http.Request) {
+	// todo
+
+	headers := make(http.Header)
+
+	err := app.writeJSON(w, http.StatusOK, map[string]any{}, headers)
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}

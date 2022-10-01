@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
-	"github.com/sqlpipe/sqlpipe/internal/engine"
+	"github.com/sqlpipe/sqlpipe/internal/engine/queries"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
@@ -49,7 +49,7 @@ func (app *application) runQueryHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result, statusCode, err := engine.RunQuery(r.Context(), *query)
+	result, statusCode, err := queries.RunQuery(r.Context(), *query)
 	if err != nil {
 		app.errorResponse(w, r, statusCode, err)
 		return

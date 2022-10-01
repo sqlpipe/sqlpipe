@@ -5,15 +5,16 @@ import (
 	"net/http"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
-	"github.com/sqlpipe/sqlpipe/internal/engine"
+	"github.com/sqlpipe/sqlpipe/internal/engine/transfers"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
 func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Source data.Source `json:"source"`
-		Target data.Target `json:"target"`
-		Query  string      `json:"query"`
+		Source          data.Source `json:"source"`
+		Target          data.Target `json:"target"`
+		Query           string      `json:"query"`
+		DropTargetTable bool        `json:"drop_target_table"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -23,9 +24,10 @@ func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	transfer := &data.Transfer{
-		Source: input.Source,
-		Target: input.Target,
-		Query:  input.Query,
+		Source:          input.Source,
+		Target:          input.Target,
+		Query:           input.Query,
+		DropTargetTable: input.DropTargetTable,
 	}
 
 	v := validator.New()
@@ -68,7 +70,7 @@ func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	result, statusCode, err := engine.RunTransfer(r.Context(), *transfer)
+	result, statusCode, err := transfers.RunTransfer(r.Context(), *transfer)
 	if err != nil {
 		app.errorResponse(w, r, statusCode, err)
 		return

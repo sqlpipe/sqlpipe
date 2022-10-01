@@ -1,4 +1,4 @@
-package engine
+package csvs
 
 import (
 	"context"
@@ -8,10 +8,9 @@ import (
 	"strings"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
-	"github.com/sqlpipe/sqlpipe/internal/engine/systems"
 )
 
-func RunExport(ctx context.Context, export data.Export) (map[string]any, int, error) {
+func RunCsvExport(ctx context.Context, export data.Export) (map[string]any, int, error) {
 	rows, err := export.Source.Db.QueryContext(ctx, export.Query)
 	if err != nil {
 		return map[string]any{"": ""}, http.StatusBadRequest, err
@@ -71,13 +70,13 @@ func RunExport(ctx context.Context, export data.Export) (map[string]any, int, er
 		rows.Scan(valPtrs...)
 
 		for j := 0; j < numCols-1; j++ {
-			valToWrite, err := systems.CsvValFormatters[colDbTypes[j]](vals[j], ",", "")
+			valToWrite, err := formatters[colDbTypes[j]](vals[j], ",")
 			if err != nil {
 				return map[string]any{"": ""}, http.StatusInternalServerError, err
 			}
 			fmt.Fprint(&batchBuilder, valToWrite)
 		}
-		valToWrite, err := systems.CsvValFormatters[colDbTypes[numCols-1]](vals[numCols-1], "\n", "")
+		valToWrite, err := formatters[colDbTypes[numCols-1]](vals[numCols-1], "\n")
 		if err != nil {
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}
