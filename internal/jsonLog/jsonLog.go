@@ -1,4 +1,4 @@
-package jsonlog
+package jsonLog
 
 import (
 	"encoding/json"

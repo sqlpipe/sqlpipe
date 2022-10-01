@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sqlpipe/sqlpipe/internal/jsonlog"
+	"github.com/sqlpipe/sqlpipe/internal/jsonLog"
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 	"github.com/sqlpipe/sqlpipe/pkg"
 
@@ -34,7 +34,7 @@ type config struct {
 
 type application struct {
 	config config
-	logger *jsonlog.Logger
+	logger *jsonLog.Logger
 	wg     sync.WaitGroup
 }
 
@@ -48,7 +48,7 @@ func main() {
 	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
 
 	flag.StringVar(&cfg.token, "token", "", "Auth token")
-	flag.BoolVar(&cfg.secure, "secure", true, "Secure with an auth token")
+	flag.BoolVar(&cfg.secure, "secure", false, "Secure with an auth token")
 
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 
@@ -72,7 +72,7 @@ func main() {
 		}
 	}
 
-	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
+	logger := jsonLog.New(os.Stdout, jsonLog.LevelInfo)
 
 	expvar.NewString("version").Set(version)
 

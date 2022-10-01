@@ -3,7 +3,7 @@ include .envrc
 ## run/sqlpipe: run the cmd/sqlpipe application
 .PHONY: run/sqlpipe
 run/sqlpipe:
-	go run ./cmd/sqlpipe -secure=false
+	go run ./cmd/sqlpipe
 
 ## run/docker: run sqlpipe testing stack in docker
 .PHONY: run/docker

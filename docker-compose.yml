@@ -8,12 +8,12 @@ services:
     container_name: postgresql
     ports:
       - 5432:5432
-  sqlpipe:
-    build:
-      context: ./
-      dockerfile: Dockerfile
-    container_name: sqlpipe
-    ports:
-      - 9000:9000
-    depends_on:
-      - postgresql
+  # sqlpipe:
+  #   build:
+  #     context: ./
+  #     dockerfile: Dockerfile
+  #   container_name: sqlpipe
+  #   ports:
+  #     - 9000:9000
+  #   depends_on:
+  #     - postgresql
