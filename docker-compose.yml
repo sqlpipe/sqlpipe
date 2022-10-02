@@ -2,10 +2,18 @@ services:
   postgresql:
     image: postgres:14
     environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${PASSWORD}
     container_name: postgresql
     ports:
       - 5432:5432
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${PASSWORD}
+    container_name: mssql
+    ports:
+      - 1433:1433
   # sqlpipe:
   #   image: sqlpipe/sqlpipe
   #   container_name: sqlpipe

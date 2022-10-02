@@ -18,6 +18,9 @@ var (
 	postgresqlTestSource = data.Source{
 		OdbcDsn: "Driver=PostgreSQL;Server=localhost;Port=5432;Database=postgres;Uid=postgres;Pwd=Mypass123;",
 	}
+	mssqlTestSource = data.Source{
+		OdbcDsn: "Driver=MSSQL;Server=localhost;Port=1433;Database=master;UID=sa;PWD=Mypass123;TDS_VERSION=8.0;",
+	}
 )
 
 type queryTest struct {
@@ -83,6 +86,59 @@ var postgresqlSetupTests = []queryTest{
 	},
 }
 
+var mssqlSetupTests = []queryTest{
+	// MSSQL setup
+	{
+		name:        "mssqlWideTableDrop",
+		source:      mssqlTestSource,
+		testQuery:   "drop table if exists wide_table;",
+		checkQuery:  "select * from wide_table",
+		expectedErr: "",
+	},
+	{
+		name:        "mssqlWideTableCreate",
+		source:      mssqlTestSource,
+		testQuery:   `create table wide_table (mybigint bigint, mybit bit, mydecimal decimal(10,5), myint int, mymoney money, mynumeric numeric(11,7), mysmallint smallint, mysmallmoney smallmoney, mytinyint tinyint, myfloat float, myreal real, mydate date, mydatetime2 datetime2, mydatetime datetime, mydatetimeoffset datetimeoffset, mysmalldatetime smalldatetime, mytime time, mychar char(3), myvarchar varchar(20), mytext text, mynchar nchar(3), mynvarchar nvarchar(20), myntext ntext, mybinary binary(3), myvarbinary varbinary(30), myuniqueidentifier uniqueidentifier, myxml xml);`,
+		checkQuery:  "select * from wide_table",
+		checkResult: "",
+	},
+	{
+		name:        "mssqlWideTableInsert",
+		source:      mssqlTestSource,
+		testQuery:   `insert into wide_table (mybigint, mybit, mydecimal, myint, mymoney, mynumeric, mysmallint, mysmallmoney, mytinyint, myfloat, myreal, mydate, mydatetime2, mydatetime, mydatetimeoffset, mysmalldatetime, mytime, mychar, myvarchar, mytext, mynchar, mynvarchar, myntext, mybinary, myvarbinary, myuniqueidentifier, myxml) values(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);`,
+		checkQuery:  "select * from wide_table",
+		checkResult: "",
+	},
+	{
+		name:        "mssqlLoadTableDrop",
+		source:      mssqlTestSource,
+		testQuery:   "drop table if exists load_table;",
+		checkQuery:  "select * from load_table",
+		expectedErr: "",
+	},
+	{
+		name:        "mssqlLoadTableCreate",
+		source:      mssqlTestSource,
+		testQuery:   `create table load_table (mybigint bigint, mybit bit, mydecimal decimal(10,5), myint int, mymoney money, mynumeric numeric(11,7), mysmallint smallint, mysmallmoney smallmoney, mytinyint tinyint, myfloat float, myreal real, mydate date, mydatetime2 datetime2, mydatetime datetime, mydatetimeoffset datetimeoffset, mysmalldatetime smalldatetime, mytime time, mychar char(3), myvarchar varchar(20), mytext text, mynchar nchar(3), mynvarchar nvarchar(20), myntext ntext, mybinary binary(3), myvarbinary varbinary(30), myuniqueidentifier uniqueidentifier, myxml xml);`,
+		checkQuery:  "select * from load_table",
+		checkResult: "",
+	},
+	{
+		name:   "mssqlLoadTableInsert",
+		source: mssqlTestSource,
+		testQuery: `
+DECLARE @i int = 0
+WHILE @i < 1000
+BEGIN
+	SET @i = @i + 1
+insert into load_table (mybigint, mybit, mydecimal, myint, mymoney, mynumeric, mysmallint, mysmallmoney, mytinyint, myfloat, myreal, mydate, mydatetime2, mydatetime, mydatetimeoffset, mysmalldatetime, mytime, mychar, myvarchar, mytext, mynchar, mynvarchar, myntext, mybinary, myvarbinary, myuniqueidentifier, myxml) values (435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>'),(435345, 1, 324.43, 54, 43.21, 54.33, 12, 22.10, 4, 45.5, 47.7, '2013-10-12', CAST('2005-06-12 11:40:17.632' AS datetime2), CAST('2005-06-12 11:40:17.632' AS datetime), CAST('2005-06-12 11:40:17.632 +01:00' AS datetimeoffset), CAST('2005-06-12 11:40:00' AS smalldatetime), CAST('11:40:12.543654' AS time), 'yoo', 'gday guvna', 'omg have you hea''rd" a,bout the latest craze that the people are talking about?', 'yoo', 'gday guvna', 'omg have you heard about the latest craze that the people are talking about?', 101, 100001, N'6F9619FF-8B86-D011-B42D-00C04FC964FF','<foo>bar</foo>');
+END	
+	`,
+		checkQuery:  "select count(*) from load_table",
+		checkResult: "",
+	},
+}
+
 var postgresqlTransferTests = []transferTest{
 	// PostgreSQL Transfers
 	{
@@ -141,6 +197,50 @@ func TestPostgresqlSetup(t *testing.T) {
 		})
 	}
 }
+
+// func TestMssqlSetup(t *testing.T) {
+// 	// t.Parallel()
+// 	ctx := context.Background()
+
+// 	sourceDb, err := sql.Open(
+// 		"odbc",
+// 		mssqlTestSource.OdbcDsn,
+// 	)
+// 	if err != nil {
+// 		t.Fatalf("unable to create mssql source db. err:\n\n%v\n", err)
+// 	}
+
+// 	mssqlTestSource.Db = sourceDb
+// 	err = mssqlTestSource.Db.Ping()
+// 	if err != nil {
+// 		t.Fatalf("unable to ping mssql source db. err:\n\n%v\n", err)
+// 	}
+
+// 	// Loop over the test cases.
+// 	for _, tt := range mssqlSetupTests {
+// 		tt := tt
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			_, _, err := queries.RunQuery(ctx, data.Query{Source: mssqlTestSource, Query: tt.testQuery})
+
+// 			if err != nil && err.Error() != tt.expectedErr {
+
+// 				t.Fatalf("unable to run test query. err:\n\n%v\n", err)
+// 			}
+
+// 			if tt.checkQuery != "" {
+// 				result, _, err := queries.RunQuery(ctx, data.Query{Source: mssqlTestSource, Query: tt.checkQuery})
+
+// 				if err != nil && err.Error() != tt.expectedErr {
+// 					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err.Error())
+// 				}
+
+// 				if !reflect.DeepEqual(result, tt.checkResult) {
+// 					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, result)
+// 				}
+// 			}
+// 		})
+// 	}
+// }
 
 func TestPostgresqlTransfers(t *testing.T) {
 	// t.Parallel()
