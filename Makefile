@@ -44,8 +44,10 @@ build/docker: build/docker
 
 # test/engine: Test the engine
 .PHONY: test/engine
-test/engine:
-	go test -v -count=1 -run Setup ./...
+test/engine: build/docker
+	docker rm -f sqlpipe \
+	&& docker-compose up --build -d sqlpipe \
+	&& go test -v -count=1 -run Setup ./...
 
 # ==================================================================================== #
 # OTHER
