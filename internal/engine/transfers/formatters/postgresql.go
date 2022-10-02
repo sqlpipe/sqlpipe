@@ -42,7 +42,7 @@ var PostgresqlCreateFormatters = map[string]func(column *sql.ColumnType, termina
 
 var PostgresqlMidStringValFormatters = map[string]func(value interface{}) (string, error){
 	"SQL_UNKNOWN_TYPE":    shared.RawXcommaXnull,
-	"SQL_CHAR":            shared.RawXcommaXnull,
+	"SQL_CHAR":            shared.CastToBytesCastToStringPrintQuotedXcommaXnull,
 	"SQL_NUMERIC":         shared.RawXcommaXnull,
 	"SQL_DECIMAL":         shared.RawXcommaXnull,
 	"SQL_INTEGER":         shared.RawXcommaXnull,
@@ -57,9 +57,9 @@ var PostgresqlMidStringValFormatters = map[string]func(value interface{}) (strin
 	"SQL_TYPE_TIME":       shared.CastToTimeFormatToTimeStringXcommaXnull,
 	"SQL_TYPE_TIMESTAMP":  shared.CastToTimeFormatToTimetampStringXcommaXnull,
 	"SQL_TIMESTAMP":       shared.RawXcommaXnull,
-	"SQL_LONGVARCHAR":     shared.RawXcommaXnull,
-	"SQL_BINARY":          shared.RawXcommaXnull,
-	"SQL_VARBINARY":       shared.RawXcommaXnull,
+	"SQL_LONGVARCHAR":     shared.CastToBytesCastToStringPrintQuotedXcommaXnull,
+	"SQL_BINARY":          shared.CastToBytesCastToStringPrintQuotedHexXcommaXnull,
+	"SQL_VARBINARY":       shared.CastToBytesCastToStringPrintQuotedHexXcommaXnull,
 	"SQL_LONGVARBINARY":   shared.CastToBytesCastToStringPrintQuotedHexXcommaXnull,
 	"SQL_BIGINT":          shared.RawXcommaXnull,
 	"SQL_TINYINT":         shared.RawXcommaXnull,
@@ -76,7 +76,7 @@ var PostgresqlMidStringValFormatters = map[string]func(value interface{}) (strin
 
 var PostgresqlEndStringValFormatters = map[string]func(value interface{}) (string, error){
 	"SQL_UNKNOWN_TYPE":    shared.RawXparenthesisXnull,
-	"SQL_CHAR":            shared.RawXparenthesisXnull,
+	"SQL_CHAR":            shared.CastToBytesCastToStringPrintQuotedXparenthesisXnull,
 	"SQL_NUMERIC":         shared.RawXparenthesisXnull,
 	"SQL_DECIMAL":         shared.RawXparenthesisXnull,
 	"SQL_INTEGER":         shared.RawXparenthesisXnull,
@@ -92,8 +92,8 @@ var PostgresqlEndStringValFormatters = map[string]func(value interface{}) (strin
 	"SQL_TYPE_TIMESTAMP":  shared.CastToTimeFormatToTimetampStringXparenthesisXnull,
 	"SQL_TIMESTAMP":       shared.RawXparenthesisXnull,
 	"SQL_LONGVARCHAR":     shared.RawXparenthesisXnull,
-	"SQL_BINARY":          shared.RawXparenthesisXnull,
-	"SQL_VARBINARY":       shared.RawXparenthesisXnull,
+	"SQL_BINARY":          shared.CastToBytesCastToStringPrintQuotedHexXparenthesisXnull,
+	"SQL_VARBINARY":       shared.CastToBytesCastToStringPrintQuotedHexXparenthesisXnull,
 	"SQL_LONGVARBINARY":   shared.CastToBytesCastToStringPrintQuotedHexXparenthesisXnull,
 	"SQL_BIGINT":          shared.RawXparenthesisXnull,
 	"SQL_TINYINT":         shared.RawXparenthesisXnull,

@@ -110,12 +110,14 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 			if err != nil {
 				return map[string]any{"": ""}, http.StatusInternalServerError, err
 			}
+			fmt.Println(valToWrite, colDbTypes[j])
 			batchBuilder.WriteString(valToWrite)
 		}
 		valToWrite, err := endStringValFormatters[colDbTypes[numCols-1]](vals[numCols-1])
 		if err != nil {
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}
+		fmt.Println(valToWrite, colDbTypes[numCols-1])
 		batchBuilder.WriteString(valToWrite)
 		if i%systemRowsPerWrite == 0 {
 			stringToWrite := batchBuilder.String()
