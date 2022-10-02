@@ -38,16 +38,30 @@ build/sqlpipe:
 build/docker: build/docker
 	docker build -t sqlpipe/sqlpipe -f dockerfile .
 
+## build/delve: Build locally with delve friendly flags
+.PHONY: build/delve
+build/delve:
+	go build -o=./bin/sqlpipe ./cmd/sqlpipe
+
 # ==================================================================================== #
 # TEST
 # ==================================================================================== #
 
 # test/engine: Test the engine
 .PHONY: test/engine
-test/engine: build/docker
-	docker rm -f sqlpipe \
-	&& docker-compose up --build -d sqlpipe \
-	&& go test -v -count=1 -run Setup ./...
+test/engine: build/sqlpipe
+	docker-compose down -v \
+	&& docker-compose up --build -d \
+	&& sleep 3 \
+	&& go test -v -count=1 -run Setup ./... \
+	&& go test -v -count=1 -run Transfers ./...
+
+## test/delve: run tests with delve
+.PHONY: test/delve
+test/delve: build/delve
+	docker-compose down -v \
+	&& docker-compose up --build -d \
+	&& /home/ubuntu/go/bin/dlv test ./internal/engine --
 
 # ==================================================================================== #
 # OTHER

@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	_ "github.com/sqlpipe/odbc"
+
 	"github.com/sqlpipe/sqlpipe/internal/jsonLog"
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 	"github.com/sqlpipe/sqlpipe/pkg"

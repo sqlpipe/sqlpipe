@@ -63,7 +63,7 @@ func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Reques
 		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
-	transfer.Target.Db = *targetDb
+	transfer.Target.Db = targetDb
 	err = transfer.Target.Db.Ping()
 	if err != nil {
 		app.errorResponse(w, r, http.StatusBadRequest, err)

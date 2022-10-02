@@ -66,9 +66,10 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 
 	if transfer.DropTargetTable {
 		dropTableCommand := fmt.Sprintf(
-			"drop table %v%v",
-			transfer.Target.Table,
+			"%v %v%v",
+			dropTableCommandStarters[transfer.Target.SystemType],
 			schemaSpecifier,
+			transfer.Target.Table,
 		)
 
 		_, err = transfer.Target.Db.ExecContext(ctx, dropTableCommand)
@@ -92,6 +93,7 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 
 	isFirstRow := true
 	dataRemaining := false
+	systemRowsPerWrite := rowsPerWrite[transfer.Target.SystemType]
 
 	for i := 1; rows.Next(); i++ {
 		dataRemaining = true
@@ -115,7 +117,7 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}
 		batchBuilder.WriteString(valToWrite)
-		if i%transfer.Target.RowsPerWrite == 0 {
+		if i%systemRowsPerWrite == 0 {
 			stringToWrite := batchBuilder.String()
 			_, err := transfer.Target.Db.ExecContext(ctx, stringToWrite)
 			if err != nil {
@@ -142,14 +144,20 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 	return map[string]any{"message": "success"}, http.StatusOK, nil
 }
 
-var createFormatters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
-	"postgresql": formatters.PostgresqlCreateFormatters,
-}
-
-var systemMidStringValFormatters = map[string]map[string]func(value interface{}) (string, error){
-	"postgresql": formatters.PostgresqlMidStringValFormatters,
-}
-
-var systemEndStringValFormatters = map[string]map[string]func(value interface{}) (string, error){
-	"postgresql": formatters.PostgresqlEndStringValFormatters,
-}
+var (
+	createFormatters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
+		"postgresql": formatters.PostgresqlCreateFormatters,
+	}
+	systemMidStringValFormatters = map[string]map[string]func(value interface{}) (string, error){
+		"postgresql": formatters.PostgresqlMidStringValFormatters,
+	}
+	systemEndStringValFormatters = map[string]map[string]func(value interface{}) (string, error){
+		"postgresql": formatters.PostgresqlEndStringValFormatters,
+	}
+	rowsPerWrite = map[string]int{
+		"postgresql": 1000,
+	}
+	dropTableCommandStarters = map[string]string{
+		"postgresql": "drop table if exists",
+	}
+)
