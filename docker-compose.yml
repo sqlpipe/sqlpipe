@@ -7,7 +7,7 @@ services:
     ports:
       - 5432:5432
   mssql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2019-latest
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${PASSWORD}

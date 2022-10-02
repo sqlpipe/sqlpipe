@@ -1,3 +1,3 @@
-[MSSQL]
+[FreeTDS]
 Description     = MSSQL driver
 Driver          =/usr/local/lib/libtdsodbc.so
