@@ -57,7 +57,7 @@ func (app *application) runQueryHandler(w http.ResponseWriter, r *http.Request) 
 
 	headers := make(http.Header)
 
-	err = app.writeJSON(w, http.StatusOK, result, headers)
+	err = app.writePlaintext(w, http.StatusOK, result, headers)
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}

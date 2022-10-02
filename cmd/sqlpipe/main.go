@@ -13,8 +13,6 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/jsonLog"
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 	"github.com/sqlpipe/sqlpipe/pkg"
-
-	_ "github.com/sqlpipe/odbc"
 )
 
 var (

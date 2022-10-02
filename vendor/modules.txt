@@ -4,6 +4,13 @@ github.com/felixge/httpsnoop
 # github.com/julienschmidt/httprouter v1.3.0
 ## explicit; go 1.7
 github.com/julienschmidt/httprouter
+# github.com/shomali11/util v0.0.0-20180607005212-e0f70fd665ff
+## explicit
+github.com/shomali11/util/xrunes
+github.com/shomali11/util/xstrings
+# github.com/shomali11/xsql v0.0.0-20190608141458-bf76292144df
+## explicit
+github.com/shomali11/xsql
 # github.com/sqlpipe/odbc v0.0.0-20220925112539-e562aef317a2
 ## explicit; go 1.19
 github.com/sqlpipe/odbc

@@ -28,6 +28,18 @@ func (app *application) writeJSON(w http.ResponseWriter, status int, data map[st
 	return nil
 }
 
+func (app *application) writePlaintext(w http.ResponseWriter, status int, data string, headers http.Header) error {
+	for key, value := range headers {
+		w.Header()[key] = value
+	}
+
+	w.Header().Set("Content-Type", " text/plain")
+	w.WriteHeader(status)
+	w.Write([]byte(data))
+
+	return nil
+}
+
 func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	maxBytes := 1_048_576
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
