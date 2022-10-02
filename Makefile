@@ -1,23 +1,46 @@
 include .envrc
 
-## run/sqlpipe: run the cmd/sqlpipe application
+# ==================================================================================== #
+# RUN
+# ==================================================================================== #
+
+## run/compose: Run the test env using docker compose
+.PHONY: run/compose
+run/compose: build/docker
+	POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+	docker-compose down -v \
+	&& docker-compose up --build -d \
+	&& docker-compose logs -f
+
+## run/sqlpipe: Run SQLpipe locally
 .PHONY: run/sqlpipe
 run/sqlpipe:
 	go run ./cmd/sqlpipe
 
-## run/docker: run sqlpipe testing stack in docker
-.PHONY: run/docker
-run/docker: 
-	POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
-		docker-compose down -v \
-		&& docker-compose up --build -d \
-		&& docker-compose logs -f
+## run/docker:
+.PHONY: restart/compose
+restart/compose: build/docker
+	docker rm -f sqlpipe \
+	&& docker-compose up --build -d sqlpipe \
+	&& docker-compose logs -f
 
-## restart/docker: restart sqlpipe in docker
-.PHONY: restart/docker
-restart/docker: 
-		docker-compose up --build -d sqlpipe \
-		&& docker-compose logs -f sqlpipe
+# ==================================================================================== #
+# BUILD
+# ==================================================================================== #
+
+## build/sqlpipe: Build SQLpipe locally
+.PHONY: build/sqlpipe
+build/sqlpipe:
+	go build -ldflags="-s" -o=./bin/sqlpipe ./cmd/sqlpipe
+
+## build/docker: Build SQLpipe in Docker
+.PHONY: build/docker
+build/docker: build/docker
+	docker build -t sqlpipe/sqlpipe -f dockerfile .
+
+# ==================================================================================== #
+# OTHER
+# ==================================================================================== #
 
 ## audit: tidy and vendor dependencies and format, vet and test all code
 .PHONY: audit
@@ -38,14 +61,3 @@ vendor:
 	go mod verify
 	@echo 'Vendoring dependencies...'
 	go mod vendor
-
-# ==================================================================================== #
-# BUILD
-# ==================================================================================== #
-
-## build/sqlpipe: build the cmd/sqlpipe application
-.PHONY: build/sqlpipe
-build/sqlpipe:
-	@echo 'Building cmd/sqlpipe...'
-	go build -ldflags="-s" -o=./bin/sqlpipe ./cmd/sqlpipe
-# GOOS=linux GOARCH=arm64 go build -ldflags="-s" -o=./bin/linux_arm64/sqlpipe ./cmd/sqlpipe

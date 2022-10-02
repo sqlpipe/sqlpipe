@@ -1,5 +1,3 @@
-# This is *not* a production ready way to deploy Reserva.
-
 services:
   postgresql:
     image: postgres:14
@@ -8,12 +6,8 @@ services:
     container_name: postgresql
     ports:
       - 5432:5432
-  # sqlpipe:
-  #   build:
-  #     context: ./
-  #     dockerfile: Dockerfile
-  #   container_name: sqlpipe
-  #   ports:
-  #     - 9000:9000
-  #   depends_on:
-  #     - postgresql
+  sqlpipe:
+    image: sqlpipe/sqlpipe
+    container_name: sqlpipe
+    ports:
+      - 9000:9000

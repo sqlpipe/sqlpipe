@@ -10,7 +10,7 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
-func RunCsvExport(ctx context.Context, export data.Export) (map[string]any, int, error) {
+func RunCsvSaveOnServer(ctx context.Context, export data.Export) (map[string]any, int, error) {
 	rows, err := export.Source.Db.QueryContext(ctx, export.Query)
 	if err != nil {
 		return map[string]any{"": ""}, http.StatusBadRequest, err

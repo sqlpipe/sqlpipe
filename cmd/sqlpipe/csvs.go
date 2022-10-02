@@ -9,7 +9,7 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
-func (app *application) runCsvExportHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) runCsvSaveOnServerHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Source    data.Source    `json:"source"`
 		CsvTarget data.CsvTarget `json:"csv_target"`
@@ -52,7 +52,7 @@ func (app *application) runCsvExportHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	result, statusCode, err := csvs.RunCsvExport(r.Context(), *export)
+	result, statusCode, err := csvs.RunCsvSaveOnServer(r.Context(), *export)
 	if err != nil {
 		app.errorResponse(w, r, statusCode, err)
 		return
@@ -77,13 +77,13 @@ func (app *application) runCsvDownloadHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func (app *application) runS3ExportHandler(w http.ResponseWriter, r *http.Request) {
-	// todo
+// func (app *application) runS3ExportHandler(w http.ResponseWriter, r *http.Request) {
+// 	// todo
 
-	headers := make(http.Header)
+// 	headers := make(http.Header)
 
-	err := app.writeJSON(w, http.StatusOK, map[string]any{}, headers)
-	if err != nil {
-		app.errorResponse(w, r, http.StatusInternalServerError, err)
-	}
-}
+// 	err := app.writeJSON(w, http.StatusOK, map[string]any{}, headers)
+// 	if err != nil {
+// 		app.errorResponse(w, r, http.StatusInternalServerError, err)
+// 	}
+// }
