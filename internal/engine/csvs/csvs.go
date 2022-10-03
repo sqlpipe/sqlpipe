@@ -83,9 +83,7 @@ func RunCsvSaveOnServer(ctx context.Context, export data.Export) (map[string]any
 		fmt.Fprint(&batchBuilder, valToWrite)
 	}
 
-	stringToWrite := batchBuilder.String()
-
-	if _, err = f.WriteString(stringToWrite); err != nil {
+	if _, err = f.WriteString(batchBuilder.String()); err != nil {
 		return map[string]any{"": ""}, http.StatusInternalServerError, err
 	}
 

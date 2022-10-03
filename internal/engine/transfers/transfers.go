@@ -43,20 +43,20 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		schemaSpecifier = fmt.Sprintf("%v.", transfer.Target.Schema)
 	}
 
+	var createFormatters map[string]func(column *sql.ColumnType, terminator string) (string, error)
 	var midStringValFormatters map[string]func(value interface{}) (string, error)
 	var endStringValFormatters map[string]func(value interface{}) (string, error)
-	var createFormatters map[string]func(column *sql.ColumnType, terminator string) (string, error)
 	var ok bool
+
+	if createFormatters, ok = systemCreateFormatters[transfer.Target.SystemType]; !ok {
+		return map[string]any{"": ""}, http.StatusBadRequest, fmt.Errorf("unsupported target system type: %v", transfer.Target.SystemType)
+	}
 
 	if midStringValFormatters, ok = systemMidStringValFormatters[transfer.Target.SystemType]; !ok {
 		return map[string]any{"": ""}, http.StatusBadRequest, fmt.Errorf("unsupported target system type: %v", transfer.Target.SystemType)
 	}
 
 	if endStringValFormatters, ok = systemEndStringValFormatters[transfer.Target.SystemType]; !ok {
-		return map[string]any{"": ""}, http.StatusBadRequest, fmt.Errorf("unsupported target system type: %v", transfer.Target.SystemType)
-	}
-
-	if createFormatters, ok = systemCreateFormatters[transfer.Target.SystemType]; !ok {
 		return map[string]any{"": ""}, http.StatusBadRequest, fmt.Errorf("unsupported target system type: %v", transfer.Target.SystemType)
 	}
 
@@ -129,8 +129,7 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		}
 		batchBuilder.WriteString(valToWrite)
 		if i%rowsPerWrite == 0 {
-			stringToWrite := batchBuilder.String()
-			_, err := transfer.Target.Db.ExecContext(ctx, stringToWrite)
+			_, err := transfer.Target.Db.ExecContext(ctx, batchBuilder.String())
 			if err != nil {
 				return map[string]any{"": ""}, http.StatusInternalServerError, err
 			}
