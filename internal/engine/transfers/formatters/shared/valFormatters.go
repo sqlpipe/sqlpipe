@@ -37,7 +37,7 @@ func QuotedXparenthesisXnull(value interface{}) (string, error) {
 	return fmt.Sprintf("'%v')", value), nil
 }
 
-func CastToBoolWriteBinaryEquivalentXcommaXnull(value interface{}) (string, error) {
+func CastToBoolWriteTextEquivalentXcommaXnull(value interface{}) (string, error) {
 	if value == nil {
 		return "null,", nil
 	}
@@ -49,7 +49,7 @@ func CastToBoolWriteBinaryEquivalentXcommaXnull(value interface{}) (string, erro
 	return fmt.Sprintf("%v,", valBool), nil
 }
 
-func CastToBoolWriteBinaryEquivalentXparenthesisXnull(value interface{}) (string, error) {
+func CastToBoolWriteTextEquivalentXparenthesisXnull(value interface{}) (string, error) {
 	if value == nil {
 		return "null)", nil
 	}
@@ -59,6 +59,38 @@ func CastToBoolWriteBinaryEquivalentXparenthesisXnull(value interface{}) (string
 	}
 
 	return fmt.Sprintf("%v)", valBool), nil
+}
+
+func CastToBoolWriteBinaryEquivalentXcommaXnull(value interface{}) (string, error) {
+	if value == nil {
+		return "null,", nil
+	}
+	valBool, ok := value.(bool)
+	if !ok {
+		return "", errors.New("castToBool unable to cast value to bool")
+	}
+
+	if valBool {
+		return "1,", nil
+	} else {
+		return "0,", nil
+	}
+}
+
+func CastToBoolWriteBinaryEquivalentXparenthesisXnull(value interface{}) (string, error) {
+	if value == nil {
+		return "null)", nil
+	}
+	valBool, ok := value.(bool)
+	if !ok {
+		return "", errors.New("castToBool unable to cast value to bool")
+	}
+
+	if valBool {
+		return "1)", nil
+	} else {
+		return "0)", nil
+	}
 }
 
 func CastToBytesCastToStringPrintQuotedXcommaXnull(value interface{}) (string, error) {

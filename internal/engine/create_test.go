@@ -12,15 +12,6 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/engine/queries"
 )
 
-type setupTest struct {
-	name        string      // name of test
-	source      data.Source //source to run query on
-	testQuery   string      // query
-	checkQuery  string      // query to test if the testQuery was successful
-	checkResult string      // expected result of checkQuery
-	expectedErr string      // if an error is expected, this will be the expected error
-}
-
 var createTests = []setupTest{
 	// PostgreSQL
 	{

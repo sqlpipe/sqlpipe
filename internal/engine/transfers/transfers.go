@@ -36,9 +36,6 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		colDbTypes = append(colDbTypes, colType.DatabaseTypeName())
 	}
 
-	var midStringValFormatters map[string]func(value interface{}) (string, error)
-	var endStringValFormatters map[string]func(value interface{}) (string, error)
-
 	schemaSpecifier := ""
 	switch transfer.Target.Schema {
 	case "":
@@ -46,9 +43,23 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 		schemaSpecifier = fmt.Sprintf("%v.", transfer.Target.Schema)
 	}
 
-	midStringValFormatters = systemMidStringValFormatters[transfer.Target.SystemType]
-	endStringValFormatters = systemEndStringValFormatters[transfer.Target.SystemType]
-	createFormatters := createFormatters[transfer.Target.SystemType]
+	var midStringValFormatters map[string]func(value interface{}) (string, error)
+	var endStringValFormatters map[string]func(value interface{}) (string, error)
+	var createFormatters map[string]func(column *sql.ColumnType, terminator string) (string, error)
+	var ok bool
+
+	if midStringValFormatters, ok = systemMidStringValFormatters[transfer.Target.SystemType]; !ok {
+		return map[string]any{"": ""}, http.StatusBadRequest, fmt.Errorf("unsupported target system type: %v", transfer.Target.SystemType)
+	}
+
+	if endStringValFormatters, ok = systemEndStringValFormatters[transfer.Target.SystemType]; !ok {
+		return map[string]any{"": ""}, http.StatusBadRequest, fmt.Errorf("unsupported target system type: %v", transfer.Target.SystemType)
+	}
+
+	if createFormatters, ok = systemCreateFormatters[transfer.Target.SystemType]; !ok {
+		return map[string]any{"": ""}, http.StatusBadRequest, fmt.Errorf("unsupported target system type: %v", transfer.Target.SystemType)
+	}
+
 	createQuery := fmt.Sprintf("create table %v%v(", schemaSpecifier, transfer.Target.Table)
 
 	for i := 0; i < numCols-1; i++ {
@@ -93,7 +104,7 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 
 	isFirstRow := true
 	dataRemaining := false
-	systemRowsPerWrite := rowsPerWrite[transfer.Target.SystemType]
+	rowsPerWrite := defaultRowsPerWrite[transfer.Target.SystemType]
 
 	for i := 1; rows.Next(); i++ {
 		dataRemaining = true
@@ -117,7 +128,7 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 			return map[string]any{"": ""}, http.StatusInternalServerError, err
 		}
 		batchBuilder.WriteString(valToWrite)
-		if i%systemRowsPerWrite == 0 {
+		if i%rowsPerWrite == 0 {
 			stringToWrite := batchBuilder.String()
 			_, err := transfer.Target.Db.ExecContext(ctx, stringToWrite)
 			if err != nil {
@@ -145,19 +156,24 @@ func RunTransfer(ctx context.Context, transfer data.Transfer) (map[string]any, i
 }
 
 var (
-	createFormatters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
+	systemCreateFormatters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
 		"postgresql": formatters.PostgresqlCreateFormatters,
+		"mssql":      formatters.MssqlCreateFormatters,
 	}
 	systemMidStringValFormatters = map[string]map[string]func(value interface{}) (string, error){
 		"postgresql": formatters.PostgresqlMidStringValFormatters,
+		"mssql":      formatters.MssqlMidStringValFormatters,
 	}
 	systemEndStringValFormatters = map[string]map[string]func(value interface{}) (string, error){
 		"postgresql": formatters.PostgresqlEndStringValFormatters,
+		"mssql":      formatters.MssqlEndStringValFormatters,
 	}
-	rowsPerWrite = map[string]int{
+	defaultRowsPerWrite = map[string]int{
 		"postgresql": 1000,
+		"mssql":      1000,
 	}
 	dropTableCommandStarters = map[string]string{
 		"postgresql": "drop table if exists",
+		"mssql":      "drop table if exists",
 	}
 )

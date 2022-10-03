@@ -54,9 +54,9 @@ test/engine: build/sqlpipe
 	&& docker-compose up --build -d \
 	&& sleep 5 \
 	&& go test -v -count=1 -run Connection ./... \
-	&& go test -v -count=1 -run Create ./...  \
-	&& go test -v -count=1 -run Insert ./...  
-# && go test -v -count=1 -run Transfers ./...
+	&& go test -v -count=1 -run Create ./... \
+	&& go test -v -count=1 -run Insert ./... \
+	&& go test -v -count=1 -run Transfers ./...
 
 ## test/delve: run tests with delve
 .PHONY: test/delve
