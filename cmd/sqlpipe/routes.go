@@ -19,7 +19,6 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodPost, "/v1/transfer", app.authenticate(app.runTransferHandler))
 	router.HandlerFunc(http.MethodPost, "/v1/csv/download", app.authenticate(app.runCsvDownloadHandler))
 	router.HandlerFunc(http.MethodPost, "/v1/csv/save-on-server", app.authenticate(app.runCsvSaveOnServerHandler))
-	// router.HandlerFunc(http.MethodPost, "/v1/csv/s3", app.authenticate(app.runS3ExportHandler))
 
 	router.Handler(http.MethodGet, "/debug/vars", expvar.Handler())
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/shomali11/xsql"
 	"github.com/sqlpipe/sqlpipe/internal/data"
-	"github.com/sqlpipe/sqlpipe/internal/engine/queries"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
@@ -51,7 +50,7 @@ func (app *application) runQueryHandler(w http.ResponseWriter, r *http.Request) 
 
 	var message string
 
-	rows, err := queries.RunQuery(r.Context(), *query)
+	rows, err := query.Source.Db.QueryContext(r.Context(), query.Query)
 	if err != nil {
 		switch {
 		case err.Error() == "Stmt did not create a result set":

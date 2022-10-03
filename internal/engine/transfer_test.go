@@ -10,7 +10,6 @@ import (
 	_ "github.com/sqlpipe/odbc"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
-	"github.com/sqlpipe/sqlpipe/internal/engine/queries"
 	"github.com/sqlpipe/sqlpipe/internal/engine/transfers"
 )
 
@@ -139,7 +138,7 @@ func TestTransfers(t *testing.T) {
 			}
 
 			if tt.checkQuery != "" {
-				rows, err := queries.RunQuery(ctx, data.Query{Source: tt.targetCheckSource, Query: tt.checkQuery})
+				rows, err := tt.targetCheckSource.Db.QueryContext(ctx, tt.checkQuery)
 				if err != nil && err.Error() != tt.expectedErr {
 					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err.Error())
 				}

@@ -8,9 +8,6 @@ import (
 
 	"github.com/shomali11/xsql"
 	_ "github.com/sqlpipe/odbc"
-
-	"github.com/sqlpipe/sqlpipe/internal/data"
-	"github.com/sqlpipe/sqlpipe/internal/engine/queries"
 )
 
 var createTests = []setupTest{
@@ -50,13 +47,14 @@ func TestCreate(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := queries.RunQuery(ctx, data.Query{Source: tt.source, Query: tt.testQuery})
+
+			_, err := tt.source.Db.QueryContext(ctx, tt.testQuery)
 			if err != nil && err.Error() != tt.expectedErr {
 				t.Fatalf("unable to run test query, err: %v\n", err)
 			}
 
 			if tt.checkQuery != "" {
-				rows, err := queries.RunQuery(ctx, data.Query{Source: tt.source, Query: tt.checkQuery})
+				rows, err := tt.source.Db.QueryContext(ctx, tt.checkQuery)
 				if err != nil && err.Error() != tt.expectedErr {
 					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err.Error())
 				}

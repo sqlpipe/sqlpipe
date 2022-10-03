@@ -20,6 +20,7 @@ func RunTransfer(
 	if err != nil {
 		return fmt.Errorf("error running query on source: %v", err.Error())
 	}
+	defer rows.Close()
 
 	columnNames, err := rows.Columns()
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -28,12 +29,30 @@ func (app *application) writeJSON(w http.ResponseWriter, status int, data map[st
 	return nil
 }
 
+func (app *application) writeCSV(w http.ResponseWriter, status int, file *os.File, headers http.Header) error {
+	for key, value := range headers {
+		w.Header()[key] = value
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment;filename=sqlpipe-export.csv")
+	w.WriteHeader(status)
+
+	fileBytes, err := os.ReadFile(file.Name())
+	if err != nil {
+		return err
+	}
+	w.Write(fileBytes)
+
+	return nil
+}
+
 func (app *application) writePlaintext(w http.ResponseWriter, status int, data string, headers http.Header) error {
 	for key, value := range headers {
 		w.Header()[key] = value
 	}
 
-	w.Header().Set("Content-Type", " text/plain")
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
 	w.Write([]byte(data))
 

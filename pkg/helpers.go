@@ -2,7 +2,9 @@ package pkg
 
 import (
 	"crypto/rand"
+	"io/ioutil"
 	"math/big"
+	"os"
 )
 
 func RandomCharacters(length int) (string, error) {
@@ -83,4 +85,18 @@ func RandomCharacters(length int) (string, error) {
 	}
 
 	return randomString, nil
+}
+
+func IsValidPath(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
+	}
+
+	var b []byte
+	if err := ioutil.WriteFile(path, b, 0644); err == nil {
+		os.Remove(path)
+		return true
+	}
+
+	return false
 }
