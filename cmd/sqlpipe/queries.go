@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
+	"github.com/shomali11/xsql"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/engine/queries"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
@@ -27,7 +28,6 @@ func (app *application) runQueryHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	v := validator.New()
-
 	if data.ValidateQuery(v, query); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
@@ -49,15 +49,27 @@ func (app *application) runQueryHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result, statusCode, err := queries.RunQuery(r.Context(), *query)
+	var message string
+
+	rows, err := queries.RunQuery(r.Context(), *query)
 	if err != nil {
-		app.errorResponse(w, r, statusCode, err)
+		switch {
+		case err.Error() == "Stmt did not create a result set":
+			message = "Query ran successfully but did not product a result set."
+		default:
+			app.errorResponse(w, r, http.StatusBadRequest, err)
+			return
+		}
+	}
+	defer rows.Close()
+
+	message, err = xsql.Pretty(rows)
+	if err != nil {
+		app.errorResponse(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	headers := make(http.Header)
-
-	err = app.writePlaintext(w, http.StatusOK, result, headers)
+	err = app.writePlaintext(w, http.StatusOK, message, make(http.Header))
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}

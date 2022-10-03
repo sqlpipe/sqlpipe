@@ -9,200 +9,100 @@ import (
 
 var dbValReplacer = strings.NewReplacer(`'`, `''`, "{", "(", "}", ")")
 
-func RawXcommaXnull(value interface{}) (string, error) {
+func RawXnull(value interface{}, terminator string) (formattedValue string, err error) {
 	if value == nil {
-		return "null,", nil
+		return fmt.Sprintf("null%v", terminator), nil
 	}
-	return fmt.Sprintf("%v,", value), nil
+	return fmt.Sprintf("%v%v", value, terminator), nil
 }
 
-func RawXparenthesisXnull(value interface{}) (string, error) {
+func QuotedXnull(value interface{}, terminator string) (formattedValue string, err error) {
 	if value == nil {
-		return "null)", nil
+		return fmt.Sprintf("null%v", terminator), nil
 	}
-	return fmt.Sprintf("%v)", value), nil
+	return fmt.Sprintf("'%v'%v", value, terminator), nil
 }
 
-func QuotedXcommaXnull(value interface{}) (string, error) {
+func CastToBoolWriteTextEquivalentXnull(value interface{}, terminator string) (formattedValue string, err error) {
 	if value == nil {
-		return "null,", nil
-	}
-	return fmt.Sprintf("'%v',", value), nil
-}
-
-func QuotedXparenthesisXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null)", nil
-	}
-	return fmt.Sprintf("'%v')", value), nil
-}
-
-func CastToBoolWriteTextEquivalentXcommaXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null,", nil
+		return fmt.Sprintf("null%v", terminator), nil
 	}
 	valBool, ok := value.(bool)
 	if !ok {
-		return "", errors.New("castToBool unable to cast value to bool")
+		return "", errors.New("CastToBoolWriteTextEquivalentXnull unable to cast value to bool")
 	}
 
-	return fmt.Sprintf("%v,", valBool), nil
+	return fmt.Sprintf("%v%v", valBool, terminator), nil
 }
 
-func CastToBoolWriteTextEquivalentXparenthesisXnull(value interface{}) (string, error) {
+func CastToBoolWriteBinaryEquivalentXnull(value interface{}, terminator string) (formattedValue string, err error) {
 	if value == nil {
-		return "null)", nil
+		return fmt.Sprintf("null%v", terminator), nil
 	}
 	valBool, ok := value.(bool)
 	if !ok {
-		return "", errors.New("castToBool unable to cast value to bool")
-	}
-
-	return fmt.Sprintf("%v)", valBool), nil
-}
-
-func CastToBoolWriteBinaryEquivalentXcommaXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null,", nil
-	}
-	valBool, ok := value.(bool)
-	if !ok {
-		return "", errors.New("castToBool unable to cast value to bool")
+		return "", errors.New("CastToBoolWriteBinaryEquivalentXnull unable to cast value to bool")
 	}
 
 	if valBool {
-		return "1,", nil
+		return fmt.Sprintf("1%v", terminator), nil
 	} else {
-		return "0,", nil
+		return fmt.Sprintf("0%v", terminator), nil
 	}
 }
 
-func CastToBoolWriteBinaryEquivalentXparenthesisXnull(value interface{}) (string, error) {
+func CastToBytesCastToStringPrintQuotedXnull(value interface{}, terminator string) (formattedValue string, err error) {
 	if value == nil {
-		return "null)", nil
-	}
-	valBool, ok := value.(bool)
-	if !ok {
-		return "", errors.New("castToBool unable to cast value to bool")
-	}
-
-	if valBool {
-		return "1)", nil
-	} else {
-		return "0)", nil
-	}
-}
-
-func CastToBytesCastToStringPrintQuotedXcommaXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null,", nil
+		return fmt.Sprintf("null%v", terminator), nil
 	}
 	valBytes, ok := value.([]byte)
 	if !ok {
-		return "", errors.New("castToBytesCastToStringPrintQuoted unable to cast value to bytes")
+		return "", errors.New("CastToBytesCastToStringPrintQuotedXnull unable to cast value to bytes")
 	}
-	valString := string(valBytes)
-	escaped := dbValReplacer.Replace(valString)
-	return fmt.Sprintf("'%v',", escaped), nil
+	escaped := dbValReplacer.Replace(string(valBytes))
+	return fmt.Sprintf("'%v'%v", escaped, terminator), nil
 }
 
-func CastToBytesCastToStringPrintQuotedXparenthesisXnull(value interface{}) (string, error) {
+func CastToTimeFormatToDateStringXnull(value interface{}, terminator string) (formattedValue string, err error) {
 	if value == nil {
-		return "null)", nil
+		return fmt.Sprintf("null%v", terminator), nil
+	}
+	valTime, ok := value.(time.Time)
+	if !ok {
+		return "", errors.New("CastToTimeFormatToDateStringXnull unable to cast value to bytes")
+	}
+	return fmt.Sprintf("'%v'%v", valTime.Format("2006/01/02"), terminator), nil
+}
+
+func CastToTimeFormatToTimeStringXnull(value interface{}, terminator string) (formattedValue string, err error) {
+	if value == nil {
+		return fmt.Sprintf("null%v", terminator), nil
+	}
+	valTime, ok := value.(time.Time)
+	if !ok {
+		return "", errors.New("CastToTimeFormatToTimeStringXnull unable to cast value to bytes")
+	}
+	return fmt.Sprintf("'%v'%v", valTime.Format("15:04:05.999999999"), terminator), nil
+}
+
+func CastToTimeFormatToTimetampStringXnull(value interface{}, terminator string) (formattedValue string, err error) {
+	if value == nil {
+		return fmt.Sprintf("null%v", terminator), nil
+	}
+	valTime, ok := value.(time.Time)
+	if !ok {
+		return "", errors.New("CastToTimeFormatToTimetampStringXnull unable to cast value to bytes")
+	}
+	return fmt.Sprintf("'%v'%v", valTime.Format(time.RFC3339Nano), terminator), nil
+}
+
+func CastToBytesCastToStringPrintQuotedHexXnull(value interface{}, terminator string) (formattedValue string, err error) {
+	if value == nil {
+		return fmt.Sprintf("null%v", terminator), nil
 	}
 	valBytes, ok := value.([]byte)
 	if !ok {
-		return "", errors.New("castToBytesCastToStringPrintQuoted unable to cast value to bytes")
+		return "", errors.New("CastToBytesCastToStringPrintQuotedHexXnull unable to cast value to bytes")
 	}
-	valString := string(valBytes)
-	escaped := dbValReplacer.Replace(valString)
-	return fmt.Sprintf("'%v')", escaped), nil
-}
-
-func CastToTimeFormatToDateStringXcommaXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null,", nil
-	}
-	valTime, ok := value.(time.Time)
-	if !ok {
-		return "", errors.New("castToTimeFormatToDateString unable to cast value to bytes")
-	}
-	return fmt.Sprintf("'%v',", valTime.Format("2006/01/02")), nil
-}
-
-func CastToTimeFormatToDateStringXparenthesisXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null)", nil
-	}
-	valTime, ok := value.(time.Time)
-	if !ok {
-		return "", errors.New("castToTimeFormatToDateString unable to cast value to bytes")
-	}
-	return fmt.Sprintf("'%v')", valTime.Format("2006/01/02")), nil
-}
-
-func CastToTimeFormatToTimeStringXcommaXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null,", nil
-	}
-	valTime, ok := value.(time.Time)
-	if !ok {
-		return "", errors.New("castToTimeFormatToTimeString unable to cast value to bytes")
-	}
-	return fmt.Sprintf("'%v',", valTime.Format("15:04:05.999999999")), nil
-}
-
-func CastToTimeFormatToTimeStringXparenthesisXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null)", nil
-	}
-	valTime, ok := value.(time.Time)
-	if !ok {
-		return "", errors.New("castToTimeFormatToTimeString unable to cast value to bytes")
-	}
-	return fmt.Sprintf("'%v')", valTime.Format("15:04:05.999999999")), nil
-}
-
-func CastToTimeFormatToTimetampStringXcommaXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null,", nil
-	}
-	valTime, ok := value.(time.Time)
-	if !ok {
-		return "", errors.New("castToTimeFormatToTimetampString unable to cast value to bytes")
-	}
-	return fmt.Sprintf("'%v',", valTime.Format(time.RFC3339Nano)), nil
-}
-
-func CastToTimeFormatToTimetampStringXparenthesisXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null)", nil
-	}
-	valTime, ok := value.(time.Time)
-	if !ok {
-		return "", errors.New("castToTimeFormatToTimetampString unable to cast value to bytes")
-	}
-	return fmt.Sprintf("'%v')", valTime.Format(time.RFC3339Nano)), nil
-}
-
-func CastToBytesCastToStringPrintQuotedHexXcommaXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null,", nil
-	}
-	valBytes, ok := value.([]byte)
-	if !ok {
-		return "", errors.New("castToBytesCastToStringPrintQuotedHex unable to cast value to bytes")
-	}
-	return fmt.Sprintf("'%x',", string(valBytes)), nil
-}
-
-func CastToBytesCastToStringPrintQuotedHexXparenthesisXnull(value interface{}) (string, error) {
-	if value == nil {
-		return "null)", nil
-	}
-	valBytes, ok := value.([]byte)
-	if !ok {
-		return "", errors.New("castToBytesCastToStringPrintQuotedHex unable to cast value to bytes")
-	}
-	return fmt.Sprintf("'%x')", string(valBytes)), nil
+	return fmt.Sprintf("'%x'%v", string(valBytes), terminator), nil
 }

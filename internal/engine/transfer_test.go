@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/shomali11/xsql"
 	_ "github.com/sqlpipe/odbc"
 
 	"github.com/sqlpipe/sqlpipe/internal/data"
@@ -128,7 +129,7 @@ func TestTransfers(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, _, err := transfers.RunTransfer(
+			err := transfers.RunTransfer(
 				ctx,
 				tt.transfer,
 			)
@@ -138,10 +139,14 @@ func TestTransfers(t *testing.T) {
 			}
 
 			if tt.checkQuery != "" {
-				result, _, err := queries.RunQuery(ctx, data.Query{Source: tt.targetCheckSource, Query: tt.checkQuery})
-
+				rows, err := queries.RunQuery(ctx, data.Query{Source: tt.targetCheckSource, Query: tt.checkQuery})
 				if err != nil && err.Error() != tt.expectedErr {
 					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err.Error())
+				}
+				defer rows.Close()
+				result, err := xsql.Pretty(rows)
+				if err != nil {
+					t.Fatalf("unable to format query results, err: %v\n", err)
 				}
 
 				if !reflect.DeepEqual(result, tt.checkResult) {

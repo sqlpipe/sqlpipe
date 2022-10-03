@@ -31,14 +31,12 @@ func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	v := validator.New()
-
 	if data.ValidateTransfer(v, transfer); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 
-	var sourceDb *sql.DB
-	sourceDb, err = sql.Open(
+	transfer.Source.Db, err = sql.Open(
 		"odbc",
 		transfer.Source.OdbcDsn,
 	)
@@ -47,15 +45,13 @@ func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	transfer.Source.Db = sourceDb
 	err = transfer.Source.Db.Ping()
 	if err != nil {
 		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	var targetDb *sql.DB
-	targetDb, err = sql.Open(
+	transfer.Target.Db, err = sql.Open(
 		"odbc",
 		transfer.Target.OdbcDsn,
 	)
@@ -63,22 +59,20 @@ func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Reques
 		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
-	transfer.Target.Db = targetDb
+
 	err = transfer.Target.Db.Ping()
 	if err != nil {
 		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	result, statusCode, err := transfers.RunTransfer(r.Context(), *transfer)
+	err = transfers.RunTransfer(r.Context(), *transfer)
 	if err != nil {
-		app.errorResponse(w, r, statusCode, err)
+		app.errorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	headers := make(http.Header)
-
-	err = app.writeJSON(w, http.StatusOK, result, headers)
+	err = app.writeJSON(w, http.StatusOK, map[string]any{"message": "success"}, make(http.Header))
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}
