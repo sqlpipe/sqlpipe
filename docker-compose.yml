@@ -14,8 +14,17 @@ services:
     container_name: mssql
     ports:
       - 1433:1433
-  # sqlpipe:
-  #   image: sqlpipe/sqlpipe
-  #   container_name: sqlpipe
-  #   ports:
-  #     - 9000:9000
+  mysql:
+    image: mysql:8.0.30-debian
+    environment:
+      - MYSQL_ROOT_PASSWORD=${PASSWORD}
+    container_name: mysql
+    ports:
+      - 3306:3306
+  sqlpipe:
+    build:
+      context: ./
+      dockerfile: dockerfile
+    container_name: sqlpipe
+    ports:
+      - 9000:9000

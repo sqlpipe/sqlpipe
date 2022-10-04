@@ -53,11 +53,11 @@ RUN rm -rf freetds-1.3
 
 # MySQL
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-RUN echo "deb http://repo.mysql.com/apt/ubuntu/ jammy  mysql-8.0" > /etc/apt/sources.list.d/mysql.list \
-RUN apt-get update \
-RUN apt-get install -y libodbc2 libodbcinst2 mysql-community-client-plugins \
-RUN curl -O http://repo.mysql.com/apt/ubuntu/pool/mysql-tools/m/mysql-connector-odbc/mysql-connector-odbc_8.0.30-1ubuntu22.04_amd64.deb \
-RUN dpkg -i mysql-connector-odbc_8.0.30-1ubuntu22.04_amd64.deb \
+RUN echo "deb http://repo.mysql.com/apt/ubuntu/ jammy  mysql-8.0" > /etc/apt/sources.list.d/mysql.list
+RUN apt-get update
+RUN apt-get install -y libodbc2 libodbcinst2 mysql-community-client-plugins
+RUN curl -O http://repo.mysql.com/apt/ubuntu/pool/mysql-tools/m/mysql-connector-odbc/mysql-connector-odbc_8.0.30-1ubuntu22.04_amd64.deb
+RUN dpkg -i mysql-connector-odbc_8.0.30-1ubuntu22.04_amd64.deb
 RUN rm mysql-connector-odbc_8.0.30-1ubuntu22.04_amd64.deb
 
 COPY build/mysql.driver.template /driver-templates

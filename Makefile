@@ -17,7 +17,7 @@ run/compose: build/docker
 run/sqlpipe:
 	go run ./cmd/sqlpipe
 
-## run/docker:
+## restart/compose:
 .PHONY: restart/compose
 restart/compose: build/docker
 	docker rm -f sqlpipe \
