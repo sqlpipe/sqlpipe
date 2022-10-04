@@ -58,7 +58,7 @@ func (app *application) runCsvSaveOnServerHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, map[string]any{"message": fmt.Sprintf("csv file written to: %v", file.Name())}, make(http.Header))
+	err = app.writeJSON(w, http.StatusOK, map[string]any{"message": fmt.Sprintf("csv file written to %v", file.Name())}, make(http.Header))
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}
@@ -115,14 +115,3 @@ func (app *application) runCsvDownloadHandler(w http.ResponseWriter, r *http.Req
 		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}
 }
-
-// func (app *application) runS3ExportHandler(w http.ResponseWriter, r *http.Request) {
-// 	// todo
-
-// 	headers := make(http.Header)
-
-// 	err := app.writeJSON(w, http.StatusOK, map[string]any{}, headers)
-// 	if err != nil {
-// 		app.errorResponse(w, r, http.StatusInternalServerError, err)
-// 	}
-// }
