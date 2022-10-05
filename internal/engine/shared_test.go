@@ -16,10 +16,11 @@ var (
 )
 
 type setupTest struct {
-	name        string      // name of test
-	source      data.Source //source to run query on
-	testQuery   string      // query
-	checkQuery  string      // query to test if the testQuery was successful
-	checkResult string      // expected result of checkQuery
-	expectedErr string      // if an error is expected, this will be the expected error
+	name             string      // name of test
+	source           data.Source //source to run query on
+	testQuery        string      // query
+	checkQuery       string      // query to test if the testQuery was successful
+	checkResult      string      // expected result of checkQuery
+	expectedErr      string      // if an error is expected, this will be the expected error
+	expectedCheckErr string      // if an error is expected during check query, this will be the expected error
 }

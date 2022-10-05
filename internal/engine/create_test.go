@@ -22,12 +22,21 @@ var createTests = []setupTest{
 	},
 	// MSSQL
 	{
-		name:        "mssqlwide_table create",
+		name:        "mssql wide_table create",
 		source:      mssqlTestSource,
 		testQuery:   `create table wide_table (mybigint bigint, mybit bit, mydecimal decimal(10,5), myint int, mymoney money, mynumeric numeric(11,7), mysmallint smallint, mysmallmoney smallmoney, mytinyint tinyint, myfloat float, myreal real, mydate date, mydatetime2 datetime2, mydatetime datetime, mydatetimeoffset datetimeoffset, mysmalldatetime smalldatetime, mytime time, mychar char(3), myvarchar varchar(20), mytext text, mynchar nchar(3), mynvarchar nvarchar(20), myntext ntext, mybinary binary(3), myvarbinary varbinary(30), myuniqueidentifier uniqueidentifier, myxml xml);`,
 		expectedErr: "Stmt did not create a result set",
 		checkQuery:  "select * from wide_table",
 		checkResult: " mybigint | mybit | mydecimal | myint | mymoney | mynumeric | mysmallint | mysmallmoney | mytinyint | myfloat | myreal | mydate | mydatetime2 | mydatetime | mydatetimeoffset | mysmalldatetime | mytime | mychar | myvarchar | mytext | mynchar | mynvarchar | myntext | mybinary | myvarbinary | myuniqueidentifier | myxml \n----------+-------+-----------+-------+---------+-----------+------------+--------------+-----------+---------+--------+--------+-------------+------------+------------------+-----------------+--------+--------+-----------+--------+---------+------------+---------+----------+-------------+--------------------+-------\n(0 rows)",
+	},
+	// MySQL
+	{
+		name:        "mysql wide_table create",
+		source:      mysqlTestSource,
+		testQuery:   `create table wide_table(myserial serial, mybit bit, mybit5 bit(5), mybit64 bit(64), mytinyint tinyint, mysmallint smallint, mymediumint mediumint, myint int, mybigint bigint, mydecimal decimal(10, 5), myfloat float, mydouble double, mydate date, mytime time, mydatetime datetime, mytimestamp timestamp, myyear year, mychar char(3), myvarchar varchar(200), mynchar nchar(3), mynvarchar nvarchar(200), mybinary binary(3), myvarbinary varbinary(200), mytinyblob tinyblob, mymediumblob mediumblob, myblob blob, mylongblob longblob, mytinytext tinytext, mytext text, mymediumtext mediumtext, mylongtext longtext, myenum ENUM('enumval1', 'enumval2'), myset SET('setval1', 'setval2'), myjson json);`,
+		expectedErr: "Stmt did not create a result set",
+		checkQuery:  "select * from wide_table",
+		checkResult: " myserial | mybit | mybit5 | mybit64 | mytinyint | mysmallint | mymediumint | myint | mybigint | mydecimal | myfloat | mydouble | mydate | mytime | mydatetime | mytimestamp | myyear | mychar | myvarchar | mynchar | mynvarchar | mybinary | myvarbinary | mytinyblob | mymediumblob | myblob | mylongblob | mytinytext | mytext | mymediumtext | mylongtext | myenum | myset | myjson \n----------+-------+--------+---------+-----------+------------+-------------+-------+----------+-----------+---------+----------+--------+--------+------------+-------------+--------+--------+-----------+---------+------------+----------+-------------+------------+--------------+--------+------------+------------+--------+--------------+------------+--------+-------+--------\n(0 rows)",
 	},
 }
 
@@ -55,17 +64,20 @@ func TestCreate(t *testing.T) {
 
 			if tt.checkQuery != "" {
 				rows, err := tt.source.Db.QueryContext(ctx, tt.checkQuery)
-				if err != nil && err.Error() != tt.expectedErr {
-					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedErr, err.Error())
-				}
-				defer rows.Close()
-				result, err := xsql.Pretty(rows)
-				if err != nil {
-					t.Fatalf("unable to format query results, err: %v\n", err)
+				if err != nil && err.Error() != tt.expectedCheckErr {
+					t.Fatalf("\nwanted error:\n%#v\n\ngot error:\n%#v\n", tt.expectedCheckErr, err.Error())
 				}
 
-				if !reflect.DeepEqual(result, tt.checkResult) {
-					t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, result)
+				if err == nil {
+					defer rows.Close()
+					result, err := xsql.Pretty(rows)
+					if err != nil {
+						t.Fatalf("unable to format query results, err: %v\n", err)
+					}
+
+					if !reflect.DeepEqual(result, tt.checkResult) {
+						t.Fatalf("\n\nWanted:\n%#v\n\nGot:\n%#v", tt.checkResult, result)
+					}
 				}
 			}
 		})

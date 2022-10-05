@@ -25,6 +25,13 @@ var dropTests = []setupTest{
 		testQuery:   `drop table if exists wide_table;`,
 		expectedErr: "Stmt did not create a result set",
 	},
+	// MySQL
+	{
+		name:        "mysql wide_table drop",
+		source:      mysqlTestSource,
+		testQuery:   `drop table if exists wide_table;`,
+		expectedErr: "Stmt did not create a result set",
+	},
 }
 
 func TestDrop(t *testing.T) {
