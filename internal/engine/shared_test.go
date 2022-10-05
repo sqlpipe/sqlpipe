@@ -10,6 +10,9 @@ var (
 	mssqlTestSource = data.Source{
 		OdbcDsn: "DRIVER=MSSQL;SERVER=localhost;PORT=1433;Database=master;UID=sa;PWD=Mypass123;TDS_Version=7.0",
 	}
+	mysqlTestSource = data.Source{
+		OdbcDsn: "DRIVER=MySQL;SERVER=localhost;PORT=3306;UID=root;database=mysql;PWD=Mypass123;",
+	}
 )
 
 type setupTest struct {

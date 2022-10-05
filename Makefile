@@ -52,7 +52,7 @@ build/delve:
 test/engine: build/sqlpipe
 	docker-compose down -v \
 	&& docker-compose up --build -d \
-	&& sleep 5 \
+	&& sleep 30 \
 	&& go test -v -count=1 -run Connection ./... \
 	&& go test -v -count=1 -run Create ./... \
 	&& go test -v -count=1 -run Insert ./... \
