@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 
 	"github.com/shomali11/xsql"
@@ -48,7 +49,7 @@ func (app *application) runQueryHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var message string
+	message := ""
 
 	rows, err := query.Source.Db.QueryContext(r.Context(), query.Query)
 	if err != nil {
@@ -60,16 +61,21 @@ func (app *application) runQueryHandler(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	defer rows.Close()
+	// defer rows.Close()
 
-	message, err = xsql.Pretty(rows)
-	if err != nil {
-		app.errorResponse(w, r, http.StatusInternalServerError, err)
-		return
+	if message == "" {
+		message, err = xsql.Pretty(rows)
+		if err != nil {
+			app.errorResponse(w, r, http.StatusInternalServerError, err)
+			return
+		}
 	}
+
+	fmt.Println(message)
 
 	err = app.writePlaintext(w, http.StatusOK, message, make(http.Header))
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}
+	fmt.Println("HERE")
 }

@@ -63,6 +63,16 @@ RUN rm mysql-connector-odbc_8.0.30-1ubuntu22.04_amd64.deb
 COPY build/mysql.driver.template /driver-templates
 RUN odbcinst -i -d -f /driver-templates/mysql.driver.template
 
+# ORACLE
+RUN curl -O https://download.oracle.com/otn_software/linux/instantclient/217000/instantclient-basiclite-linux.x64-21.7.0.0.0dbru.zip
+RUN apt-get install -y unzip
+RUN unzip instantclient-basiclite-linux.x64-21.7.0.0.0dbru.zip
+RUN rm instantclient-basiclite-linux.x64-21.7.0.0.0dbru.zip
+RUN curl -O https://download.oracle.com/otn_software/linux/instantclient/217000/instantclient-odbc-linux.x64-21.7.0.0.0dbru.zip
+RUN unzip instantclient-odbc-linux.x64-21.7.0.0.0dbru.zip
+RUN rm instantclient-odbc-linux.x64-21.7.0.0.0dbru.zip
+
+
 # Install SQLpipe
 WORKDIR /
 COPY /bin/sqlpipe /

@@ -21,10 +21,10 @@ services:
     container_name: mysql
     ports:
       - 3306:3306
-  # sqlpipe:
-  #   build:
-  #     context: ./
-  #     dockerfile: dockerfile
-  #   container_name: sqlpipe
-  #   ports:
-  #     - 9000:9000
+  sqlpipe:
+    build:
+      context: ./
+      dockerfile: dockerfile
+    container_name: sqlpipe
+    ports:
+      - 9000:9000

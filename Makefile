@@ -7,7 +7,6 @@ include .envrc
 ## run/compose: Run the test env using docker compose
 .PHONY: run/compose
 run/compose: build/docker
-	POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
 	docker-compose down -v \
 	&& docker-compose up --build -d \
 	&& docker-compose logs -f
@@ -23,6 +22,11 @@ restart/compose: build/docker
 	docker rm -f sqlpipe \
 	&& docker-compose up --build -d sqlpipe \
 	&& docker-compose logs -f
+
+## prod: run the cmd/prod application
+.PHONY: run/delve
+run/delve: build/delve
+	/home/ubuntu/go/bin/dlv exec ./bin/sqlpipe --
 
 # ==================================================================================== #
 # BUILD
@@ -50,10 +54,8 @@ build/delve:
 # test/engine: Test the engine
 .PHONY: test/engine
 test/engine: build/sqlpipe
-	docker-compose down -v \
-	&& docker-compose up --build -d \
-	&& sleep 30 \
-	&& go test -v -count=1 -run Connection ./... \
+	go test -v -count=1 -run Connection ./... \
+	&& go test -v -count=1 -run Drop ./... \
 	&& go test -v -count=1 -run Create ./... \
 	&& go test -v -count=1 -run Insert ./... \
 	&& go test -v -count=1 -run Transfers ./...
