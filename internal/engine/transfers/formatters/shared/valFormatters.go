@@ -74,6 +74,17 @@ func CastToTimeFormatToDateStringXnull(value interface{}, terminator string) (fo
 	return fmt.Sprintf("'%v'%v", valTime.Format("2006/01/02"), terminator), nil
 }
 
+func CastToTimeFormatToSnowflakeDateStringXnull(value interface{}, terminator string) (formattedValue string, err error) {
+	if value == nil {
+		return fmt.Sprintf("null%v", terminator), nil
+	}
+	valTime, ok := value.(time.Time)
+	if !ok {
+		return "", errors.New("CastToTimeFormatToSnowflakeDateStringXnull unable to cast value to bytes")
+	}
+	return fmt.Sprintf("'%v'%v", valTime.Format("2006-01-02 15:04:05.000000"), terminator), nil
+}
+
 func CastToTimeFormatToTimeStringXnull(value interface{}, terminator string) (formattedValue string, err error) {
 	if value == nil {
 		return fmt.Sprintf("null%v", terminator), nil
@@ -94,6 +105,17 @@ func CastToTimeFormatToTimetampStringXnull(value interface{}, terminator string)
 		return "", errors.New("CastToTimeFormatToTimetampStringXnull unable to cast value to bytes")
 	}
 	return fmt.Sprintf("'%v'%v", valTime.Format(time.RFC3339Nano), terminator), nil
+}
+
+func CastToTimeFormatToMysqlTimetampStringXnull(value interface{}, terminator string) (formattedValue string, err error) {
+	if value == nil {
+		return fmt.Sprintf("null%v", terminator), nil
+	}
+	valTime, ok := value.(time.Time)
+	if !ok {
+		return "", errors.New("CastToTimeFormatToTimetampStringXnull unable to cast value to bytes")
+	}
+	return fmt.Sprintf("'%v'%v", valTime.Format("2006-01-02 15:04:05.000000-07:00"), terminator), nil
 }
 
 func CastToBytesCastToStringPrintQuotedHexXnull(value interface{}, terminator string) (formattedValue string, err error) {

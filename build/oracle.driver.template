@@ -1,0 +1,3 @@
+[Oracle]
+Description = Oracle ODBC driver for Oracle
+Driver = /usr/lib/oracle/21/client64/lib/libsqora.so.21.1

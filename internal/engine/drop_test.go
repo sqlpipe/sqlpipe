@@ -32,6 +32,13 @@ var dropTests = []setupTest{
 		testQuery:   `drop table if exists wide_table;`,
 		expectedErr: "Stmt did not create a result set",
 	},
+	// Snowflake
+	{
+		name:        "snowflake wide_table drop",
+		source:      snowflakeTestSource,
+		testQuery:   `drop table if exists wide_table;`,
+		expectedErr: "Stmt did not create a result set",
+	},
 }
 
 func TestDrop(t *testing.T) {

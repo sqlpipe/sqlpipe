@@ -38,6 +38,15 @@ var createTests = []setupTest{
 		checkQuery:  "select * from wide_table",
 		checkResult: " myserial | mybit | mybit5 | mybit64 | mytinyint | mysmallint | mymediumint | myint | mybigint | mydecimal | myfloat | mydouble | mydate | mytime | mydatetime | mytimestamp | myyear | mychar | myvarchar | mynchar | mynvarchar | mybinary | myvarbinary | mytinyblob | mymediumblob | myblob | mylongblob | mytinytext | mytext | mymediumtext | mylongtext | myenum | myset | myjson \n----------+-------+--------+---------+-----------+------------+-------------+-------+----------+-----------+---------+----------+--------+--------+------------+-------------+--------+--------+-----------+---------+------------+----------+-------------+------------+--------------+--------+------------+------------+--------+--------------+------------+--------+-------+--------\n(0 rows)",
 	},
+	// Snowflake
+	{
+		name:        "snowflake wide_table create",
+		source:      snowflakeTestSource,
+		testQuery:   `create table public.wide_table (mynumber number(10, 5), myint int, myfloat float, myvarchar varchar, mybinary binary, myboolean boolean, mydate date, mytime time, mytimestamp_ltz timestamp_ltz, mytimestamp_ntz timestamp_ntz, mytimestamp_tz timestamptz, myvariant variant, myobject object, myarray array, mygeography geography);`,
+		expectedErr: "Stmt did not create a result set",
+		checkQuery:  "select * from wide_table",
+		checkResult: " MYNUMBER | MYINT | MYFLOAT | MYVARCHAR | MYBINARY | MYBOOLEAN | MYDATE | MYTIME | MYTIMESTAMP_LTZ | MYTIMESTAMP_NTZ | MYTIMESTAMP_TZ | MYVARIANT | MYOBJECT | MYARRAY | MYGEOGRAPHY \n----------+-------+---------+-----------+----------+-----------+--------+--------+-----------------+-----------------+----------------+-----------+----------+---------+-------------\n(0 rows)",
+	},
 }
 
 func TestCreate(t *testing.T) {

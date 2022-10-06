@@ -28,13 +28,17 @@ var connectionTests = []connectionTest{
 		name:   "mysql connection test",
 		source: mysqlTestSource,
 	},
+	{
+		name:   "snowflake connection test",
+		source: snowflakeTestSource,
+	},
 }
 
 func TestConnections(t *testing.T) {
 	var err error
 	for _, tt := range connectionTests {
 		t.Run(tt.name, func(t *testing.T) {
-			// t.Parallel()
+			t.Parallel()
 			tt.source.Db, err = sql.Open(
 				"odbc",
 				tt.source.OdbcDsn,

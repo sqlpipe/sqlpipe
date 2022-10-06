@@ -150,17 +150,25 @@ var (
 	systemCreateFormatters = map[string]map[string]func(column *sql.ColumnType, terminator string) (string, error){
 		"postgresql": formatters.PostgresqlCreateFormatters,
 		"mssql":      formatters.MssqlCreateFormatters,
+		"mysql":      formatters.MysqlCreateFormatters,
+		"snowflake":  formatters.SnowflakeCreateFormatters,
 	}
 	systemValFormatters = map[string]map[string]func(value interface{}, terminator string) (string, error){
 		"postgresql": formatters.PostgresqlValFormatters,
 		"mssql":      formatters.MssqlValFormatters,
+		"mysql":      formatters.MysqlValFormatters,
+		"snowflake":  formatters.SnowflakeValFormatters,
 	}
 	defaultRowsPerWrite = map[string]int{
 		"postgresql": 1000,
 		"mssql":      1000,
+		"mysql":      1000,
+		"snowflake":  1000,
 	}
 	dropTableCommandStarters = map[string]string{
 		"postgresql": "drop table if exists",
 		"mssql":      "drop table if exists",
+		"mysql":      "drop table if exists",
+		"snowflake":  "drop table if exists",
 	}
 )

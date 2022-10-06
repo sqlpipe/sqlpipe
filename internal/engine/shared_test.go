@@ -1,6 +1,11 @@
 package engine
 
-import "github.com/sqlpipe/sqlpipe/internal/data"
+import (
+	"fmt"
+	"os"
+
+	"github.com/sqlpipe/sqlpipe/internal/data"
+)
 
 var (
 	// Sources
@@ -12,6 +17,9 @@ var (
 	}
 	mysqlTestSource = data.Source{
 		OdbcDsn: "DRIVER=MySQL;SERVER=localhost;PORT=3306;UID=root;database=mysql;PWD=Mypass123;",
+	}
+	snowflakeTestSource = data.Source{
+		OdbcDsn: fmt.Sprintf("DRIVER=Snowflake;Server=%v.snowflakecomputing.com;PWD=%v;UID=%v;database=testing;schema=public;", os.Getenv("SNOWFLAKE_ACCOUNT"), os.Getenv("SNOWFLAKE_PASSWORD"), os.Getenv("SNOWFLAKE_USER")),
 	}
 )
 

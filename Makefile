@@ -16,6 +16,12 @@ run/compose: build/docker
 run/sqlpipe:
 	go run ./cmd/sqlpipe
 
+## run/oracle: Run SQLpipe locally
+.PHONY: run/oracle
+run/oracle: build/oracle
+	docker rm -f sqlpipe
+	docker run -it --name sqlpipe sqlpipe/sqlpipe bash
+
 ## restart/compose:
 .PHONY: restart/compose
 restart/compose: build/docker
@@ -39,8 +45,13 @@ build/sqlpipe:
 
 ## build/docker: Build SQLpipe in Docker
 .PHONY: build/docker
-build/docker: build/docker
+build/docker: build/sqlpipe
 	docker build -t sqlpipe/sqlpipe -f dockerfile .
+
+## build/oracle: Build SQLpipe in Docker
+.PHONY: build/oracle
+build/oracle: build/sqlpipe
+	docker build -t sqlpipe/sqlpipe -f oracle.dockerfile .
 
 ## build/delve: Build locally with delve friendly flags
 .PHONY: build/delve
@@ -54,11 +65,14 @@ build/delve:
 # test/engine: Test the engine
 .PHONY: test/engine
 test/engine: build/sqlpipe
-	go test -v -count=1 -run Connection ./... \
-	&& go test -v -count=1 -run Drop ./... \
-	&& go test -v -count=1 -run Create ./... \
-	&& go test -v -count=1 -run Insert ./... \
-	&& go test -v -count=1 -run Transfers ./...
+	export SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT}
+	export SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD}
+	export SNOWFLAKE_USER=${SNOWFLAKE_USER}
+	go test -v -count=1 -run Connection ./...
+	go test -v -count=1 -run Drop ./...
+	go test -v -count=1 -run Create ./...
+	go test -v -count=1 -run Insert ./...
+	go test -v -count=1 -run Transfers ./...
 
 ## test/delve: run tests with delve
 .PHONY: test/delve

@@ -24,7 +24,7 @@ services:
   # sqlpipe:
   #   build:
   #     context: ./
-  #     dockerfile: dockerfile
+  #     dockerfile: oracle.dockerfile
   #   container_name: sqlpipe
   #   ports:
   #     - 9000:9000
