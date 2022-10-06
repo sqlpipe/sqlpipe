@@ -96,7 +96,8 @@ func RunTransfer(
 
 	isFirstRow := true
 	dataRemaining := false
-	rowsPerWrite := defaultRowsPerWrite[transfer.Target.SystemType]
+	insertCheckType := insertCheckerTypes[transfer.Target.SystemType]
+	insertCheckNum := insertCheckerNums[transfer.Target.SystemType]
 
 	for i := 1; rows.Next(); i++ {
 		dataRemaining = true
@@ -120,16 +121,32 @@ func RunTransfer(
 			return fmt.Errorf("error running %v formatter on row-end value %v: %v", colDbTypes[numCols-1], vals[numCols-1], err)
 		}
 		batchBuilder.WriteString(valToWrite)
-		if i%rowsPerWrite == 0 {
-			_, err := transfer.Target.Db.ExecContext(ctx, batchBuilder.String())
-			if err != nil {
-				return fmt.Errorf("error running mid-batch insert statement: %v", err)
-			}
 
-			batchBuilder.Reset()
-			isFirstRow = true
-			dataRemaining = false
+		switch insertCheckType {
+		case "rows":
+			if i%insertCheckNum == 0 {
+				_, err := transfer.Target.Db.ExecContext(ctx, batchBuilder.String())
+				if err != nil {
+					return fmt.Errorf("error running mid-batch insert statement: %v", err)
+				}
+
+				batchBuilder.Reset()
+				isFirstRow = true
+				dataRemaining = false
+			}
+		default:
+			if batchBuilder.Len()%insertCheckNum == 0 {
+				_, err := transfer.Target.Db.ExecContext(ctx, batchBuilder.String())
+				if err != nil {
+					return fmt.Errorf("error running mid-batch insert statement: %v", err)
+				}
+
+				batchBuilder.Reset()
+				isFirstRow = true
+				dataRemaining = false
+			}
 		}
+
 	}
 
 	if dataRemaining {
@@ -159,16 +176,22 @@ var (
 		"mysql":      formatters.MysqlValFormatters,
 		"snowflake":  formatters.SnowflakeValFormatters,
 	}
-	defaultRowsPerWrite = map[string]int{
-		"postgresql": 1000,
-		"mssql":      1000,
-		"mysql":      1000,
-		"snowflake":  1000,
-	}
 	dropTableCommandStarters = map[string]string{
 		"postgresql": "drop table if exists",
 		"mssql":      "drop table if exists",
 		"mysql":      "drop table if exists",
 		"snowflake":  "drop table if exists",
+	}
+	insertCheckerTypes = map[string]string{
+		"postgresql": "length",
+		"mysql":      "length",
+		"mssql":      "rows",
+		"snowflake":  "rows",
+	}
+	insertCheckerNums = map[string]int{
+		"postgresql": 10000000,
+		"mysql":      4000000,
+		"mssql":      1000,
+		"snowflake":  3000,
 	}
 )
