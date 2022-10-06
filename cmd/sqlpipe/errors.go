@@ -17,7 +17,7 @@ func (app *application) errorResponse(w http.ResponseWriter, r *http.Request, st
 	app.logError(r, err)
 	env := map[string]any{"error": err.Error()}
 
-	err = app.writeJSON(w, status, env, nil)
+	err = app.respondWithJSON(w, status, env, nil)
 	if err != nil {
 		app.logError(r, err)
 		w.WriteHeader(500)
@@ -41,7 +41,7 @@ func (app *application) badRequestResponse(w http.ResponseWriter, r *http.Reques
 func (app *application) failedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
 	env := map[string]any{"error": errors}
 
-	err := app.writeJSON(w, http.StatusUnprocessableEntity, env, nil)
+	err := app.respondWithJSON(w, http.StatusUnprocessableEntity, env, nil)
 	if err != nil {
 		app.logError(r, err)
 		w.WriteHeader(500)

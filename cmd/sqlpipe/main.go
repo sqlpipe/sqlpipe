@@ -21,7 +21,7 @@ var (
 	version = vcs.Version()
 )
 
-type config struct {
+type appConfig struct {
 	port    int
 	token   string
 	secure  bool
@@ -33,13 +33,13 @@ type config struct {
 }
 
 type application struct {
-	config config
+	config appConfig
 	logger *jsonLog.Logger
 	wg     sync.WaitGroup
 }
 
 func main() {
-	var cfg config
+	var cfg appConfig
 
 	flag.IntVar(&cfg.port, "port", 9000, "API server port")
 

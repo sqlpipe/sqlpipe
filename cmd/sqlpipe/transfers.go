@@ -72,7 +72,7 @@ func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusOK, map[string]any{"message": "success"}, make(http.Header))
+	err = app.respondWithJSON(w, http.StatusOK, map[string]any{"message": "success"}, make(http.Header))
 	if err != nil {
 		app.errorResponse(w, r, http.StatusInternalServerError, err)
 	}

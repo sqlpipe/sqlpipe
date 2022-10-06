@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func (app *application) writeJSON(w http.ResponseWriter, status int, data map[string]any, headers http.Header) error {
+func (app *application) respondWithJSON(w http.ResponseWriter, status int, data map[string]any, headers http.Header) error {
 	js, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
 		return err
@@ -29,7 +29,7 @@ func (app *application) writeJSON(w http.ResponseWriter, status int, data map[st
 	return nil
 }
 
-func (app *application) writeCSV(w http.ResponseWriter, status int, file *os.File, headers http.Header) error {
+func (app *application) respondWithCSV(w http.ResponseWriter, status int, file *os.File, headers http.Header) error {
 	for key, value := range headers {
 		w.Header()[key] = value
 	}
