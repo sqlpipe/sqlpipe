@@ -6,5 +6,8 @@ Visit the [SQLpipe docs](https://docs.sqlpipe.com) for usage information.
 
 ## Types that don't work properly
 
-### Postgres
+### PostgreSQL
 - `BIT`
+
+### MySQL
+Geometry types.
