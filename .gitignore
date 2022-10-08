@@ -1,5 +1,5 @@
 .envrc
-bin/
+# bin/
 scratch/
 build/mysql-connector-odbc_8.0.30-1ubuntu20.04_amd64.deb
 build/mysql-connector-odbc_8.0.30-1ubuntu22.04_amd64.deb
