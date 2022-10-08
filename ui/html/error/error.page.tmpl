@@ -1,9 +1,0 @@
-{{ template "base" . }}
-{{ define "title" -}} Error {{- end }}
-{{ define "main" }}
-
-<!-- Title -->
-<h5 class="display-5 my-5">{{ template "title" . }}</h5>
-<p>{{.ErrorMessage}}</p>
-
-{{ end }}
