@@ -41,6 +41,5 @@ func ValidateS3Upload(v *validator.Validator, s3Upload *S3Upload) {
 	v.Check(s3Upload.AwsKey != "", "aws_key", "must be provided")
 	v.Check(s3Upload.AwsSecret != "", "aws_secret", "must be provided")
 	v.Check(s3Upload.S3Bucket != "", "s3_bucket", "must be provided")
-	v.Check(s3Upload.S3Dir != "", "s3_dir", "must be provided")
 	v.Check(s3Upload.FileName != "", "file_name", "must be provided")
 }

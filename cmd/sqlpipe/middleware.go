@@ -89,7 +89,7 @@ func (app *application) authenticate(next http.HandlerFunc) http.HandlerFunc {
 			authorizationHeader := r.Header.Get("Authorization")
 
 			if authorizationHeader == "" {
-				next.ServeHTTP(w, r)
+				app.invalidAuthenticationTokenResponse(w, r)
 				return
 			}
 

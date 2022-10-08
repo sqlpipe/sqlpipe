@@ -11,10 +11,11 @@ import (
 
 func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Source          data.Source `json:"source"`
-		Target          data.Target `json:"target"`
-		Query           string      `json:"query"`
-		DropTargetTable bool        `json:"drop_target_table"`
+		Source            data.Source `json:"source"`
+		Target            data.Target `json:"target"`
+		Query             string      `json:"query"`
+		DropTargetTable   bool        `json:"drop_target_table"`
+		CreateTargetTable bool        `json:"create_target_table"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -24,10 +25,11 @@ func (app *application) runTransferHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	transfer := &data.Transfer{
-		Source:          input.Source,
-		Target:          input.Target,
-		Query:           input.Query,
-		DropTargetTable: input.DropTargetTable,
+		Source:            input.Source,
+		Target:            input.Target,
+		Query:             input.Query,
+		DropTargetTable:   input.DropTargetTable,
+		CreateTargetTable: input.CreateTargetTable,
 	}
 
 	v := validator.New()

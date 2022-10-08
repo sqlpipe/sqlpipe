@@ -52,21 +52,6 @@ func RunTransfer(
 
 	valFormatters := systemValFormatters[transfer.Target.SystemType]
 
-	createQuery := fmt.Sprintf("create table %v%v(", schemaSpecifier, transfer.Target.Table)
-
-	for i := 0; i < numCols-1; i++ {
-		columnSpecifier, err := createFormatters[colDbTypes[i]](colTypes[i], ",")
-		if err != nil {
-			return fmt.Errorf("error running %v formatter on value %v: %v", colDbTypes[i], colTypes[i], err)
-		}
-		createQuery = createQuery + columnSpecifier
-	}
-	columnSpecifier, err := createFormatters[colDbTypes[numCols-1]](colTypes[numCols-1], ")")
-	if err != nil {
-		return fmt.Errorf("error running %v formatter on value %v: %v", colDbTypes[numCols-1], colTypes[numCols-1], err)
-	}
-	createQuery = createQuery + columnSpecifier
-
 	if transfer.DropTargetTable {
 		dropTableCommand := fmt.Sprintf(
 			"%v %v%v",
@@ -81,9 +66,26 @@ func RunTransfer(
 		}
 	}
 
-	_, err = transfer.Target.Db.ExecContext(ctx, createQuery)
-	if err != nil {
-		return fmt.Errorf("error running create table command: %v", err)
+	if transfer.CreateTargetTable {
+		createQuery := fmt.Sprintf("create table %v%v(", schemaSpecifier, transfer.Target.Table)
+
+		for i := 0; i < numCols-1; i++ {
+			columnSpecifier, err := createFormatters[colDbTypes[i]](colTypes[i], ",")
+			if err != nil {
+				return fmt.Errorf("error running %v formatter on value %v: %v", colDbTypes[i], colTypes[i], err)
+			}
+			createQuery = createQuery + columnSpecifier
+		}
+		columnSpecifier, err := createFormatters[colDbTypes[numCols-1]](colTypes[numCols-1], ")")
+		if err != nil {
+			return fmt.Errorf("error running %v formatter on value %v: %v", colDbTypes[numCols-1], colTypes[numCols-1], err)
+		}
+		createQuery = createQuery + columnSpecifier
+
+		_, err = transfer.Target.Db.ExecContext(ctx, createQuery)
+		if err != nil {
+			return fmt.Errorf("error running create table command: %v", err)
+		}
 	}
 
 	var batchBuilder strings.Builder
