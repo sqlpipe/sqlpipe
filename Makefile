@@ -46,7 +46,7 @@ build/sqlpipe:
 ## build/docker: Build SQLpipe in Docker
 .PHONY: build/docker
 build/docker: build/sqlpipe
-	docker build -t sqlpipe/sqlpipe -f dockerfile .
+	docker build -t sqlpipe/sqlpipe:v2 -f dockerfile .
 
 ## build/oracle: Build SQLpipe in Docker
 .PHONY: build/oracle
@@ -57,6 +57,15 @@ build/oracle: build/sqlpipe
 .PHONY: build/delve
 build/delve:
 	go build -o=./bin/sqlpipe ./cmd/sqlpipe
+
+# ==================================================================================== #
+# PUSH
+# ==================================================================================== #
+## push/docker: Push docker image
+.PHONY: push/docker
+push/docker: build/sqlpipe
+	docker build -t sqlpipe/sqlpipe:2.0.0 -f dockerfile .
+	docker push sqlpipe/sqlpipe
 
 # ==================================================================================== #
 # TEST
