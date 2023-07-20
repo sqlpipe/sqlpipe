@@ -4,50 +4,63 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 )
 
-func (app *application) logError(r *http.Request, err error) {
-	app.errorLog.Printf("error handling %s request to %s -> %v", r.Method, r.URL.String(), err)
+func transferError(transfer Transfer, err error) {
+
+	errorLog.Printf("error running transfer %v from %v to %v -> %v", transfer.Id, transfer.SourceType, transfer.TargetType, err)
+
+	transfer.Status = StatusError
+	transfer.Err = err.Error()
+	now := time.Now()
+	transfer.StoppedAt = &now
+
+	transferMap[transfer.Id] = transfer
 }
 
-func (app *application) clientErrorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
+func logError(r *http.Request, err error) {
+	errorLog.Printf("error handling %s request to %s -> %v", r.Method, r.URL.String(), err)
+}
+
+func clientErrorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
 	env := envelope{"error": err.Error()}
 
-	err = app.writeJSON(w, status, env, nil)
+	err = writeJSON(w, status, env, nil)
 	if err != nil {
-		app.logError(r, err)
+		logError(r, err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
-func (app *application) errorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
-	app.logError(r, err)
+func errorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
+	logError(r, err)
 
 	env := envelope{"error": err.Error()}
 
-	err = app.writeJSON(w, status, env, nil)
+	err = writeJSON(w, status, env, nil)
 	if err != nil {
-		app.logError(r, err)
+		logError(r, err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
-func (app *application) notFoundResponse(w http.ResponseWriter, r *http.Request) {
+func notFoundResponse(w http.ResponseWriter, r *http.Request) {
 	err := errors.New("the requested resource could not be found")
-	app.errorResponse(w, r, http.StatusNotFound, err)
+	errorResponse(w, r, http.StatusNotFound, err)
 }
 
-func (app *application) methodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
+func methodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
 	err := fmt.Errorf("the %s method is not supported for this resource", r.Method)
-	app.errorResponse(w, r, http.StatusMethodNotAllowed, err)
+	errorResponse(w, r, http.StatusMethodNotAllowed, err)
 }
 
-func (app *application) failedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
+func failedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
 	env := envelope{"error": errors}
 
-	err := app.writeJSON(w, http.StatusUnprocessableEntity, env, nil)
+	err := writeJSON(w, http.StatusUnprocessableEntity, env, nil)
 	if err != nil {
-		app.logError(r, err)
+		logError(r, err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }

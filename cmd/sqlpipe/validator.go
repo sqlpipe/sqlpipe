@@ -1,8 +1,6 @@
 package main
 
-import (
-	"regexp"
-)
+import "fmt"
 
 type validator struct {
 	errors map[string]string
@@ -37,27 +35,32 @@ func permittedValue[T comparable](value T, permittedValues ...T) bool {
 	return false
 }
 
-func matches(value string, rx *regexp.Regexp) bool {
-	return rx.MatchString(value)
-}
+var permittedSources = []string{"postgresql", "mysql", "mssql", "oracle", "snowflake"}
+var permittedTargets = []string{"postgresql", "mysql", "mssql", "oracle", "snowflake"}
 
-func unique[T comparable](values []T) bool {
-	uniqueValues := make(map[T]bool)
+var schemaRequired = map[string]bool{"postgresql": true, "mysql": false, "mssql": true, "oracle": true, "snowflake": true}
 
-	for _, value := range values {
-		uniqueValues[value] = true
-	}
-
-	return len(values) == len(uniqueValues)
-}
-
-func validateTransfer(v validator, transfer transfer) {
-	v.check(transfer.SourceName != "", "source-name", "must be provided")
+func validateTransfer(v validator, transfer Transfer) {
+	v.check(transfer.SourceType != "", "source-type", "must be provided")
+	v.check(permittedValue(transfer.SourceType, permittedSources...), "source-type", fmt.Sprintf("must be one of %v", permittedSources))
 	v.check(transfer.SourceConnectionString != "", "source-connection-string", "must be provided")
 
-	v.check(transfer.TargetName != "", "target-name", "must be provided")
+	v.check(transfer.TargetType != "", "target-type", "must be provided")
+	v.check(permittedValue(transfer.TargetType, permittedTargets...), "target-type", fmt.Sprintf("must be one of %v", permittedTargets))
 	v.check(transfer.TargetConnectionString != "", "target-connection-string", "must be provided")
 
 	v.check(transfer.Query != "", "query", "must be provided")
 	v.check(transfer.TargetTable != "", "target-table", "must be provided")
+
+	if schemaRequired[transfer.TargetType] {
+		v.check(transfer.TargetSchema != "", "target-schema", fmt.Sprintf("must be provided for target type %v", transfer.TargetType))
+	}
+
+	if transfer.SourceName == "" {
+		panic("source name not set")
+	}
+
+	if transfer.TargetName == "" {
+		panic("target name not set")
+	}
 }

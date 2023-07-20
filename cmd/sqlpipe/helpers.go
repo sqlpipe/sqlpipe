@@ -6,40 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strconv"
+	"runtime/debug"
 	"strings"
-
-	"github.com/julienschmidt/httprouter"
 )
-
-func (app *application) readIdParam(r *http.Request) string {
-	params := httprouter.ParamsFromContext(r.Context())
-	return params.ByName("id")
-}
 
 type envelope map[string]any
 
-func (app *application) writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
-	js, err := json.MarshalIndent(data, "", "\t")
-	if err != nil {
-		return err
-	}
-
-	js = append(js, '\n')
-
-	for key, value := range headers {
-		w.Header()[key] = value
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write(js)
-
-	return nil
-}
-
-func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+func readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	maxBytes := 1_048_576
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
 
@@ -92,55 +65,90 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any
 	return nil
 }
 
-func (app *application) readString(qs url.Values, key string, defaultValue string) string {
-	s := qs.Get(key)
-
-	if s == "" {
-		return defaultValue
-	}
-
-	return s
-}
-
-func (app *application) readCSV(qs url.Values, key string, defaultValue []string) []string {
-	csv := qs.Get(key)
-
-	if csv == "" {
-		return defaultValue
-	}
-
-	return strings.Split(csv, ",")
-}
-
-func (app *application) readInt(qs url.Values, key string, defaultValue int, v *validator) int {
-	s := qs.Get(key)
-
-	if s == "" {
-		return defaultValue
-	}
-
-	i, err := strconv.Atoi(s)
+func writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
+	js, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
-		v.addError(key, "must be an integer value")
-		return defaultValue
+		return err
 	}
 
-	return i
+	js = append(js, '\n')
+
+	for key, value := range headers {
+		w.Header()[key] = value
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(js)
+
+	return nil
 }
 
-func (app *application) background(fn func()) {
-	app.wg.Add(1)
+func ProgramVersion() string {
+	var revision string
+	var modified bool
 
-	go func() {
+	bi, ok := debug.ReadBuildInfo()
+	if ok {
+		for _, s := range bi.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				revision = s.Value
+			case "vcs.modified":
+				if s.Value == "true" {
+					modified = true
+				}
+			}
+		}
+	}
 
-		defer app.wg.Done()
+	if modified {
+		return fmt.Sprintf("%s-dirty", revision)
+	}
 
+	return revision
+}
+
+func healthcheckHandler(w http.ResponseWriter, r *http.Request) {
+	env := map[string]any{
+		"status": "available",
+		"system_info": map[string]string{
+			"version": version,
+		},
+	}
+
+	err := writeJSON(w, http.StatusOK, env, nil)
+	if err != nil {
+		errorResponse(w, r, http.StatusInternalServerError, err)
+	}
+}
+
+func recoverPanic(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				app.errorLog.Println(fmt.Errorf("%s", err))
+				w.Header().Set("Connection", "close")
+				errorResponse(w, r, http.StatusInternalServerError, fmt.Errorf("%s", err))
 			}
 		}()
 
-		fn()
-	}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func getDriver(systemType string) string {
+	switch systemType {
+	case "postgresql":
+		return "pgx"
+	case "mysql":
+		return "mysql"
+	case "mssql":
+		return "sqlserver"
+	case "oracle":
+		return "oracle"
+	case "snowflake":
+		return "snowflake"
+	default:
+		panic("unknown driver")
+	}
 }

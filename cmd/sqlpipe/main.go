@@ -1,42 +1,26 @@
 package main
 
 import (
-	"expvar"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
-	"runtime"
-	"sync"
 	"time"
-
-	_ "github.com/lib/pq"
 )
 
 var (
-	version = ProgramVersion()
+	version  = ProgramVersion()
+	port     int
+	workDir  string
+	infoLog  = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
-type config struct {
-	port    int
-	workDir string
-}
-
-type application struct {
-	config   config
-	errorLog *log.Logger
-	infoLog  *log.Logger
-	wg       sync.WaitGroup
-}
-
 func main() {
-	var cfg config
-
-	flag.IntVar(&cfg.port, "port", 9000, "API server port")
-	flag.StringVar(&cfg.workDir, "work-dir", "", "Working directory")
-
+	flag.IntVar(&port, "port", 9000, "API server port")
+	flag.StringVar(&workDir, "work-dir", "", "Working directory")
 	displayVersion := flag.Bool("version", false, "Display version and exit")
-
 	flag.Parse()
 
 	if *displayVersion {
@@ -44,24 +28,18 @@ func main() {
 		os.Exit(0)
 	}
 
-	expvar.NewString("version").Set(version)
-
-	expvar.Publish("goroutines", expvar.Func(func() any {
-		return runtime.NumGoroutine()
-	}))
-
-	expvar.Publish("timestamp", expvar.Func(func() any {
-		return time.Now().Unix()
-	}))
-
-	app := &application{
-		config:   cfg,
-		infoLog:  log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime),
-		errorLog: log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile),
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", port),
+		Handler:      routes(),
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 
-	err := app.serve()
+	infoLog.Printf("starting SQLpipe on port %d\n", port)
+
+	err := srv.ListenAndServe()
 	if err != nil {
-		app.errorLog.Fatalln(err)
+		errorLog.Fatal(err)
 	}
 }

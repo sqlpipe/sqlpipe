@@ -23,6 +23,13 @@ confirm:
 run/sqlpipe:
 	go run ./cmd/sqlpipe
 
+## compose: run docker-compose
+.PHONY: compose
+compose:
+	docker-compose down -v
+	docker-compose up --build -d
+	docker-compose logs -f
+
 # ==================================================================================== #
 # QUALITY CONTROL
 # ==================================================================================== #

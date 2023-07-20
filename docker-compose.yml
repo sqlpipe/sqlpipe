@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Mypass123
+    platform: linux/amd64
+    ports:
+      - "1433:1433"
+
+  # babelfish:
+  #   platform: linux/amd64
+  #   image: jonathanpotts/babelfishpg:2.3.0
+  #   ports:
+  #     - "5432:5432"
+  #     - "1434:1433"
+  
+  postgresql:
+    # platform: linux/arm64
+    image: postgres:15.3
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_PASSWORD=Mypass123
