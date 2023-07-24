@@ -7,12 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
-
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "github.com/microsoft/go-mssqldb"
-	_ "github.com/sijms/go-ora/v2"
-	_ "github.com/snowflakedb/gosnowflake"
 )
 
 var (
@@ -53,16 +47,14 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		SourceName             string `json:"source-name"`
 		SourceType             string `json:"source-type"`
 		SourceConnectionString string `json:"source-connection-string"`
-
 		TargetName             string `json:"target-name"`
 		TargetType             string `json:"target-type"`
 		TargetConnectionString string `json:"target-connection-string"`
 		TargetSchema           string `json:"target-schema"`
-
-		Query             string `json:"query"`
-		TargetTable       string `json:"target-table"`
-		DropTargetTable   bool   `json:"drop-target-table"`
-		CreateTargetTable bool   `json:"create-target-table"`
+		Query                  string `json:"query"`
+		TargetTable            string `json:"target-table"`
+		DropTargetTable        bool   `json:"drop-target-table"`
+		CreateTargetTable      bool   `json:"create-target-table"`
 	}
 
 	err := readJSON(w, r, &input)
@@ -90,15 +82,9 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		CreateTargetTable:      input.CreateTargetTable,
 	}
 
-	if transfer.SourceName == "" {
-		transfer.SourceName = transfer.SourceType
-	}
-	if transfer.TargetName == "" {
-		transfer.TargetName = transfer.TargetType
-	}
+	transfer = setSourceAndTargetName(transfer)
 
 	v := newValidator()
-
 	if validateTransfer(v, transfer); !v.valid() {
 		failedValidationResponse(w, r, v.errors)
 		return
@@ -106,7 +92,87 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 
 	transferMap[transfer.Id] = transfer
 
-	go runTransfer(transfer)
+	go func() {
+		sourceSystem, err := newSystem(
+			transfer.SourceType,
+			transfer.SourceName,
+			transfer.SourceConnectionString,
+			transfer.SourceDriver,
+		)
+		if err != nil {
+			transferError(transfer, fmt.Errorf("error creating source system -> %v", err))
+			return
+		}
+
+		targetSystem, err := newSystem(
+			transfer.TargetType,
+			transfer.TargetName,
+			transfer.TargetConnectionString,
+			transfer.TargetDriver,
+		)
+		if err != nil {
+			transferError(transfer, fmt.Errorf("error creating target system -> %v", err))
+			return
+		}
+
+		if transfer.DropTargetTable {
+			err = targetSystem.dropTable(transfer.TargetSchema, transfer.TargetTable)
+			if err != nil {
+				transferError(transfer, fmt.Errorf("error dropping target table -> %v", err))
+				return
+			}
+		}
+
+		rows, err := sourceSystem.connection.Query(transfer.Query)
+		if err != nil {
+			transferError(transfer, fmt.Errorf("error querying source -> %v", err))
+			return
+		}
+		defer rows.Close()
+
+		cols, err := rows.Columns()
+		if err != nil {
+			transferError(transfer, fmt.Errorf("error getting source columns -> %v", err))
+			return
+		}
+		numCols := len(cols)
+
+		colVals := make([]interface{}, numCols)
+		colPtrs := make([]interface{}, numCols)
+		for i := range colPtrs {
+			colPtrs[i] = &colVals[i]
+		}
+
+		columnInfo, err := getColumnInfo(rows)
+		if err != nil {
+			transferError(transfer, fmt.Errorf("error getting source column info -> %v", err))
+			return
+		}
+
+		if transfer.CreateTargetTable {
+			err = targetSystem.createTable(transfer.TargetSchema, transfer.TargetTable, columnInfo)
+			if err != nil {
+				transferError(transfer, fmt.Errorf("error creating target table -> %v", err))
+				return
+			}
+		}
+
+		for rows.Next() {
+			err = rows.Scan(colPtrs...)
+			if err != nil {
+				transferError(transfer, fmt.Errorf("error scanning source row -> %v", err))
+				return
+			}
+
+			// for i := range colVals {
+			// 	if i == 0 {
+			// 		val := colVals[i].([]byte)
+			// 		fmt.Printf("%s: %s\n", cols[i], string(val))
+			// 	}
+			// fmt.Printf("%s: %v\n", cols[i], colVals[i])
+			// }
+		}
+	}()
 
 	headers := make(http.Header)
 	headers.Set("Location", fmt.Sprintf("/v3/transfers/%s", transfer.Id))

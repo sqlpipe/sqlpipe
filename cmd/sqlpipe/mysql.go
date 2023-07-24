@@ -12,3 +12,10 @@ func (system *System) mysqlDropTable(table string) error {
 	}
 	return err
 }
+
+func (system *System) mysqlCreateTable(table string, columnInfo []ColumnInfo) error {
+	for col := range columnInfo {
+		fmt.Printf("%+v\n", columnInfo[col])
+	}
+	return nil
+}
