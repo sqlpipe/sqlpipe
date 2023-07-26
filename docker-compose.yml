@@ -7,6 +7,15 @@ services:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=Mypass123
     platform: linux/amd64
+    volumes:
+      - ./setup-sql/mssql.sql:/setup.sql
+    command: >
+      /bin/bash -c "
+        /opt/mssql/bin/sqlservr &
+        sleep 15;
+        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
+        tail -f /dev/null
+      "
     ports:
       - "1433:1433"
   
@@ -15,17 +24,19 @@ services:
     ports:
       - 5432:5432
     environment:
-      - POSTGRES_PASSWORD=Mypass123
-
-  mysql:
-    image: mysql:8.0
-    ports:
-      - "3306:3306"
-    environment:
-      - MYSQL_ROOT_PASSWORD=Mypass123
-      - MYSQL_AUTHENTICATION_PLUGIN=mysql_native_password
+      POSTGRES_PASSWORD: Mypass123
     volumes:
-      - mysql_data:/var/lib/mysql
+      - ./setup-sql/postgresql.sql:/docker-entrypoint-initdb.d/setup.sql
 
-volumes:
-  mysql_data:
+  # mysql:
+  #   image: mysql:8.0
+  #   ports:
+  #     - "3306:3306"
+  #   environment:
+  #     - MYSQL_ROOT_PASSWORD=Mypass123
+  #     - MYSQL_AUTHENTICATION_PLUGIN=mysql_native_password
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+
+# volumes:
+#   mysql_data:

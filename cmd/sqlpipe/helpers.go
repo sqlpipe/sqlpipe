@@ -119,7 +119,7 @@ func healthcheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := writeJSON(w, http.StatusOK, env, nil)
 	if err != nil {
-		errorResponse(w, r, http.StatusInternalServerError, err)
+		serverErrorResponse(w, r, http.StatusInternalServerError, err)
 	}
 }
 
@@ -128,27 +128,10 @@ func recoverPanic(next http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				w.Header().Set("Connection", "close")
-				errorResponse(w, r, http.StatusInternalServerError, fmt.Errorf("%s", err))
+				serverErrorResponse(w, r, http.StatusInternalServerError, fmt.Errorf("%s", err))
 			}
 		}()
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func getDriver(systemType string) string {
-	switch systemType {
-	case "postgresql":
-		return "pgx"
-	case "mysql":
-		return "mysql"
-	case "mssql":
-		return "sqlserver"
-	case "oracle":
-		return "oracle"
-	case "snowflake":
-		return "snowflake"
-	default:
-		panic("unknown driver")
-	}
 }

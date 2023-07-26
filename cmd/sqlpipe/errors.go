@@ -9,7 +9,7 @@ import (
 
 func transferError(transfer Transfer, err error) {
 
-	errorLog.Printf("error running transfer %v from %v to %v -> %v", transfer.Id, transfer.SourceType, transfer.TargetType, err)
+	errorLog.Printf("error running transfer %v from %v to %v :: %v", transfer.Id, transfer.SourceType, transfer.TargetType, err)
 
 	transfer.Status = StatusError
 	transfer.Err = err.Error()
@@ -20,7 +20,7 @@ func transferError(transfer Transfer, err error) {
 }
 
 func logError(r *http.Request, err error) {
-	errorLog.Printf("error handling %s request to %s -> %v", r.Method, r.URL.String(), err)
+	errorLog.Printf("error handling %s request to %s :: %v", r.Method, r.URL.String(), err)
 }
 
 func clientErrorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
@@ -33,7 +33,7 @@ func clientErrorResponse(w http.ResponseWriter, r *http.Request, status int, err
 	}
 }
 
-func errorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
+func serverErrorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
 	logError(r, err)
 
 	env := envelope{"error": err.Error()}
@@ -47,12 +47,12 @@ func errorResponse(w http.ResponseWriter, r *http.Request, status int, err error
 
 func notFoundResponse(w http.ResponseWriter, r *http.Request) {
 	err := errors.New("the requested resource could not be found")
-	errorResponse(w, r, http.StatusNotFound, err)
+	clientErrorResponse(w, r, http.StatusNotFound, err)
 }
 
 func methodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
 	err := fmt.Errorf("the %s method is not supported for this resource", r.Method)
-	errorResponse(w, r, http.StatusMethodNotAllowed, err)
+	clientErrorResponse(w, r, http.StatusMethodNotAllowed, err)
 }
 
 func failedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
