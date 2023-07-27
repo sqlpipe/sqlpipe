@@ -86,7 +86,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetSystem, err := newSystem(input.SourceName, input.TargetType, input.TargetConnectionString)
+	targetSystem, err := newSystem(input.TargetName, input.TargetType, input.TargetConnectionString)
 	if err != nil {
 		clientErrorResponse(w, r, http.StatusBadRequest, err)
 		return

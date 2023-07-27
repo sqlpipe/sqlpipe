@@ -5,8 +5,8 @@ use mydb;
 go
 
 CREATE TABLE my_table (
-    my_nchar NCHAR(10),
-    my_char CHAR(10),
+    my_nchar NCHAR(4),
+    my_char CHAR(4),
     my_nvarchar_max NVARCHAR(MAX),
     my_nvarchar NVARCHAR(50),
     my_varchar_max VARCHAR(MAX),
@@ -91,7 +91,7 @@ VALUES (
 ), (
     N'ABCD', 
     'ABCD', 
-    N'This is a test message', 
+    N'This is a "test" message', 
     N'Test message',
     'This is a test message', 
     'Test message',  

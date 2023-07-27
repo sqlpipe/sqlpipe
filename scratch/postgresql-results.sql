@@ -85,8 +85,8 @@ INSERT INTO my_table (
 )
 VALUES (
     'A',
-    'Hello',
-    'This is a text',
+    '"Hello" there',
+    'This ''is a text',
     1234567890123456,
     12345678,
     1234,

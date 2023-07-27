@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -134,4 +135,16 @@ func recoverPanic(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func getScanType(columnType *sql.ColumnType) (scanType string) {
+	defer func() {
+		if r := recover(); r != nil {
+			infoLog.Printf("panic in getScanType :: %v", r)
+			scanType = ""
+		}
+	}()
+
+	scanType = columnType.ScanType().String()
+	return
 }

@@ -1,12 +1,12 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
-	"strings"
+	"path/filepath"
 	"time"
 )
 
@@ -15,336 +15,207 @@ type Mssql struct {
 	connection *sql.DB
 }
 
-func newMssql(name, connectionString string) (Mssql, error) {
-	mssql := Mssql{
-		name: "mssql",
+func newMssql(name, connectionString string) (mssql Mssql, err error) {
+	if name == "" {
+		name = "mssql"
 	}
-
-	db, err := sql.Open("sqlserver", connectionString)
+	db, err := openDbCommon(name, connectionString, "sqlserver")
 	if err != nil {
-		return mssql, fmt.Errorf("error opening connection to %v :: %v", name, err)
+		return mssql, fmt.Errorf("error opening mssql db :: %v", err)
 	}
-
-	pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer pingCancel()
-	err = db.PingContext(pingCtx)
-	if err != nil {
-		return mssql, fmt.Errorf("error pinging mssql :: %v", err)
-	}
-
 	mssql.connection = db
-
+	mssql.name = name
 	return mssql, nil
-}
-
-func (system Mssql) dropTable(schema, table string) error {
-	query := fmt.Sprintf("drop table if exists %v.%v", schema, table)
-	_, err := system.connection.Exec(query)
-	if err != nil {
-		err = fmt.Errorf("error dropping %v.%v in %v :: %v", schema, table, system.name, err)
-	}
-	return err
-}
-
-func (system Mssql) createTable(schema, table string, columnInfo []ColumnInfo) error {
-	var queryBuilder = strings.Builder{}
-
-	queryBuilder.WriteString("create table ")
-	queryBuilder.WriteString(schema)
-	queryBuilder.WriteString(".")
-	queryBuilder.WriteString(table)
-	queryBuilder.WriteString(" (")
-
-	for i := range columnInfo {
-		if i > 0 {
-			queryBuilder.WriteString(", ")
-		}
-		queryBuilder.WriteString(columnInfo[i].name)
-		queryBuilder.WriteString(" ")
-
-		switch columnInfo[i].databaseType {
-		case "nvarchar":
-			if columnInfo[i].lengthOk {
-				if columnInfo[i].length <= 0 {
-					queryBuilder.WriteString("nvarchar(max)")
-				} else if columnInfo[i].length <= 4000 {
-					queryBuilder.WriteString(fmt.Sprintf("nvarchar(%v)", columnInfo[i].length))
-				} else {
-					queryBuilder.WriteString("nvarchar(max)")
-				}
-			} else {
-				queryBuilder.WriteString("nvarchar(4000)")
-			}
-		case "varchar":
-			if columnInfo[i].lengthOk {
-				if columnInfo[i].length <= 0 {
-					queryBuilder.WriteString("varchar(max)")
-				} else if columnInfo[i].length <= 8000 {
-					queryBuilder.WriteString(fmt.Sprintf("varchar(%v)", columnInfo[i].length))
-				} else {
-					queryBuilder.WriteString("varchar(max)")
-				}
-			} else {
-				queryBuilder.WriteString("varchar(8000)")
-			}
-		case "ntext":
-			queryBuilder.WriteString("nvarchar(max)")
-		case "text":
-			queryBuilder.WriteString("varchar(max)")
-		case "int64":
-			queryBuilder.WriteString("bigint")
-		case "int32":
-			queryBuilder.WriteString("integer")
-		case "int16":
-			queryBuilder.WriteString("smallint")
-		case "int8":
-			queryBuilder.WriteString("tinyint")
-		case "float64":
-			queryBuilder.WriteString("float")
-		case "float32":
-			queryBuilder.WriteString("real")
-		case "decimal":
-			queryBuilder.WriteString("decimal")
-			if columnInfo[i].decimalOk {
-				if columnInfo[i].precision > 38 {
-					return fmt.Errorf("error creating %v.%v in %v :: precision on column %v is greater than 38", schema, table, system.name, columnInfo[i].name)
-				}
-				queryBuilder.WriteString("(")
-				queryBuilder.WriteString(fmt.Sprintf("%v", columnInfo[i].precision))
-				queryBuilder.WriteString(", ")
-				queryBuilder.WriteString(fmt.Sprintf("%v", columnInfo[i].scale))
-				queryBuilder.WriteString(")")
-			}
-		case "money":
-			queryBuilder.WriteString("money")
-		case "datetime":
-			queryBuilder.WriteString("datetime2")
-		case "datetimetz":
-			queryBuilder.WriteString("datetimeoffset")
-		case "date":
-			queryBuilder.WriteString("date")
-		case "time":
-			queryBuilder.WriteString("time")
-		case "varbinary":
-			if columnInfo[i].lengthOk {
-				if columnInfo[i].length <= 0 {
-					queryBuilder.WriteString("varbinary(max)")
-				} else if columnInfo[i].length <= 8000 {
-					queryBuilder.WriteString(fmt.Sprintf("varbinary(%v)", columnInfo[i].length))
-				} else {
-					queryBuilder.WriteString("varbinary(max)")
-				}
-			} else {
-				queryBuilder.WriteString("varbinary(8000)")
-			}
-		case "blob":
-			queryBuilder.WriteString("varbinary(max)")
-		case "uuid":
-			queryBuilder.WriteString("uniqueidentifier")
-		case "bool":
-			queryBuilder.WriteString("bit")
-		case "json":
-			if columnInfo[i].lengthOk {
-				if columnInfo[i].length <= 0 {
-					queryBuilder.WriteString("nvarchar(max)")
-				} else if columnInfo[i].length <= 4000 {
-					queryBuilder.WriteString(fmt.Sprintf("nvarchar(%v)", columnInfo[i].length))
-				} else {
-					queryBuilder.WriteString("nvarchar(max)")
-				}
-			} else {
-				queryBuilder.WriteString("nvarchar(4000)")
-			}
-		case "xml":
-			queryBuilder.WriteString("xml")
-		default:
-			return fmt.Errorf("unsupported pipeType for mssql: %v", columnInfo[i].databaseType)
-		}
-	}
-	queryBuilder.WriteString(")")
-
-	_, err := system.connection.Exec(queryBuilder.String())
-	if err != nil {
-		return fmt.Errorf("error creating %v.%v in %v :: %v", schema, table, system.name, err)
-	}
-	return nil
 }
 
 func (system Mssql) query(query string) (*sql.Rows, error) {
 	rows, err := system.connection.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("error querying %v :: %v", system.name, err)
+		return nil, fmt.Errorf("error running dql on %v :: %v :: %v", system.name, query, err)
 	}
 	return rows, nil
 }
 
-func (system Mssql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
-	columnInfo := []ColumnInfo{}
-
-	columnNames, err := rows.Columns()
+func (system Mssql) exec(query string) error {
+	_, err := system.connection.Exec(query)
 	if err != nil {
-		return columnInfo, fmt.Errorf("error getting column names :: %v", err)
+		return fmt.Errorf("error running ddl/dml on %v :: %v :: %v", system.name, query, err)
 	}
-
-	columnTypes, err := rows.ColumnTypes()
-	if err != nil {
-		return columnInfo, fmt.Errorf("error getting column types :: %v", err)
-	}
-
-	numCols := len(columnNames)
-
-	for i := 0; i < numCols; i++ {
-		precision, scale, decimalOk := columnTypes[i].DecimalSize()
-		length, lengthOk := columnTypes[i].Length()
-		nullable, nullableOk := columnTypes[i].Nullable()
-		scanType := getScanType(columnTypes[i])
-
-		var databaseType string
-
-		switch columnTypes[i].DatabaseTypeName() {
-		case "NVARCHAR":
-			databaseType = "nvarchar"
-		case "NCHAR":
-			databaseType = "nvarchar"
-		case "VARCHAR":
-			databaseType = "varchar"
-		case "CHAR":
-			databaseType = "varchar"
-		case "NTEXT":
-			databaseType = "ntext"
-		case "TEXT":
-			databaseType = "text"
-		case "BIGINT":
-			databaseType = "int64"
-		case "INT":
-			databaseType = "int32"
-		case "SMALLINT":
-			databaseType = "int16"
-		case "TINYINT":
-			databaseType = "int8"
-		case "FLOAT":
-			databaseType = "float64"
-		case "REAL":
-			databaseType = "float32"
-		case "DECIMAL":
-			databaseType = "decimal"
-		case "MONEY":
-			databaseType = "money"
-		case "SMALLMONEY":
-			databaseType = "money"
-		case "DATETIME2":
-			databaseType = "datetime"
-		case "DATETIME":
-			databaseType = "datetime"
-		case "SMALLDATETIME":
-			databaseType = "datetime"
-		case "DATETIMEOFFSET":
-			databaseType = "datetimetz"
-		case "DATE":
-			databaseType = "date"
-		case "TIME":
-			databaseType = "time"
-		case "BINARY":
-			databaseType = "varbinary"
-		case "IMAGE":
-			databaseType = "blob"
-		case "VARBINARY":
-			databaseType = "blob"
-		case "UNIQUEIDENTIFIER":
-			databaseType = "uuid"
-		case "BIT":
-			databaseType = "bool"
-		case "XML":
-			databaseType = "xml"
-		default:
-			return columnInfo, fmt.Errorf("unsupported database type for mssql: %v", columnTypes[i].DatabaseTypeName())
-		}
-
-		columnInfo = append(columnInfo, ColumnInfo{
-			name:         columnNames[i],
-			databaseType: databaseType,
-			scanType:     scanType,
-			decimalOk:    decimalOk,
-			precision:    precision,
-			scale:        scale,
-			lengthOk:     lengthOk,
-			length:       length,
-			nullableOk:   nullableOk,
-			nullable:     nullable,
-		})
-	}
-
-	return columnInfo, nil
+	return nil
 }
 
-func (system Mssql) writeCsv(rows *sql.Rows, columnInfo []ColumnInfo, transferId string) (tmpDir string, err error) {
-	if bcpAvailable {
-		rows.Close()
-		return system.writeCsvWithBcp(rows, columnInfo)
+func (system Mssql) dropTable(schema, table string) error {
+	return dropTableIfExistsCommon(schema, table, system)
+}
+
+func (system Mssql) createTable(schema, table string, columnInfo []ColumnInfo) error {
+	return createTableCommon(schema, table, columnInfo, system)
+}
+
+func (system Mssql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
+	return getColumnInfoCommon(rows, system)
+}
+
+func (system Mssql) createPipeFiles(rows *sql.Rows, columnInfo []ColumnInfo, transferId string) (tmpDir string, err error) {
+	return
+}
+
+func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
+	switch columnType.DatabaseTypeName() {
+	case "NVARCHAR":
+		return "nvarchar", nil
+	case "NCHAR":
+		return "nvarchar", nil
+	case "VARCHAR":
+		return "varchar", nil
+	case "CHAR":
+		return "varchar", nil
+	case "NTEXT":
+		return "ntext", nil
+	case "TEXT":
+		return "text", nil
+	case "BIGINT":
+		return "int64", nil
+	case "INT":
+		return "int32", nil
+	case "SMALLINT":
+		return "int16", nil
+	case "TINYINT":
+		return "int8", nil
+	case "FLOAT":
+		return "float64", nil
+	case "REAL":
+		return "float32", nil
+	case "DECIMAL":
+		return "decimal", nil
+	case "MONEY":
+		return "money", nil
+	case "SMALLMONEY":
+		return "money", nil
+	case "DATETIME2":
+		return "datetime", nil
+	case "DATETIME":
+		return "datetime", nil
+	case "SMALLDATETIME":
+		return "datetime", nil
+	case "DATETIMEOFFSET":
+		return "datetimetz", nil
+	case "DATE":
+		return "date", nil
+	case "TIME":
+		return "time", nil
+	case "BINARY":
+		return "varbinary", nil
+	case "IMAGE":
+		return "blob", nil
+	case "VARBINARY":
+		return "blob", nil
+	case "UNIQUEIDENTIFIER":
+		return "uuid", nil
+	case "BIT":
+		return "bool", nil
+	case "XML":
+		return "xml", nil
+	default:
+		return "", fmt.Errorf("unsupported database type for mssql: %v", columnType.DatabaseTypeName())
 	}
+}
 
-	tmpDir, err = os.MkdirTemp("", transferId)
-	if err != nil {
-		return "", fmt.Errorf("error creating temp dir :: %v", err)
-	}
-
-	tmpFile, err := os.CreateTemp(tmpDir, "")
-	if err != nil {
-		return "", fmt.Errorf("error creating temp file :: %v", err)
-	}
-
-	csvWriter := csv.NewWriter(tmpFile)
-
-	values := make([]interface{}, len(columnInfo))
-	valuePtrs := make([]interface{}, len(columnInfo))
-	for i := range columnInfo {
-		valuePtrs[i] = &values[i]
-	}
-
-	for i := 0; rows.Next(); i++ {
-		err := rows.Scan(valuePtrs...)
-		if err != nil {
-			return "", fmt.Errorf("error scanning row :: %v", err)
-		}
-
-		row := make([]string, len(columnInfo))
-		for j := range columnInfo {
-			if values[j] == nil {
-				row[j] = "\u0000"
+func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error) {
+	switch columnInfo.pipeType {
+	case "nvarchar":
+		if columnInfo.lengthOk {
+			if columnInfo.length <= 0 {
+				return "nvarchar(max)", nil
+			} else if columnInfo.length <= 4000 {
+				return fmt.Sprintf("nvarchar(%v)", columnInfo.length), nil
 			} else {
-				row[j] = fmt.Sprint(values[j])
+				return "nvarchar(max)", nil
 			}
+		} else {
+			return "nvarchar(4000)", nil
 		}
-
-		if i%999 == 0 {
-			csvWriter.Flush()
-			err = csvWriter.Error()
-			if err != nil {
-				return "", fmt.Errorf("error flushing csv :: %v", err)
+	case "varchar":
+		if columnInfo.lengthOk {
+			if columnInfo.length <= 0 {
+				return "varchar(max)", nil
+			} else if columnInfo.length <= 8000 {
+				return fmt.Sprintf("varchar(%v)", columnInfo.length), nil
+			} else {
+				return "varchar(max)", nil
 			}
-
-			tmpFile, err = os.CreateTemp(tmpDir, "")
-			if err != nil {
-				return "", fmt.Errorf("error creating temp file :: %v", err)
+		} else {
+			return "varchar(8000)", nil
+		}
+	case "ntext":
+		return "nvarchar(max)", nil
+	case "text":
+		return "varchar(max)", nil
+	case "int64":
+		return "bigint", nil
+	case "int32":
+		return "integer", nil
+	case "int16":
+		return "smallint", nil
+	case "int8":
+		return "tinyint", nil
+	case "float64":
+		return "float", nil
+	case "float32":
+		return "real", nil
+	case "decimal":
+		if columnInfo.decimalOk {
+			if columnInfo.precision > 38 {
+				return "", fmt.Errorf("precision on column %v is greater than 38", columnInfo.name)
 			}
-			csvWriter = csv.NewWriter(tmpFile)
+			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
 		}
-
-		err = csvWriter.Write(row)
-		if err != nil {
-			return "", fmt.Errorf("error writing row :: %v", err)
+		return "float", nil
+	case "money":
+		return "money", nil
+	case "datetime":
+		return "datetime2", nil
+	case "datetimetz":
+		return "datetimeoffset", nil
+	case "date":
+		return "date", nil
+	case "time":
+		return "time", nil
+	case "varbinary":
+		if columnInfo.lengthOk {
+			if columnInfo.length <= 0 {
+				return "varbinary(max)", nil
+			} else if columnInfo.length <= 8000 {
+				return fmt.Sprintf("varbinary(%v)", columnInfo.length), nil
+			} else {
+				return "varbinary(max)", nil
+			}
+		} else {
+			return "varbinary(8000)", nil
 		}
+	case "blob":
+		return "varbinary(max)", nil
+	case "uuid":
+		return "uniqueidentifier", nil
+	case "bool":
+		return "bit", nil
+	case "json":
+		if columnInfo.lengthOk {
+			if columnInfo.length <= 0 {
+				return "nvarchar(max)", nil
+			} else if columnInfo.length <= 4000 {
+				return fmt.Sprintf("nvarchar(%v)", columnInfo.length), nil
+			} else {
+				return "nvarchar(max)", nil
+			}
+		} else {
+			return "nvarchar(4000)", nil
+		}
+	case "xml":
+		return "xml", nil
+	default:
+		return "", fmt.Errorf("unsupported pipeType for mssql: %v", columnInfo.pipeType)
 	}
-
-	csvWriter.Flush()
-	err = csvWriter.Error()
-	if err != nil {
-		return "", fmt.Errorf("error flushing csv :: %v", err)
-	}
-
-	infoLog.Println(tmpDir)
-
-	return tmpDir, nil
 }
 
 var mssqlFormatters = map[string]func(interface{}) string{
@@ -428,6 +299,34 @@ var mssqlFormatters = map[string]func(interface{}) string{
 	},
 }
 
-func (system Mssql) writeCsvWithBcp(rows *sql.Rows, columnInfo []ColumnInfo) (tmpDir string, err error) {
-	return "", nil
+func (system Mssql) insertPipeFiles(tmpDir, transferId string, columnInfo []ColumnInfo) error {
+	files, err := os.ReadDir(tmpDir)
+	if err != nil {
+		return fmt.Errorf("unable to read tmpDir :: %v", err)
+	}
+
+	for _, f := range files {
+		file, err := os.Open(filepath.Join(tmpDir, f.Name()))
+		if err != nil {
+			return fmt.Errorf("unable to read file %v :: %v", f.Name(), err)
+		}
+		defer file.Close()
+
+		reader := csv.NewReader(file)
+
+		var rows [][]string
+		for {
+			row, err := reader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("error reading csv values in %v :: %v", f.Name(), err)
+			}
+			rows = append(rows, row)
+		}
+
+		fmt.Println(rows)
+	}
+	return nil
 }

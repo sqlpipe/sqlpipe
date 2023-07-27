@@ -5,16 +5,16 @@ import (
 )
 
 type ColumnInfo struct {
-	name         string
-	databaseType string
-	scanType     string
-	decimalOk    bool
-	precision    int64
-	scale        int64
-	lengthOk     bool
-	length       int64
-	nullableOk   bool
-	nullable     bool
+	name       string
+	pipeType   string
+	scanType   string
+	decimalOk  bool
+	precision  int64
+	scale      int64
+	lengthOk   bool
+	length     int64
+	nullableOk bool
+	nullable   bool
 }
 
 func runTransfer(transfer Transfer) {
@@ -48,9 +48,14 @@ func runTransfer(transfer Transfer) {
 		}
 	}
 
-	_, err = transfer.Source.writeCsv(transfer.rows, transfer.ColumnInfo, transfer.Id)
+	tmpDir, err := transfer.Source.createPipeFiles(transfer.rows, transfer.ColumnInfo, transfer.Id)
 	if err != nil {
-		transferError(transfer, fmt.Errorf("error writing csv :: %v", err))
+		transferError(transfer, fmt.Errorf("error writing pipe file :: %v", err))
 		return
+	}
+
+	err = transfer.Target.insertPipeFiles(tmpDir, transfer.Id, transfer.ColumnInfo)
+	if err != nil {
+		transferError(transfer, fmt.Errorf("error inserting data :: %v", err))
 	}
 }

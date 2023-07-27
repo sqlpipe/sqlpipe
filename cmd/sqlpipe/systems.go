@@ -6,11 +6,15 @@ import (
 )
 
 type System interface {
-	dropTable(schema, table string) error
+	dropTable(schema, table string) (err error)
 	createTable(schema, table string, columnInfo []ColumnInfo) error
 	query(query string) (*sql.Rows, error)
+	exec(query string) (err error)
 	getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error)
-	writeCsv(rows *sql.Rows, columnInfo []ColumnInfo, transferId string) (tmpDir string, err error)
+	dbTypeToPipeType(databaseTypeName string, columnType sql.ColumnType) (pipeType string, err error)
+	pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error)
+	createPipeFiles(rows *sql.Rows, columnInfo []ColumnInfo, transferId string) (pipeFilesDir string, err error)
+	insertPipeFiles(tmpDir, transferId string, columnInfo []ColumnInfo) error
 }
 
 func newSystem(name, systemType, connectionString string) (System, error) {
