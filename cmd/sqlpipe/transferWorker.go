@@ -54,7 +54,7 @@ func runTransfer(transfer Transfer) {
 		return
 	}
 
-	err = transfer.Target.insertPipeFiles(tmpDir, transfer.Id, transfer.ColumnInfo)
+	err = transfer.Target.insertPipeFiles(tmpDir, transfer.Id, transfer.ColumnInfo, transfer.TargetTable, transfer.TargetSchema)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error inserting data :: %v", err))
 	}

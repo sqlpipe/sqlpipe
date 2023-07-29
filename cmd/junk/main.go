@@ -2,27 +2,14 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"time"
 )
 
-func myfunc() {
-	file, err := os.CreateTemp("", "AAA")
-	if err != nil {
-		panic("couldn't create a")
-	}
-	defer fmt.Println(file.Name())
-
-	file.Close()
-
-	file, err = os.CreateTemp("", "BBB")
-	if err != nil {
-		panic("couldn't create b")
-	}
-	defer fmt.Println(file.Name())
+func FormatDate(t time.Time) string {
+	return t.Format("2006-01-02")
 }
 
 func main() {
-	myfunc()
-	fmt.Println("Still here!")
-	fmt.Println(len("\u0000"))
+	t := time.Now()
+	fmt.Println(FormatDate(t))
 }

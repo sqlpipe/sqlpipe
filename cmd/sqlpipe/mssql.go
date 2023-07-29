@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,8 +12,9 @@ import (
 )
 
 type Mssql struct {
-	name       string
-	connection *sql.DB
+	name             string
+	connectionString string
+	connection       *sql.DB
 }
 
 func newMssql(name, connectionString string) (mssql Mssql, err error) {
@@ -25,6 +27,7 @@ func newMssql(name, connectionString string) (mssql Mssql, err error) {
 	}
 	mssql.connection = db
 	mssql.name = name
+	mssql.connectionString = connectionString
 	return mssql, nil
 }
 
@@ -56,8 +59,8 @@ func (system Mssql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
 	return getColumnInfoCommon(rows, system)
 }
 
-func (system Mssql) createPipeFiles(rows *sql.Rows, columnInfo []ColumnInfo, transferId string) (tmpDir string, err error) {
-	return
+func (system Mssql) createPipeFiles(rows *sql.Rows, columnInfo []ColumnInfo, transferId string) (pipeFilesDir string, err error) {
+	return createPipeFilesCommon(rows, columnInfo, transferId, system)
 }
 
 func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
@@ -218,88 +221,7 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 	}
 }
 
-var mssqlFormatters = map[string]func(interface{}) string{
-	"nvarchar": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"varchar": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"ntext": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"text": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"int64": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"int32": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"int16": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"int8": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"float64": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"float32": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"decimal": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"money": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"datetime": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"datetimetz": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"date": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"time": func(v interface{}) string {
-		val, ok := v.(time.Time)
-		if !ok {
-			panic("non-time.Time value passed to mssql time writer")
-		}
-		return val.Format("15:04:05.9999999")
-	},
-	"varbinary": func(v interface{}) string {
-		val, ok := v.([]byte)
-		if !ok {
-			panic("non-[]byte value passed to mssql varbinary writer")
-		}
-		return fmt.Sprintf("%v", val)
-	},
-	"blob": func(v interface{}) string {
-		val, ok := v.([]byte)
-		if !ok {
-			panic("non-[]byte value passed to mssql blob writer")
-		}
-		return fmt.Sprintf("%v", val)
-	},
-	"uuid": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"bool": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"json": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-	"xml": func(v interface{}) string {
-		return fmt.Sprintf("%v", v)
-	},
-}
-
-func (system Mssql) insertPipeFiles(tmpDir, transferId string, columnInfo []ColumnInfo) error {
+func (system Mssql) insertPipeFiles(tmpDir, transferId string, columnInfo []ColumnInfo, table, schema string) error {
 	files, err := os.ReadDir(tmpDir)
 	if err != nil {
 		return fmt.Errorf("unable to read tmpDir :: %v", err)
@@ -329,4 +251,91 @@ func (system Mssql) insertPipeFiles(tmpDir, transferId string, columnInfo []Colu
 		fmt.Println(rows)
 	}
 	return nil
+}
+
+func (system Mssql) getPipeFileFormatters() map[string]func(interface{}) (string, error) {
+	return map[string]func(interface{}) (string, error){
+		"nvarchar": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"varchar": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"ntext": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"text": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"int64": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%d", v), nil
+		},
+		"int32": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%d", v), nil
+		},
+		"int16": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%d", v), nil
+		},
+		"int8": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%d", v), nil
+		},
+		"float64": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%f", v), nil
+		},
+		"float32": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%f", v), nil
+		},
+		"decimal": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"money": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"datetime": func(v interface{}) (string, error) {
+			valTime, ok := v.(time.Time)
+			if !ok {
+				return "", errors.New("non time.Time value passed to datetime postgresqlPipeFileFormatters")
+			}
+			return valTime.Format(time.RFC3339Nano), nil
+		},
+		"datetimetz": func(v interface{}) (string, error) {
+			valTime, ok := v.(time.Time)
+			if !ok {
+				return "", errors.New("non time.Time value passed to datetimetz postgresqlPipeFileFormatters")
+			}
+			return valTime.Format(time.RFC3339Nano), nil
+		},
+		"date": func(v interface{}) (string, error) {
+			valTime, ok := v.(time.Time)
+			if !ok {
+				return "", errors.New("non time.Time value passed to date postgresqlPipeFileFormatters")
+			}
+			return valTime.Format(time.RFC3339Nano), nil
+		},
+		"time": func(v interface{}) (string, error) {
+			valTime, ok := v.(time.Time)
+			if !ok {
+				return "", errors.New("non time.Time value passed to time mssqlPipeFileFormatters")
+			}
+			return valTime.Format(time.RFC3339Nano), nil
+		},
+		"varbinary": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%x", v), nil
+		},
+		"blob": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%x", v), nil
+		},
+		"uuid": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%x", v), nil
+		},
+		"bool": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%t", v), nil
+		},
+		"json": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"xml": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+	}
 }

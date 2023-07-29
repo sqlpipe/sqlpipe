@@ -7,13 +7,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 )
 
 type Postgresql struct {
-	name       string
-	connection *sql.DB
+	name             string
+	connectionString string
+	connection       *sql.DB
 }
 
 func newPostgresql(name, connectionString string) (postgresql Postgresql, err error) {
@@ -26,6 +28,7 @@ func newPostgresql(name, connectionString string) (postgresql Postgresql, err er
 	}
 	postgresql.connection = db
 	postgresql.name = name
+	postgresql.connectionString = connectionString
 	return postgresql, nil
 }
 
@@ -58,81 +61,7 @@ func (system Postgresql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
 }
 
 func (system Postgresql) createPipeFiles(rows *sql.Rows, columnInfo []ColumnInfo, transferId string) (pipeFilesDir string, err error) {
-	tmpDir, err := os.MkdirTemp("", transferId)
-	if err != nil {
-		return "", errors.New("error creating tmpDir")
-	}
-
-	pipeFile, err := os.CreateTemp(tmpDir, "")
-	if err != nil {
-		return "", fmt.Errorf("error creating temp file :: %v", err)
-	}
-	defer pipeFile.Close()
-
-	csvWriter := csv.NewWriter(pipeFile)
-	csvRow := make([]string, len(columnInfo))
-	currentFileLength := 0
-
-	values := make([]interface{}, len(columnInfo))
-	valuePtrs := make([]interface{}, len(columnInfo))
-	for i := range columnInfo {
-		valuePtrs[i] = &values[i]
-	}
-
-	dataInRam := false
-	for i := 0; rows.Next(); i++ {
-		err := rows.Scan(valuePtrs...)
-		if err != nil {
-			return "", fmt.Errorf("error scanning row :: %v", err)
-		}
-
-		for j := range columnInfo {
-			if values[j] == nil {
-				csvRow[j] = "\u0000"
-				fmt.Printf("%v, of type %v, is nil\n", columnInfo[j].name, columnInfo[j].pipeType)
-				currentFileLength += 1
-			} else {
-				stringVal, err := postgresqlPipeFileFormatters[columnInfo[j].pipeType](values[j])
-				if err != nil {
-					return "", fmt.Errorf("error while formatting pipe type %v :: %v", columnInfo[j].pipeType, err)
-				}
-				csvRow[j] = stringVal
-				currentFileLength += len(stringVal)
-			}
-		}
-
-		err = csvWriter.Write(csvRow)
-		if err != nil {
-			return "", fmt.Errorf("error writing csv row :: %v", err)
-		}
-		dataInRam = true
-
-		if currentFileLength > 4096 {
-			csvWriter.Flush()
-
-			err = pipeFile.Close()
-			if err != nil {
-				return "", fmt.Errorf("error closing pipe file :: %v", err)
-			}
-
-			pipeFile, err = os.CreateTemp(tmpDir, "")
-			if err != nil {
-				return "", fmt.Errorf("error creating temp file :: %v", err)
-			}
-			defer pipeFile.Close()
-
-			csv.NewWriter(pipeFile)
-			dataInRam = false
-		}
-	}
-
-	if dataInRam {
-		csvWriter.Flush()
-	}
-
-	infoLog.Printf("pipe file written at %v", tmpDir)
-
-	return tmpDir, nil
+	return createPipeFilesCommon(rows, columnInfo, transferId, system)
 }
 
 func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
@@ -277,123 +206,287 @@ func (system Postgresql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType
 	}
 }
 
-var postgresqlPipeFileFormatters = map[string]func(interface{}) (string, error){
-	"nvarchar": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%s", v), nil
-	},
-	"varchar": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%s", v), nil
-	},
-	"ntext": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%s", v), nil
-	},
-	"text": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%s", v), nil
-	},
-	"int64": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%d", v), nil
-	},
-	"int32": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%d", v), nil
-	},
-	"int16": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%d", v), nil
-	},
-	"int8": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%d", v), nil
-	},
-	"float64": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%f", v), nil
-	},
-	"float32": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%f", v), nil
-	},
-	"decimal": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%s", v), nil
-	},
-	"money": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%s", v), nil
-	},
-	"datetime": func(v interface{}) (string, error) {
-		valTime, ok := v.(time.Time)
-		if !ok {
-			return "", errors.New("non time.Time value passed to datetime postgresqlPipeFileFormatters")
-		}
-		return valTime.Format(time.RFC3339), nil
-	},
-	"datetimetz": func(v interface{}) (string, error) {
-		valTime, ok := v.(time.Time)
-		if !ok {
-			return "", errors.New("non time.Time value passed to datetimetz postgresqlPipeFileFormatters")
-		}
-		return valTime.Format(time.RFC3339), nil
-	},
-	"date": func(v interface{}) (string, error) {
-		valTime, ok := v.(time.Time)
-		if !ok {
-			return "", errors.New("non time.Time value passed to date postgresqlPipeFileFormatters")
-		}
-		return valTime.Format(time.RFC3339), nil
-	},
-	"time": func(v interface{}) (string, error) {
-		timeString, ok := v.(string)
-		if !ok {
-			return "", errors.New("unable to cast value to string in postgresqlPipeFileFormatters")
-		}
+func (system Postgresql) getPipeFileFormatters() map[string]func(interface{}) (string, error) {
+	return map[string]func(interface{}) (string, error){
+		"nvarchar": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"varchar": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"ntext": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"text": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"int64": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%d", v), nil
+		},
+		"int32": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%d", v), nil
+		},
+		"int16": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%d", v), nil
+		},
+		"int8": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%d", v), nil
+		},
+		"float64": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%f", v), nil
+		},
+		"float32": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%f", v), nil
+		},
+		"decimal": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"money": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"datetime": func(v interface{}) (string, error) {
+			valTime, ok := v.(time.Time)
+			if !ok {
+				return "", errors.New("non time.Time value passed to datetime postgresqlPipeFileFormatters")
+			}
+			return valTime.Format(time.RFC3339Nano), nil
+		},
+		"datetimetz": func(v interface{}) (string, error) {
+			valTime, ok := v.(time.Time)
+			if !ok {
+				return "", errors.New("non time.Time value passed to datetimetz postgresqlPipeFileFormatters")
+			}
+			return valTime.Format(time.RFC3339Nano), nil
+		},
+		"date": func(v interface{}) (string, error) {
+			valTime, ok := v.(time.Time)
+			if !ok {
+				return "", errors.New("non time.Time value passed to date postgresqlPipeFileFormatters")
+			}
+			return valTime.Format(time.RFC3339Nano), nil
+		},
+		"time": func(v interface{}) (string, error) {
+			timeString, ok := v.(string)
+			if !ok {
+				return "", errors.New("unable to cast value to string in postgresqlPipeFileFormatters")
+			}
 
-		timeVal, err := time.Parse("15:04:05.000000", timeString)
-		if err != nil {
-			return "", errors.New("error parsing time value in postgresqlPipeFileFormatters")
-		}
+			timeVal, err := time.Parse("15:04:05.000000", timeString)
+			if err != nil {
+				return "", errors.New("error parsing time value in postgresqlPipeFileFormatters")
+			}
 
-		return timeVal.Format(time.RFC3339), nil
-	},
-	"varbinary": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%x", v), nil
-	},
-	"blob": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%x", v), nil
-	},
-	"uuid": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%x", v), nil
-	},
-	"bool": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%t", v), nil
-	},
-	"json": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%s", v), nil
-	},
-	"xml": func(v interface{}) (string, error) {
-		return fmt.Sprintf("%s", v), nil
-	},
+			return timeVal.Format(time.RFC3339Nano), nil
+		},
+		"varbinary": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%x", v), nil
+		},
+		"blob": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%x", v), nil
+		},
+		"uuid": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"bool": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%t", v), nil
+		},
+		"json": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+		"xml": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+	}
 }
 
-func (system Postgresql) insertPipeFiles(tmpDir, transferId string, columnInfo []ColumnInfo) error {
-	files, err := os.ReadDir(tmpDir)
+func (system Postgresql) insertPipeFiles(tmpDir, transferId string, columnInfo []ColumnInfo, table, schema string) error {
+	if psqlAvailable {
+		return system.insertViaPsql(tmpDir, transferId, columnInfo, table, schema)
+	}
+	return nil
+}
+
+func (system Postgresql) insertViaPsql(tmpDir, transferId string, columnInfo []ColumnInfo, table, schema string) error {
+	pipeFilesDir := filepath.Join(tmpDir, "pipe-files")
+
+	psqlCsvDirPath := filepath.Join(tmpDir, "psql-csv")
+	err := os.Mkdir(psqlCsvDirPath, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("unable to read tmpDir :: %v", err)
+		return fmt.Errorf("error creating psql-csv directory :: %v", err)
+	}
+
+	files, err := os.ReadDir(pipeFilesDir)
+	if err != nil {
+		return fmt.Errorf("unable to read pipe files dir :: %v", err)
 	}
 
 	for _, f := range files {
-		file, err := os.Open(filepath.Join(tmpDir, f.Name()))
+
+		csvLength := 0
+		file, err := os.Open(filepath.Join(pipeFilesDir, f.Name()))
 		if err != nil {
 			return fmt.Errorf("unable to read file %v :: %v", f.Name(), err)
 		}
 		defer file.Close()
 
-		reader := csv.NewReader(file)
+		psqlCsvFile, err := os.CreateTemp(psqlCsvDirPath, "")
+		if err != nil {
+			return fmt.Errorf("error creating psql csv file :: %v", err)
+		}
+		defer psqlCsvFile.Close()
+
+		csvReader := csv.NewReader(file)
+		csvWriter := csv.NewWriter(psqlCsvFile)
+		dataInRam := false
 
 		for {
-			row, err := reader.Read()
-			if err == io.EOF {
-				break
-			}
+			row, err := csvReader.Read()
 			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
 				return fmt.Errorf("error reading csv values in %v :: %v", f.Name(), err)
 			}
-			fmt.Println(row)
+
+			for i := range row {
+				if row[i] != "<nil>" {
+					row[i], err = postgresqlPipeFileToCsvFormatters[columnInfo[i].pipeType](row[i])
+					if err != nil {
+						return fmt.Errorf("error formatting pipe file to psql csv :: %v", err)
+					}
+				}
+
+				csvLength += len(row[i])
+
+			}
+			err = csvWriter.Write(row)
+			if err != nil {
+				return fmt.Errorf("error writing psql csv :: %v", err)
+			}
+
+			dataInRam = true
+
+			if csvLength > 4096 {
+				csvWriter.Flush()
+				err = psqlCsvFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing psql csv file :: %v", err)
+				}
+
+				psqlCsvFile, err = os.CreateTemp(psqlCsvDirPath, "")
+				if err != nil {
+					return fmt.Errorf("error creating psql csv file :: %v", err)
+				}
+				defer psqlCsvFile.Close()
+
+				csvWriter = csv.NewWriter(psqlCsvFile)
+				dataInRam = false
+			}
+			if dataInRam {
+				csvWriter.Flush()
+			}
 		}
 
+		infoLog.Printf("wrote psql csvs to %v", psqlCsvDirPath)
 	}
+
+	psqlCsvs, err := os.ReadDir(psqlCsvDirPath)
+	if err != nil {
+		return fmt.Errorf("unable to read psql csvs dir :: %v", err)
+	}
+
+	for _, f := range psqlCsvs {
+
+		mycommand := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '<nil>', ENCODING 'UTF8')`, schema, table, filepath.Join(psqlCsvDirPath, f.Name()))
+
+		cmd := exec.Command("psql", system.connectionString, "-c", mycommand)
+		result, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to upload csv to postgresql :: stderr %v :: stdout %s", err, string(result))
+		}
+	}
+
 	return nil
+}
+
+func (system Postgresql) getConnectionString() (string, error) {
+	return system.connectionString, nil
+}
+
+var postgresqlPipeFileToCsvFormatters = map[string]func(string) (string, error){
+	"nvarchar": func(v string) (string, error) {
+		return v, nil
+	},
+	"varchar": func(v string) (string, error) {
+		return v, nil
+	},
+	"ntext": func(v string) (string, error) {
+		return v, nil
+	},
+	"text": func(v string) (string, error) {
+		return v, nil
+	},
+	"int64": func(v string) (string, error) {
+		return v, nil
+	},
+	"int32": func(v string) (string, error) {
+		return v, nil
+	},
+	"int16": func(v string) (string, error) {
+		return v, nil
+	},
+	"int8": func(v string) (string, error) {
+		return v, nil
+	},
+	"float64": func(v string) (string, error) {
+		return v, nil
+	},
+	"float32": func(v string) (string, error) {
+		return v, nil
+	},
+	"decimal": func(v string) (string, error) {
+		return v, nil
+	},
+	"money": func(v string) (string, error) {
+		return v, nil
+	},
+	"datetime": func(v string) (string, error) {
+		return v, nil
+	},
+	"datetimetz": func(v string) (string, error) {
+		return v, nil
+	},
+	"date": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error writing date value to psql csv :: %v", err)
+		}
+		return valTime.Format("2006-01-02"), nil
+	},
+	"time": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error writing time value to psql csv :: %v", err)
+		}
+
+		return valTime.Format("15:04:05.999999"), nil
+	},
+	"varbinary": func(v string) (string, error) {
+		return fmt.Sprintf(`\x%s`, v), nil
+	},
+	"blob": func(v string) (string, error) {
+		return fmt.Sprintf(`\x%s`, v), nil
+	},
+	"uuid": func(v string) (string, error) {
+		return v, nil
+	},
+	"bool": func(v string) (string, error) {
+		return v, nil
+	},
+	"json": func(v string) (string, error) {
+		return v, nil
+	},
+	"xml": func(v string) (string, error) {
+		return v, nil
+	},
 }
