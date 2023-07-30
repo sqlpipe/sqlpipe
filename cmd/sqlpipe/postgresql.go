@@ -315,19 +315,17 @@ func (system Postgresql) insertViaPsql(tmpDir, transferId string, columnInfo []C
 		return fmt.Errorf("error creating psql-csv directory :: %v", err)
 	}
 
-	files, err := os.ReadDir(pipeFilesDir)
+	pipeFileEntries, err := os.ReadDir(pipeFilesDir)
 	if err != nil {
 		return fmt.Errorf("unable to read pipe files dir :: %v", err)
 	}
 
-	for _, f := range files {
-
-		csvLength := 0
-		file, err := os.Open(filepath.Join(pipeFilesDir, f.Name()))
+	for _, pipeFileEntry := range pipeFileEntries {
+		pipeFile, err := os.Open(filepath.Join(pipeFilesDir, pipeFileEntry.Name()))
 		if err != nil {
-			return fmt.Errorf("unable to read file %v :: %v", f.Name(), err)
+			return fmt.Errorf("unable to read file %v :: %v", pipeFileEntry.Name(), err)
 		}
-		defer file.Close()
+		defer pipeFile.Close()
 
 		psqlCsvFile, err := os.CreateTemp(psqlCsvDirPath, "")
 		if err != nil {
@@ -335,9 +333,8 @@ func (system Postgresql) insertViaPsql(tmpDir, transferId string, columnInfo []C
 		}
 		defer psqlCsvFile.Close()
 
-		csvReader := csv.NewReader(file)
+		csvReader := csv.NewReader(pipeFile)
 		csvWriter := csv.NewWriter(psqlCsvFile)
-		dataInRam := false
 
 		for {
 			row, err := csvReader.Read()
@@ -345,7 +342,7 @@ func (system Postgresql) insertViaPsql(tmpDir, transferId string, columnInfo []C
 				if errors.Is(err, io.EOF) {
 					break
 				}
-				return fmt.Errorf("error reading csv values in %v :: %v", f.Name(), err)
+				return fmt.Errorf("error reading csv values in %v :: %v", pipeFileEntry.Name(), err)
 			}
 
 			for i := range row {
@@ -355,40 +352,28 @@ func (system Postgresql) insertViaPsql(tmpDir, transferId string, columnInfo []C
 						return fmt.Errorf("error formatting pipe file to psql csv :: %v", err)
 					}
 				}
-
-				csvLength += len(row[i])
-
 			}
+
 			err = csvWriter.Write(row)
 			if err != nil {
 				return fmt.Errorf("error writing psql csv :: %v", err)
 			}
-
-			dataInRam = true
-
-			if csvLength > 4096 {
-				csvWriter.Flush()
-				err = psqlCsvFile.Close()
-				if err != nil {
-					return fmt.Errorf("error closing psql csv file :: %v", err)
-				}
-
-				psqlCsvFile, err = os.CreateTemp(psqlCsvDirPath, "")
-				if err != nil {
-					return fmt.Errorf("error creating psql csv file :: %v", err)
-				}
-				defer psqlCsvFile.Close()
-
-				csvWriter = csv.NewWriter(psqlCsvFile)
-				dataInRam = false
-			}
-			if dataInRam {
-				csvWriter.Flush()
-			}
 		}
 
-		infoLog.Printf("wrote psql csvs to %v", psqlCsvDirPath)
+		csvWriter.Flush()
+
+		err = psqlCsvFile.Close()
+		if err != nil {
+			return fmt.Errorf("error closing psql csv file :: %v", err)
+		}
+
+		err = pipeFile.Close()
+		if err != nil {
+			return fmt.Errorf("error closing pipe file :: %v", err)
+		}
 	}
+
+	infoLog.Printf("wrote psql csvs to %v", psqlCsvDirPath)
 
 	psqlCsvs, err := os.ReadDir(psqlCsvDirPath)
 	if err != nil {
@@ -405,6 +390,8 @@ func (system Postgresql) insertViaPsql(tmpDir, transferId string, columnInfo []C
 			return fmt.Errorf("failed to upload csv to postgresql :: stderr %v :: stdout %s", err, string(result))
 		}
 	}
+
+	infoLog.Printf("inserted psql csvs into %s.%s", schema, table)
 
 	return nil
 }

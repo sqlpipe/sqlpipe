@@ -172,7 +172,7 @@ func createPipeFilesCommon(rows *sql.Rows, columnInfo []ColumnInfo, transferId s
 		}
 		dataInRam = true
 
-		if csvLength > 4096 {
+		if csvLength > 10_000_000 {
 			csvWriter.Flush()
 
 			err = pipeFile.Close()
@@ -188,6 +188,7 @@ func createPipeFilesCommon(rows *sql.Rows, columnInfo []ColumnInfo, transferId s
 
 			csvWriter = csv.NewWriter(pipeFile)
 			dataInRam = false
+			csvLength = 0
 		}
 	}
 
@@ -195,7 +196,12 @@ func createPipeFilesCommon(rows *sql.Rows, columnInfo []ColumnInfo, transferId s
 		csvWriter.Flush()
 	}
 
-	infoLog.Printf("pipe file written at %v", pipeFilesDirPath)
+	err = pipeFile.Close()
+	if err != nil {
+		return "", fmt.Errorf("error closing pipe file :: %v", err)
+	}
+
+	infoLog.Printf("pipe files written at %v", pipeFilesDirPath)
 
 	return transferDir, nil
 }
