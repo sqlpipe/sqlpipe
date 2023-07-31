@@ -19,14 +19,21 @@ services:
     ports:
       - "1433:1433"
   
-  postgresql:
-    image: postgres:15.3
+  # postgresql:
+  #   image: postgres:15.3
+  #   ports:
+  #     - 5432:5432
+  #   environment:
+  #     POSTGRES_PASSWORD: Mypass123
+  #   volumes:
+  #     - ./setup-sql/postgresql.sql:/docker-entrypoint-initdb.d/setup.sql
+
+  babelfish:
+    platform: linux/amd64
+    image: jonathanpotts/babelfishpg:2.3.0
     ports:
-      - 5432:5432
-    environment:
-      POSTGRES_PASSWORD: Mypass123
-    volumes:
-      - ./setup-sql/postgresql.sql:/docker-entrypoint-initdb.d/setup.sql
+      - "5432:5432"
+      - "1434:1433"
 
   # mysql:
   #   image: mysql:8.0
