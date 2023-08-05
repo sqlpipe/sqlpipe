@@ -300,13 +300,6 @@ func (system Postgresql) getPipeFileFormatters() map[string]func(interface{}) (s
 }
 
 func (system Postgresql) insertPipeFiles(tmpDir, transferId string, columnInfo []ColumnInfo, table, schema string) error {
-	if psqlAvailable {
-		return system.insertViaPsql(tmpDir, transferId, columnInfo, table, schema)
-	}
-	return nil
-}
-
-func (system Postgresql) insertViaPsql(tmpDir, transferId string, columnInfo []ColumnInfo, table, schema string) error {
 	pipeFilesDir := filepath.Join(tmpDir, "pipe-files")
 
 	psqlCsvDirPath := filepath.Join(tmpDir, "psql-csv")
@@ -384,7 +377,7 @@ func (system Postgresql) insertViaPsql(tmpDir, transferId string, columnInfo []C
 
 		mycommand := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '<nil>', ENCODING 'UTF8')`, schema, table, filepath.Join(psqlCsvDirPath, f.Name()))
 
-		cmd := exec.Command("psql", system.connectionString, "-c", mycommand)
+		cmd := exec.Command(psqlTmpFile.Name(), system.connectionString, "-c", mycommand)
 		result, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("failed to upload csv to postgresql :: stderr %v :: stdout %s", err, string(result))

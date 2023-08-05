@@ -46,7 +46,7 @@ go
 DECLARE @counter INT;
 SET @counter = 1;
 
-WHILE @counter <= 100000
+WHILE @counter <= 1000
 BEGIN
 INSERT INTO my_table (my_nchar, my_char, my_nvarchar_max, my_nvarchar, my_varchar_max, my_varchar, my_ntext, my_text, my_bigint, my_int, my_smallint, my_tinyint, my_float, my_real, my_decimal, my_money, my_smallmoney, my_datetime2, my_datetime, my_smalldatetime, my_datetimeoffset, my_date, my_time, my_binary, my_varbinary, my_image, my_bit, my_uniqueidentifier, my_xml)
 VALUES
