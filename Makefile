@@ -26,8 +26,15 @@ run/sqlpipe:
 ## compose: run docker-compose
 .PHONY: compose
 compose:
+	docker-compose stop
+	docker-compose up -d
+	docker-compose logs -f
+
+## compose-reset: run docker-compose
+.PHONY: compose-reset
+compose-reset:
 	docker-compose down -v
-	docker-compose up --build -d
+	docker-compose up -d
 	docker-compose logs -f
 
 # ==================================================================================== #

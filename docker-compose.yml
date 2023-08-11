@@ -3,6 +3,7 @@ version: '3.8'
 services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=Mypass123
@@ -12,21 +13,59 @@ services:
     command: >
       /bin/bash -c "
         /opt/mssql/bin/sqlservr &
-        sleep 15;
+        sleep 25;
         /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
         tail -f /dev/null
       "
     ports:
       - "1433:1433"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
+  oracle:
+    image: oracle/database:21.3.0-ee
+    container_name: oracle
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=Mypass123
+    volumes:
+      - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 8G
   
   postgresql:
     image: postgres:15.3
+    container_name: postgresql
     ports:
       - 5432:5432
     environment:
       POSTGRES_PASSWORD: Mypass123
     volumes:
       - ./setup-sql/postgresql.sql:/docker-entrypoint-initdb.d/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=Mypass123
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
 
   # babelfish:
   #   platform: linux/amd64
@@ -35,15 +74,8 @@ services:
   #     - "5432:5432"
   #     - "1434:1433"
 
-  # mysql:
-  #   image: mysql:8.0
-  #   ports:
-  #     - "3306:3306"
-  #   environment:
-  #     - MYSQL_ROOT_PASSWORD=Mypass123
-  #     - MYSQL_AUTHENTICATION_PLUGIN=mysql_native_password
-  #   volumes:
-  #     - mysql_data:/var/lib/mysql
-
-# volumes:
-#   mysql_data:
+volumes:
+  mssql-data:
+  oracle-data:
+  postgresql-data:
+  mysql-data:
