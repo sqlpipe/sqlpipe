@@ -38,12 +38,12 @@ type Transfer struct {
 	Status    string     `json:"status"`
 	Err       string     `json:"error,omitempty"`
 
-	SourceName             string `json:"source-name,omitempty"`
+	SourceName             string `json:"source-name"`
 	SourceType             string `json:"source-type"`
 	SourceConnectionString string `json:"-"`
 	Source                 System `json:"-"`
 
-	TargetName             string `json:"target-name,omitempty"`
+	TargetName             string `json:"target-name"`
 	TargetType             string `json:"target-type"`
 	TargetConnectionString string `json:"-"`
 	Target                 System `json:"-"`
@@ -55,8 +55,18 @@ type Transfer struct {
 	DropTargetTable   bool `json:"drop-target-table"`
 	CreateTargetTable bool `json:"create-target-table"`
 
-	rows       *sql.Rows    `json:"-"`
-	ColumnInfo []ColumnInfo `json:"column-info,omitempty"`
+	Rows       *sql.Rows    `json:"-"`
+	ColumnInfo []ColumnInfo `json:"column-info"`
+	TmpDir     string       `json:"tmp-dir"`
+
+	Delimiter string `json:"delimiter"`
+	Newline   string `json:"newline"`
+	Null      string `json:"null"`
+
+	BcpDatabase string `json:"bcp-database",omitempty`
+	BcpServer   string `json:"bcp-server",omitempty`
+	BcpUsername string `json:"bcp-user",omitempty`
+	BcpPass     string `json:"-"`
 }
 
 func createTransferHandler(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +82,13 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		TargetTable            string `json:"target-table"`
 		DropTargetTable        bool   `json:"drop-target-table"`
 		CreateTargetTable      bool   `json:"create-target-table"`
+		Delimiter              string `json:"delimiter"`
+		Newline                string `json:"newline"`
+		Null                   string `json:"null"`
+		BcpServer              string `json:"bcp-server"`
+		BcpUsername            string `json:"bcp-user"`
+		BcpPass                string `json:"bcp-password"`
+		BcpDatabase            string `json:"bcp-database"`
 	}
 
 	err := readJSON(w, r, &input)
@@ -100,6 +117,18 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		input.TargetName = input.TargetType
 	}
 
+	if input.Delimiter == "" {
+		input.Delimiter = "{dlm}"
+	}
+
+	if input.Newline == "" {
+		input.Newline = "{nwln}"
+	}
+
+	if input.Null == "" {
+		input.Null = "{nll}"
+	}
+
 	transfer := Transfer{
 		Id:                     uuid.New().String(),
 		CreatedAt:              time.Now(),
@@ -117,6 +146,13 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		Query:                  input.Query,
 		DropTargetTable:        input.DropTargetTable,
 		CreateTargetTable:      input.CreateTargetTable,
+		Delimiter:              input.Delimiter,
+		Newline:                input.Newline,
+		Null:                   input.Null,
+		BcpServer:              input.BcpServer,
+		BcpUsername:            input.BcpUsername,
+		BcpPass:                input.BcpPass,
+		BcpDatabase:            input.BcpDatabase,
 	}
 
 	v := newValidator()

@@ -63,4 +63,11 @@ func validateTransfer(v validator, transfer Transfer) {
 	if transfer.TargetName == "" {
 		panic("target name not set")
 	}
+
+	if transfer.TargetType == "mssql" {
+		v.check(transfer.BcpServer != "", "bcp-server", "must be provided")
+		v.check(transfer.BcpUsername != "", "bcp-user", "must be provided")
+		v.check(transfer.BcpPass != "", "bcp-password", "must be provided")
+		v.check(transfer.BcpDatabase != "", "bcp-database", "must be provided")
+	}
 }

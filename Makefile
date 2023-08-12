@@ -21,7 +21,7 @@ confirm:
 ## run/sqlpipe: run the cmd/sqlpipe application
 .PHONY: run/sqlpipe
 run/sqlpipe:
-	go run ./cmd/sqlpipe
+	go run ./cmd/sqlpipe --accept-licenses
 
 ## compose: run docker-compose
 .PHONY: compose
@@ -69,5 +69,5 @@ vendor:
 .PHONY: build/sqlpipe
 build/sqlpipe:
 	@echo 'Building cmd/sqlpipe...'
-	go build -ldflags="-s" -o=./bin/api ./cmd/sqlpipe
+	go build -tags linuxAmd64 -ldflags="-s" -o=./bin/api ./cmd/sqlpipe
 	# GOOS=linux GOARCH=amd64 go build -ldflags="-s" -o=./bin/linux_amd64/api ./cmd/sqlpipe

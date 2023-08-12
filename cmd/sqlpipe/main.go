@@ -4,11 +4,9 @@ import (
 	"embed"
 	"flag"
 	"fmt"
-	"io/fs"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -18,20 +16,24 @@ import (
 	_ "github.com/snowflakedb/gosnowflake"
 )
 
+var (
+	version        = ProgramVersion()
+	port           int
+	infoLog        = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog       = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+	acceptLicenses = false
+	psqlAvailable  = false
+	psqlTmpFile    *os.File
+	bcpAvailable   = false
+	bcpTmpFile     *os.File
+)
+
 //go:embed deps
 var depsFs embed.FS
 
-var (
-	version      = ProgramVersion()
-	port         int
-	infoLog      = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
-	errorLog     = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
-	psqlTmpFile  *os.File
-	bcpAvailable bool = false
-)
-
 func main() {
 	flag.IntVar(&port, "port", 9000, "API server port")
+	flag.BoolVar(&acceptLicenses, "accept-licenses", false, "Accept all licenses at https://sqlpipe.com/sqlpipe-licenses")
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 	flag.Parse()
 
@@ -40,39 +42,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	// create psql tmp file
-	var err error
-	psqlTmpFile, err = os.CreateTemp("", "")
-	if err != nil {
-		errorLog.Fatalf("failed to create psql temp file :: %v", err)
+	if platform == "" {
+		errorLog.Fatal("unsupported OS / CPU platform")
 	}
 
-	psqlBytes, err := fs.ReadFile(depsFs, "deps/psql")
-	if err != nil {
-		errorLog.Fatalf("failed to read psql bytes :: %v", err)
+	if !acceptLicenses {
+		errorLog.Fatal("you must provide the --accept-licenses flag to signify you all third party licenses at https://sqlpipe.com/sqlpipe-licenses")
 	}
 
-	_, err = psqlTmpFile.Write(psqlBytes)
+	err := loadDeps()
 	if err != nil {
-		log.Fatalf("failed to write psql bytes :: %v", err)
-	}
-
-	err = os.Chmod(psqlTmpFile.Name(), 0755)
-	if err != nil {
-		log.Fatalf("failed to change psql permissions :: %v", err)
-	}
-
-	// get combined output
-	err = exec.Command(psqlTmpFile.Name(), "--version").Run()
-	if err != nil {
-		errorLog.Fatalf("unable to load psql dependency :: %v", err)
-	}
-
-	infoLog.Println("psql dependency loaded")
-
-	err = exec.Command("bcp", "--version").Run()
-	if err == nil {
-		bcpAvailable = true
+		errorLog.Fatalf("failed to load dependencies :: %v", err)
 	}
 
 	srv := &http.Server{

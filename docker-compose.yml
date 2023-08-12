@@ -13,7 +13,7 @@ services:
     command: >
       /bin/bash -c "
         /opt/mssql/bin/sqlservr &
-        sleep 25;
+        sleep 15;
         /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
         tail -f /dev/null
       "
@@ -24,19 +24,19 @@ services:
         limits:
           memory: 8G
 
-  oracle:
-    image: oracle/database:21.3.0-ee
-    container_name: oracle
-    ports:
-      - "1521:1521"
-    environment:
-      - ORACLE_PWD=Mypass123
-    volumes:
-      - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
-    deploy:
-      resources:
-        limits:
-          memory: 8G
+  # oracle:
+  #   image: oracle/database:21.3.0-ee
+  #   container_name: oracle
+  #   ports:
+  #     - "1521:1521"
+  #   environment:
+  #     - ORACLE_PWD=Mypass123
+  #   volumes:
+  #     - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 8G
   
   postgresql:
     image: postgres:15.3
@@ -52,19 +52,19 @@ services:
         limits:
           memory: 8G
 
-  mysql:
-    image: mysql:8.0
-    container_name: mysql
-    environment:
-      - MYSQL_ROOT_PASSWORD=Mypass123
-    ports:
-      - "3306:3306"
-    volumes:
-      - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
-    deploy:
-      resources:
-        limits:
-          memory: 8G
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: mysql
+  #   environment:
+  #     - MYSQL_ROOT_PASSWORD=Mypass123
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 8G
 
 
   # babelfish:

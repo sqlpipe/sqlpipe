@@ -27,14 +27,14 @@ func runTransfer(transfer Transfer) {
 	}
 
 	var err error
-	transfer.rows, err = transfer.Source.query(transfer.Query)
+	transfer.Rows, err = transfer.Source.query(transfer.Query)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error querying source :: %v", err))
 		return
 	}
-	defer transfer.rows.Close()
+	defer transfer.Rows.Close()
 
-	transfer.ColumnInfo, err = transfer.Source.getColumnInfo(transfer.rows)
+	transfer.ColumnInfo, err = transfer.Source.getColumnInfo(transfer.Rows)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error getting source column info :: %v", err))
 		return
@@ -48,13 +48,13 @@ func runTransfer(transfer Transfer) {
 		}
 	}
 
-	tmpDir, err := transfer.Source.createPipeFiles(transfer.rows, transfer.ColumnInfo, transfer.Id)
+	transfer.TmpDir, err = transfer.Source.createPipeFiles(transfer)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error writing pipe file :: %v", err))
 		return
 	}
 
-	err = transfer.Target.insertPipeFiles(tmpDir, transfer.Id, transfer.ColumnInfo, transfer.TargetTable, transfer.TargetSchema)
+	err = transfer.Target.insertPipeFiles(transfer)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error inserting data :: %v", err))
 	}

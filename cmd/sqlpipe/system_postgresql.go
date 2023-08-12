@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -60,8 +61,8 @@ func (system Postgresql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
 	return getColumnInfoCommon(rows, system)
 }
 
-func (system Postgresql) createPipeFiles(rows *sql.Rows, columnInfo []ColumnInfo, transferId string) (pipeFilesDir string, err error) {
-	return createPipeFilesCommon(rows, columnInfo, transferId, system)
+func (system Postgresql) createPipeFiles(transfer Transfer) (pipeFilesDir string, err error) {
+	return createPipeFilesCommon(transfer.Rows, transfer.ColumnInfo, transfer.Id, system, transfer.Null)
 }
 
 func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
@@ -299,10 +300,10 @@ func (system Postgresql) getPipeFileFormatters() map[string]func(interface{}) (s
 	}
 }
 
-func (system Postgresql) insertPipeFiles(tmpDir, transferId string, columnInfo []ColumnInfo, table, schema string) error {
-	pipeFilesDir := filepath.Join(tmpDir, "pipe-files")
+func (system Postgresql) insertPipeFiles(transfer Transfer) error {
+	pipeFilesDir := filepath.Join(transfer.TmpDir, "pipe-files")
 
-	psqlCsvDirPath := filepath.Join(tmpDir, "psql-csv")
+	psqlCsvDirPath := filepath.Join(transfer.TmpDir, "psql-csv")
 	err := os.Mkdir(psqlCsvDirPath, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("error creating psql-csv directory :: %v", err)
@@ -320,7 +321,9 @@ func (system Postgresql) insertPipeFiles(tmpDir, transferId string, columnInfo [
 		}
 		defer pipeFile.Close()
 
-		psqlCsvFile, err := os.CreateTemp(psqlCsvDirPath, "")
+		pipeFileNum := strings.Split(pipeFileEntry.Name(), ".")[0]
+
+		psqlCsvFile, err := os.Create(filepath.Join(psqlCsvDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
 		if err != nil {
 			return fmt.Errorf("error creating psql csv file :: %v", err)
 		}
@@ -339,8 +342,8 @@ func (system Postgresql) insertPipeFiles(tmpDir, transferId string, columnInfo [
 			}
 
 			for i := range row {
-				if row[i] != "<nil>" {
-					row[i], err = postgresqlPipeFileToCsvFormatters[columnInfo[i].pipeType](row[i])
+				if row[i] != transfer.Null {
+					row[i], err = postgresqlPipeFileToPsqlCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
 					if err != nil {
 						return fmt.Errorf("error formatting pipe file to psql csv :: %v", err)
 					}
@@ -375,7 +378,7 @@ func (system Postgresql) insertPipeFiles(tmpDir, transferId string, columnInfo [
 
 	for _, f := range psqlCsvs {
 
-		mycommand := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '<nil>', ENCODING 'UTF8')`, schema, table, filepath.Join(psqlCsvDirPath, f.Name()))
+		mycommand := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL %v, ENCODING 'UTF8')`, transfer.TargetSchema, transfer.TargetTable, filepath.Join(psqlCsvDirPath, f.Name()), transfer.Null)
 
 		cmd := exec.Command(psqlTmpFile.Name(), system.connectionString, "-c", mycommand)
 		result, err := cmd.CombinedOutput()
@@ -384,16 +387,12 @@ func (system Postgresql) insertPipeFiles(tmpDir, transferId string, columnInfo [
 		}
 	}
 
-	infoLog.Printf("inserted psql csvs into %s.%s", schema, table)
+	infoLog.Printf("inserted psql csvs into %s.%s", transfer.TargetSchema, transfer.TargetTable)
 
 	return nil
 }
 
-func (system Postgresql) getConnectionString() (string, error) {
-	return system.connectionString, nil
-}
-
-var postgresqlPipeFileToCsvFormatters = map[string]func(string) (string, error){
+var postgresqlPipeFileToPsqlCsvFormatters = map[string]func(string) (string, error){
 	"nvarchar": func(v string) (string, error) {
 		return v, nil
 	},
