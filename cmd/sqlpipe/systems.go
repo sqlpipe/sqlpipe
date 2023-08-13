@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type System interface {
@@ -21,16 +23,16 @@ type System interface {
 	getPipeFileFormatters() map[string]func(interface{}) (string, error)
 	dbTypeToPipeType(databaseTypeName string, columnType sql.ColumnType) (pipeType string, err error)
 	pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error)
-	createPipeFiles(transfer Transfer) (pipeFilesDir string, err error)
-	insertPipeFiles(transfer Transfer) error
+	createPipeFiles(transfer *Transfer, transferErrGroup *errgroup.Group) (out <-chan string, err error)
+	insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error
 }
 
 func newSystem(name, systemType, connectionString string) (System, error) {
 	switch systemType {
 	case "postgresql":
 		return newPostgresql(name, connectionString)
-	case "mssql":
-		return newMssql(name, connectionString)
+	// case "mssql":
+	// 	return newMssql(name, connectionString)
 	default:
 		return nil, fmt.Errorf("unsupported system type %v", systemType)
 	}
@@ -136,100 +138,113 @@ func createTableCommon(schema, table string, columnInfo []ColumnInfo, system Sys
 	return nil
 }
 
-func createPipeFilesCommon(rows *sql.Rows, columnInfo []ColumnInfo, transferId string, system System, null string) (transferDir string, err error) {
+func createPipeFilesCommon(transfer *Transfer, transferErrGroup *errgroup.Group) (<-chan string, error) {
+	var err error
+	out := make(chan string)
 	tempDir := os.TempDir()
-	transferDir = filepath.Join(tempDir, fmt.Sprintf("sqlpipe-transfer-%v", transferId))
-	err = os.Mkdir(transferDir, os.ModePerm)
+	transfer.TmpDir = filepath.Join(tempDir, fmt.Sprintf("sqlpipe-transfer-%v", transfer.Id))
+	err = os.Mkdir(transfer.TmpDir, os.ModePerm)
 	if err != nil {
-		return "", errors.New("error creating transfer dir")
+		return out, errors.New("error creating transfer dir")
 	}
 
-	pipeFilesDirPath := filepath.Join(transferDir, "pipe-files")
+	transferErrGroup.Go(func() error {
 
-	err = os.Mkdir(pipeFilesDirPath, os.ModePerm)
-	if err != nil {
-		return "", fmt.Errorf("unable to create temp dir for pipe files:: %v", err)
-	}
+		defer close(out)
 
-	pipeFileFormatters := system.getPipeFileFormatters()
+		pipeFilesDirPath := filepath.Join(transfer.TmpDir, "pipe-files")
 
-	pipeFileNum := 1
-
-	pipeFile, err := os.Create(filepath.Join(pipeFilesDirPath, fmt.Sprintf("%b.pipe", pipeFileNum)))
-	if err != nil {
-		return "", fmt.Errorf("error creating temp file :: %v", err)
-	}
-	defer pipeFile.Close()
-
-	csvWriter := csv.NewWriter(pipeFile)
-	csvRow := make([]string, len(columnInfo))
-	csvLength := 0
-
-	values := make([]interface{}, len(columnInfo))
-	valuePtrs := make([]interface{}, len(columnInfo))
-	for i := range columnInfo {
-		valuePtrs[i] = &values[i]
-	}
-
-	dataInRam := false
-	for i := 0; rows.Next(); i++ {
-		err := rows.Scan(valuePtrs...)
+		err = os.Mkdir(pipeFilesDirPath, os.ModePerm)
 		if err != nil {
-			return "", fmt.Errorf("error scanning row :: %v", err)
+			return fmt.Errorf("unable to create temp dir for pipe files:: %v", err)
 		}
 
-		for j := range columnInfo {
-			if values[j] == nil {
-				csvRow[j] = null
-				csvLength += 5
-			} else {
-				stringVal, err := pipeFileFormatters[columnInfo[j].pipeType](values[j])
-				if err != nil {
-					return "", fmt.Errorf("error while formatting pipe type %v :: %v", columnInfo[j].pipeType, err)
+		pipeFileFormatters := transfer.Source.getPipeFileFormatters()
+
+		pipeFileNum := 1
+
+		pipeFile, err := os.Create(filepath.Join(pipeFilesDirPath, fmt.Sprintf("%b.pipe", pipeFileNum)))
+		if err != nil {
+			return fmt.Errorf("error creating temp file :: %v", err)
+		}
+		defer pipeFile.Close()
+
+		csvWriter := csv.NewWriter(pipeFile)
+		csvRow := make([]string, len(transfer.ColumnInfo))
+		csvLength := 0
+
+		values := make([]interface{}, len(transfer.ColumnInfo))
+		valuePtrs := make([]interface{}, len(transfer.ColumnInfo))
+		for i := range transfer.ColumnInfo {
+			valuePtrs[i] = &values[i]
+		}
+
+		dataInRam := false
+
+		for i := 0; transfer.Rows.Next(); i++ {
+			err := transfer.Rows.Scan(valuePtrs...)
+			if err != nil {
+				return fmt.Errorf("error scanning row :: %v", err)
+			}
+
+			for j := range transfer.ColumnInfo {
+				if values[j] == nil {
+					csvRow[j] = transfer.Null
+					csvLength += 5
+				} else {
+					stringVal, err := pipeFileFormatters[transfer.ColumnInfo[j].pipeType](values[j])
+					if err != nil {
+						return fmt.Errorf("error while formatting pipe type %v :: %v", transfer.ColumnInfo[j].pipeType, err)
+					}
+					csvRow[j] = stringVal
+					csvLength += len(stringVal)
 				}
-				csvRow[j] = stringVal
-				csvLength += len(stringVal)
+			}
+
+			err = csvWriter.Write(csvRow)
+			if err != nil {
+				return fmt.Errorf("error writing csv row :: %v", err)
+			}
+			dataInRam = true
+
+			if csvLength > 10_000_000 {
+				csvWriter.Flush()
+
+				err = pipeFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing pipe file :: %v", err)
+				}
+
+				out <- pipeFile.Name()
+
+				pipeFileNum++
+				// create the file names in binary so it sorts correctly
+				pipeFile, err = os.Create(filepath.Join(pipeFilesDirPath, fmt.Sprintf("%b.pipe", pipeFileNum)))
+				if err != nil {
+					return fmt.Errorf("error creating temp file :: %v", err)
+				}
+				defer pipeFile.Close()
+
+				csvWriter = csv.NewWriter(pipeFile)
+				dataInRam = false
+				csvLength = 0
 			}
 		}
 
-		err = csvWriter.Write(csvRow)
-		if err != nil {
-			return "", fmt.Errorf("error writing csv row :: %v", err)
-		}
-		dataInRam = true
-
-		if csvLength > 10_000_000 {
+		if dataInRam {
 			csvWriter.Flush()
 
 			err = pipeFile.Close()
 			if err != nil {
-				return "", fmt.Errorf("error closing pipe file :: %v", err)
+				return fmt.Errorf("error closing pipe file :: %v", err)
 			}
 
-			pipeFileNum++
-			// create the file names in binary so it sorts correctly
-			pipeFile, err = os.Create(filepath.Join(pipeFilesDirPath, fmt.Sprintf("%b.pipe", pipeFileNum)))
-			if err != nil {
-				return "", fmt.Errorf("error creating temp file :: %v", err)
-			}
-			defer pipeFile.Close()
-
-			csvWriter = csv.NewWriter(pipeFile)
-			dataInRam = false
-			csvLength = 0
+			out <- pipeFile.Name()
 		}
-	}
 
-	if dataInRam {
-		csvWriter.Flush()
-	}
+		infoLog.Printf("pipe files written at %v", pipeFilesDirPath)
+		return nil
+	})
 
-	err = pipeFile.Close()
-	if err != nil {
-		return "", fmt.Errorf("error closing pipe file :: %v", err)
-	}
-
-	infoLog.Printf("pipe files written at %v", pipeFilesDirPath)
-
-	return transferDir, nil
+	return out, nil
 }

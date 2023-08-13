@@ -1,24 +1,20 @@
-curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "mssql", "target-connection-string": "sqlserver://sa:Mypass123@localhost:1433/mydb", "query": "select * from mytable", "target-table": "mytable", "target-schema": "dbo", "drop-target-table": true, "create-target-table": true}' localhost:9000/api/v3/transfers/create
-curl localhost:9000/api/v3/transfers/show/8d2a4853-fba3-4bd4-84be-a8440cdf1052
-curl localhost:9000/api/v3/transfers/list
-
-curl -X PATCH localhost:9000/api/v3/transfers/cancel/67374e5a-4faa-4955-afee-8bc5ec1782b6
-curl localhost:9000/api/v3/transfers/show/8d2a4853-fba3-4bd4-84be-a8440cdf1052
-curl localhost:9000/api/v3/transfers/list
-
 curl localhost:9000/api/v3/healthcheck
+
+postgresql to postgresql
+curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "postgresql", "target-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "query": "select * from my_table", "target-table": "postgresql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "public"}' localhost:9000/api/v3/transfers/create
 
 mssql to postgresql
 curl -d '{"source-type": "mssql", "source-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "target-type": "postgresql", "target-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "query": "select * from my_table", "target-table": "mssql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "public"}' localhost:9000/api/v3/transfers/create
 
-postgresql to mssql
-curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "mssql", "target-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "query": "select * from my_table", "target-table": "postgresql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo"}' localhost:9000/api/v3/transfers/create
-
-postgresql to postgresql
-curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "postgresql", "target-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "query": "select * from my_table", "target-table": "target_table", "drop-target-table": true, "create-target-table": true, "target-schema": "public"}' localhost:9000/api/v3/transfers/create
-
-mssql to babelfish
-curl -d '{"source-type": "mssql", "source-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "target-type": "postgresql", "target-connection-string": "postgresql://babelfish_user:12345678@localhost:5432/babelfish_db", "query": "select * from my_table", "target-table": "target_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo"}' localhost:9000/api/v3/transfers/create
-
 mssql to mssql
-curl -d '{"source-type": "mssql", "source-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "target-type": "mssql", "target-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "query": "select * from my_table", "target-table": "mssql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo", "bcp-database": "mydb", "bcp-password": "Mypass123", "bcp-server": "localhost", "bcp-user": "sa"}' localhost:9000/api/v3/transfers/create
+curl -d '{"source-type": "mssql", "source-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "target-type": "mssql", "target-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "query": "select * from my_table", "target-table": "mssql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo", "bcp-database": "mydb", "bcp-password": "Mypass123", "bcp-server": "localhost;TrustServerCertificate=yes", "bcp-user": "sa"}' localhost:9000/api/v3/transfers/create
+
+postgresql to mssql
+curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "mssql", "target-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "query": "select * from my_table", "target-table": "postgresql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo", "bcp-database": "mydb", "bcp-password": "Mypass123", "bcp-server": "localhost;TrustServerCertificate=yes", "bcp-user": "sa"}' localhost:9000/api/v3/transfers/create
+
+
+all 4
+curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "postgresql", "target-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "query": "select * from my_table", "target-table": "postgresql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "public"}' localhost:9000/api/v3/transfers/create
+curl -d '{"source-type": "mssql", "source-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "target-type": "postgresql", "target-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "query": "select * from my_table", "target-table": "mssql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "public"}' localhost:9000/api/v3/transfers/create
+curl -d '{"source-type": "mssql", "source-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "target-type": "mssql", "target-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "query": "select * from my_table", "target-table": "mssql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo", "bcp-database": "mydb", "bcp-password": "Mypass123", "bcp-server": "localhost;TrustServerCertificate=yes", "bcp-user": "sa"}' localhost:9000/api/v3/transfers/create
+curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "mssql", "target-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "query": "select * from my_table", "target-table": "postgresql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo", "bcp-database": "mydb", "bcp-password": "Mypass123", "bcp-server": "localhost;TrustServerCertificate=yes", "bcp-user": "sa"}' localhost:9000/api/v3/transfers/create

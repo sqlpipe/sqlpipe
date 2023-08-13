@@ -47,7 +47,7 @@ DO $$
 DECLARE 
     counter INTEGER := 0;
 BEGIN 
-    WHILE counter < 1000 LOOP
+    WHILE counter < 10000 LOOP
         INSERT INTO my_table (
             my_char,
             my_varchar,

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type ColumnInfo struct {
@@ -48,14 +50,25 @@ func runTransfer(transfer Transfer) {
 		}
 	}
 
-	transfer.TmpDir, err = transfer.Source.createPipeFiles(transfer)
+	transferErrGroup := &errgroup.Group{}
+
+	pipeFiles, err := transfer.Source.createPipeFiles(&transfer, transferErrGroup)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error writing pipe file :: %v", err))
 		return
 	}
 
-	err = transfer.Target.insertPipeFiles(transfer)
+	err = transfer.Target.insertPipeFiles(&transfer, pipeFiles, transferErrGroup)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error inserting data :: %v", err))
+		return
 	}
+
+	err = transferErrGroup.Wait()
+	if err != nil {
+		transferError(transfer, fmt.Errorf("error inserting data :: %v", err))
+		return
+	}
+
+	infoLog.Printf("transfer %v complete\n", transfer.Id)
 }

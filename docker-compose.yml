@@ -13,7 +13,7 @@ services:
     command: >
       /bin/bash -c "
         /opt/mssql/bin/sqlservr &
-        sleep 15;
+        sleep 20;
         /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
         tail -f /dev/null
       "
