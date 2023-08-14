@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,8 +30,8 @@ func newSystem(name, systemType, connectionString string) (System, error) {
 	switch systemType {
 	case "postgresql":
 		return newPostgresql(name, connectionString)
-	// case "mssql":
-	// 	return newMssql(name, connectionString)
+	case "mssql":
+		return newMssql(name, connectionString)
 	default:
 		return nil, fmt.Errorf("unsupported system type %v", systemType)
 	}
@@ -141,12 +140,6 @@ func createTableCommon(schema, table string, columnInfo []ColumnInfo, system Sys
 func createPipeFilesCommon(transfer *Transfer, transferErrGroup *errgroup.Group) (<-chan string, error) {
 	var err error
 	out := make(chan string)
-	tempDir := os.TempDir()
-	transfer.TmpDir = filepath.Join(tempDir, fmt.Sprintf("sqlpipe-transfer-%v", transfer.Id))
-	err = os.Mkdir(transfer.TmpDir, os.ModePerm)
-	if err != nil {
-		return out, errors.New("error creating transfer dir")
-	}
 
 	transferErrGroup.Go(func() error {
 

@@ -303,83 +303,148 @@ func (system Postgresql) getPipeFileFormatters() map[string]func(interface{}) (s
 }
 
 func (system Postgresql) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
+	psqlFiles, err := postgresqlConvertPipeFiles(transfer, in, transferErrGroup)
+	if err != nil {
+		return fmt.Errorf("error converting pipeFiles :: %v", err)
+	}
+
+	err = postgresqlInsertPsqlCsvs(transfer, psqlFiles)
+	if err != nil {
+		return fmt.Errorf("error inserting pipeFiles :: %v", err)
+	}
+
+	return nil
+}
+
+func postgresqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
+
+	out := make(chan string)
 
 	psqlCsvDirPath := filepath.Join(transfer.TmpDir, "psql-csv")
 	err := os.Mkdir(psqlCsvDirPath, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("error creating psql-csv directory :: %v", err)
+		return out, fmt.Errorf("error creating psql-csv directory :: %v", err)
 	}
 
-	for pipeFileName := range in {
+	transferErrGroup.Go(func() error {
+		defer close(out)
 
-		pipeFileName := pipeFileName
+		for pipeFileName := range in {
 
-		transferErrGroup.Go(func() error {
+			pipeFileName := pipeFileName
+			conversionErrGroup := errgroup.Group{}
 
-			pipeFile, err := os.Open(pipeFileName)
-			if err != nil {
-				return fmt.Errorf("error opening pipeFile :: %v", err)
-			}
-
-			// strip path from pipeFile name, get number
-			pipeFileNameClean := filepath.Base(pipeFileName)
-			pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
-
-			psqlCsvFile, err := os.Create(filepath.Join(psqlCsvDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
-			if err != nil {
-				return fmt.Errorf("error creating psql csv file :: %v", err)
-			}
-
-			csvReader := csv.NewReader(pipeFile)
-			csvWriter := csv.NewWriter(psqlCsvFile)
-
-			for {
-				row, err := csvReader.Read()
+			conversionErrGroup.Go(func() error {
+				pipeFile, err := os.Open(pipeFileName)
 				if err != nil {
-					if errors.Is(err, io.EOF) {
-						break
-					}
-					return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
+					return fmt.Errorf("error opening pipeFile :: %v", err)
 				}
+				defer pipeFile.Close()
 
-				for i := range row {
-					if row[i] != transfer.Null {
-						row[i], err = postgresqlPipeFileToPsqlCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
-						if err != nil {
-							return fmt.Errorf("error formatting pipe file to psql csv :: %v", err)
+				// strip path from pipeFile name, get number
+				pipeFileNameClean := filepath.Base(pipeFileName)
+				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
+
+				psqlCsvFile, err := os.Create(filepath.Join(psqlCsvDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
+				if err != nil {
+					return fmt.Errorf("error creating psql csv file :: %v", err)
+				}
+				defer psqlCsvFile.Close()
+
+				csvReader := csv.NewReader(pipeFile)
+				csvWriter := csv.NewWriter(psqlCsvFile)
+
+				for {
+					row, err := csvReader.Read()
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							break
+						}
+						return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
+					}
+
+					for i := range row {
+						if row[i] != transfer.Null {
+							row[i], err = postgresqlPipeFileToPsqlCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
+							if err != nil {
+								return fmt.Errorf("error formatting pipe file to psql csv :: %v", err)
+							}
 						}
 					}
+
+					err = csvWriter.Write(row)
+					if err != nil {
+						return fmt.Errorf("error writing psql csv :: %v", err)
+					}
 				}
 
-				err = csvWriter.Write(row)
+				err = pipeFile.Close()
 				if err != nil {
-					return fmt.Errorf("error writing psql csv :: %v", err)
+					return fmt.Errorf("error closing pipeFile :: %v", err)
 				}
-			}
 
-			csvWriter.Flush()
+				conversionErrGroup.Go(func() error {
+					err := os.Remove(pipeFileName)
+					if err != nil {
+						return fmt.Errorf("error removing pipeFile :: %v", err)
+					}
+					return nil
+				})
 
-			err = psqlCsvFile.Close()
+				csvWriter.Flush()
+
+				err = psqlCsvFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing psql csv file :: %v", err)
+				}
+
+				out <- psqlCsvFile.Name()
+
+				return nil
+			})
+
+			err = conversionErrGroup.Wait()
 			if err != nil {
-				return fmt.Errorf("error closing psql csv file :: %v", err)
+				return fmt.Errorf("error converting pipeFiles :: %v", err)
 			}
+		}
 
-			err = pipeFile.Close()
+		infoLog.Printf("converted pipe files to psql csvs at %v\n", psqlCsvDirPath)
+		return nil
+	})
+
+	return out, nil
+}
+
+func postgresqlInsertPsqlCsvs(transfer *Transfer, in <-chan string) error {
+
+	insertErrGroup := errgroup.Group{}
+
+	for psqlCsvFileName := range in {
+		copyCmd := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '%v', ENCODING 'UTF8')`, transfer.TargetSchema, transfer.TargetTable, psqlCsvFileName, transfer.Null)
+
+		cmd := exec.Command(psqlTmpFile.Name(), transfer.TargetConnectionString, "-c", copyCmd)
+
+		result, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to upload csv to postgresql :: stderr %v :: stdout %s", err, string(result))
+		}
+
+		psqlCsvFileName := psqlCsvFileName
+		insertErrGroup.Go(func() error {
+			err = os.Remove(psqlCsvFileName)
 			if err != nil {
-				return fmt.Errorf("error closing pipe file :: %v", err)
+				return fmt.Errorf("error removing psql csv :: %v", err)
 			}
-
-			mycommand := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '%v', ENCODING 'UTF8')`, transfer.TargetSchema, transfer.TargetTable, psqlCsvFile.Name(), transfer.Null)
-
-			cmd := exec.Command(psqlTmpFile.Name(), system.connectionString, "-c", mycommand)
-			result, err := cmd.CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("failed to upload csv to postgresql :: stderr %v :: stdout %s", err, string(result))
-			}
-
-			psqlCsvFile.Close()
 			return nil
 		})
+	}
+
+	infoLog.Printf("finished inserting psql csvs into for transfer %v\n", transfer.Id)
+
+	err := insertErrGroup.Wait()
+	if err != nil {
+		return fmt.Errorf("error inserting psql csvs :: %v", err)
 	}
 
 	return nil
