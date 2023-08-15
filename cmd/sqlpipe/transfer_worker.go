@@ -58,7 +58,7 @@ func runTransfer(transfer Transfer) {
 		transferError(transfer, fmt.Errorf("error creating transfer dir :: %v", err))
 		return
 	}
-	defer os.RemoveAll(transfer.TmpDir)
+	// defer os.RemoveAll(transfer.TmpDir)
 
 	transferErrGroup := &errgroup.Group{}
 

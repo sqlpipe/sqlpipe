@@ -110,9 +110,9 @@ func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.Co
 	case "142":
 		return "xml", nil
 	case "BIT":
-		return "nvarchar", nil
+		return "varbit", nil
 	case "VARBIT":
-		return "nvarchar", nil
+		return "varbit", nil
 	case "BOX":
 		return "nvarchar", nil
 	case "CIRCLE":
@@ -204,12 +204,14 @@ func (system Postgresql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType
 		return "jsonb", nil
 	case "xml":
 		return "xml", nil
+	case "varbit":
+		return "varbit", nil
 	default:
 		return "", fmt.Errorf("unsupported pipeType for postgresql: %v", columnInfo.pipeType)
 	}
 }
 
-func (system Postgresql) getPipeFileFormatters() map[string]func(interface{}) (string, error) {
+func (system Postgresql) getPipeFileFormatters() (map[string]func(interface{}) (string, error), error) {
 	return map[string]func(interface{}) (string, error){
 		"nvarchar": func(v interface{}) (string, error) {
 			return fmt.Sprintf("%s", v), nil
@@ -299,7 +301,10 @@ func (system Postgresql) getPipeFileFormatters() map[string]func(interface{}) (s
 		"xml": func(v interface{}) (string, error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-	}
+		"varbit": func(v interface{}) (string, error) {
+			return fmt.Sprintf("%s", v), nil
+		},
+	}, nil
 }
 
 func (system Postgresql) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
@@ -383,13 +388,13 @@ func postgresqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferEr
 					return fmt.Errorf("error closing pipeFile :: %v", err)
 				}
 
-				conversionErrGroup.Go(func() error {
-					err := os.Remove(pipeFileName)
-					if err != nil {
-						return fmt.Errorf("error removing pipeFile :: %v", err)
-					}
-					return nil
-				})
+				// conversionErrGroup.Go(func() error {
+				// 	err := os.Remove(pipeFileName)
+				// 	if err != nil {
+				// 		return fmt.Errorf("error removing pipeFile :: %v", err)
+				// 	}
+				// 	return nil
+				// })
 
 				csvWriter.Flush()
 
@@ -524,6 +529,9 @@ var postgresqlPipeFileToPsqlCsvFormatters = map[string]func(string) (string, err
 		return v, nil
 	},
 	"xml": func(v string) (string, error) {
+		return v, nil
+	},
+	"varbit": func(v string) (string, error) {
 		return v, nil
 	},
 }

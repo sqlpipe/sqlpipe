@@ -19,19 +19,21 @@ type System interface {
 	query(query string) (*sql.Rows, error)
 	exec(query string) (err error)
 	getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error)
-	getPipeFileFormatters() map[string]func(interface{}) (string, error)
+	getPipeFileFormatters() (map[string]func(interface{}) (string, error), error)
 	dbTypeToPipeType(databaseTypeName string, columnType sql.ColumnType) (pipeType string, err error)
 	pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error)
 	createPipeFiles(transfer *Transfer, transferErrGroup *errgroup.Group) (out <-chan string, err error)
 	insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error
 }
 
-func newSystem(name, systemType, connectionString string) (System, error) {
+func newSystem(name, systemType, connectionString string, timezone string) (System, error) {
 	switch systemType {
 	case "postgresql":
 		return newPostgresql(name, connectionString)
 	case "mssql":
 		return newMssql(name, connectionString)
+	case "mysql":
+		return newMysql(name, connectionString, timezone)
 	default:
 		return nil, fmt.Errorf("unsupported system type %v", systemType)
 	}
@@ -54,11 +56,19 @@ func openDbCommon(name, connectionString, driverName string) (db *sql.DB, err er
 }
 
 func dropTableIfExistsCommon(schema, table string, system System) error {
-	query := fmt.Sprintf("drop table if exists %v.%v", schema, table)
+
+	if schema != "" {
+		schema = fmt.Sprintf("%v.", schema)
+	}
+
+	query := fmt.Sprintf("drop table if exists %v%v", schema, table)
 	err := system.exec(query)
 	if err != nil {
-		err = fmt.Errorf("error dropping %v.%v :: %v", schema, table, err)
+		err = fmt.Errorf("error dropping %v%v :: %v", schema, table, err)
 	}
+
+	infoLog.Printf("dropped %v%v", schema, table)
+
 	return err
 }
 
@@ -110,8 +120,8 @@ func createTableCommon(schema, table string, columnInfo []ColumnInfo, system Sys
 
 	queryBuilder.WriteString("create table ")
 	if schema != "" {
+		schema = fmt.Sprintf("%v.", schema)
 		queryBuilder.WriteString(schema)
-		queryBuilder.WriteString(".")
 	}
 	queryBuilder.WriteString(table)
 	queryBuilder.WriteString(" (")
@@ -134,6 +144,9 @@ func createTableCommon(schema, table string, columnInfo []ColumnInfo, system Sys
 	if err != nil {
 		return fmt.Errorf("error running create table %v.%v :: %v", schema, table, err)
 	}
+
+	infoLog.Printf("created table %v%v", schema, table)
+
 	return nil
 }
 
@@ -152,7 +165,10 @@ func createPipeFilesCommon(transfer *Transfer, transferErrGroup *errgroup.Group)
 			return fmt.Errorf("unable to create temp dir for pipe files:: %v", err)
 		}
 
-		pipeFileFormatters := transfer.Source.getPipeFileFormatters()
+		pipeFileFormatters, err := transfer.Source.getPipeFileFormatters()
+		if err != nil {
+			return fmt.Errorf("error getting pipe file formatters :: %v", err)
+		}
 
 		pipeFileNum := 1
 

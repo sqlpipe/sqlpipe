@@ -42,6 +42,7 @@ type Transfer struct {
 	SourceType             string `json:"source-type"`
 	SourceConnectionString string `json:"-"`
 	Source                 System `json:"-"`
+	SourceTimezone         string `json:"source-timezone"`
 
 	TargetName             string `json:"target-name"`
 	TargetType             string `json:"target-type"`
@@ -63,9 +64,9 @@ type Transfer struct {
 	Newline   string `json:"newline"`
 	Null      string `json:"null"`
 
-	BcpDatabase string `json:"bcp-database",omitempty`
-	BcpServer   string `json:"bcp-server",omitempty`
-	BcpUsername string `json:"bcp-user",omitempty`
+	BcpDatabase string `json:"bcp-database,omitempty"`
+	BcpServer   string `json:"bcp-server,omitempty"`
+	BcpUsername string `json:"bcp-user,omitempty"`
 	BcpPass     string `json:"-"`
 }
 
@@ -74,6 +75,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		SourceName             string `json:"source-name"`
 		SourceType             string `json:"source-type"`
 		SourceConnectionString string `json:"source-connection-string"`
+		SourceTimezone         string `json:"source-timezone"`
 		TargetName             string `json:"target-name"`
 		TargetType             string `json:"target-type"`
 		TargetConnectionString string `json:"target-connection-string"`
@@ -97,13 +99,13 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sourceSystem, err := newSystem(input.SourceName, input.SourceType, input.SourceConnectionString)
+	sourceSystem, err := newSystem(input.SourceName, input.SourceType, input.SourceConnectionString, input.SourceTimezone)
 	if err != nil {
 		clientErrorResponse(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	targetSystem, err := newSystem(input.TargetName, input.TargetType, input.TargetConnectionString)
+	targetSystem, err := newSystem(input.TargetName, input.TargetType, input.TargetConnectionString, input.SourceTimezone)
 	if err != nil {
 		clientErrorResponse(w, r, http.StatusBadRequest, err)
 		return

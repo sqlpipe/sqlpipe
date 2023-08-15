@@ -12,6 +12,12 @@ curl -d '{"source-type": "mssql", "source-connection-string": "Server=localhost,
 postgresql to mssql
 curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "mssql", "target-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "query": "select * from my_table", "target-table": "postgresql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo", "bcp-database": "mydb", "bcp-password": "Mypass123", "bcp-server": "localhost;TrustServerCertificate=yes", "bcp-user": "sa"}' localhost:9000/api/v3/transfers/create
 
+mysql to postgresql
+curl -d '{"source-type": "mysql", "source-connection-string": "root:Mypass123@tcp(localhost:3306)/mydb", "source-timezone": "US/Pacific", "target-type": "postgresql", "target-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "query": "select * from my_table", "target-table": "mysql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "public"}' localhost:9000/api/v3/transfers/create
+
+mysql to mssql
+curl -d '{"source-type": "mysql", "source-connection-string": "root:Mypass123@tcp(localhost:3306)/mydb", "source-timezone": "US/Pacific", "target-type": "mssql", "target-connection-string": "Server=localhost,1433;Database=mydb;User Id=sa;Password=Mypass123;", "query": "select * from my_table", "target-table": "mysql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "dbo", "bcp-database": "mydb", "bcp-password": "Mypass123", "bcp-server": "localhost;TrustServerCertificate=yes", "bcp-user": "sa"}' localhost:9000/api/v3/transfers/create
+
 
 all 4
 curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "target-type": "postgresql", "target-connection-string": "postgresql://postgres:Mypass123@localhost:5432/mydb", "query": "select * from my_table", "target-table": "postgresql_my_table", "drop-target-table": true, "create-target-table": true, "target-schema": "public"}' localhost:9000/api/v3/transfers/create

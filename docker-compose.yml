@@ -13,7 +13,7 @@ services:
     command: >
       /bin/bash -c "
         /opt/mssql/bin/sqlservr &
-        sleep 20;
+        sleep 25;
         /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
         tail -f /dev/null
       "
@@ -52,19 +52,20 @@ services:
         limits:
           memory: 8G
 
-  # mysql:
-  #   image: mysql:8.0
-  #   container_name: mysql
-  #   environment:
-  #     - MYSQL_ROOT_PASSWORD=Mypass123
-  #   ports:
-  #     - "3306:3306"
-  #   volumes:
-  #     - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 8G
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=Mypass123
+      - TZ=America/Los_Angeles
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 8G
 
 
   # babelfish:

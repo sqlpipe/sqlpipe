@@ -69,5 +69,10 @@ func validateTransfer(v validator, transfer Transfer) {
 		v.check(transfer.BcpUsername != "", "bcp-user", "must be provided")
 		v.check(transfer.BcpPass != "", "bcp-password", "must be provided")
 		v.check(transfer.BcpDatabase != "", "bcp-database", "must be provided")
+		v.check(bcpAvailable, "target-type", "bcp is not available on your os / cpu combination")
+	}
+
+	if transfer.TargetType == "postgresql" {
+		v.check(psqlAvailable, "target-type", "psql is not available on your os / cpu combination")
 	}
 }

@@ -119,7 +119,7 @@ func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 		return "blob", nil
 	case "UNIQUEIDENTIFIER":
 		return "uuid", nil
-	case "BIT":
+	case "varbit":
 		return "bool", nil
 	case "XML":
 		return "xml", nil
@@ -220,6 +220,18 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 		}
 	case "xml":
 		return "xml", nil
+	case "varbit":
+		if columnInfo.lengthOk {
+			if columnInfo.length <= 0 {
+				return "varchar(max)", nil
+			} else if columnInfo.length <= 8000 {
+				return fmt.Sprintf("varchar(%v)", columnInfo.length), nil
+			} else {
+				return "varchar(max)", nil
+			}
+		} else {
+			return "varchar(8000)", nil
+		}
 	default:
 		return "", fmt.Errorf("unsupported pipeType for mssql: %v", columnInfo.pipeType)
 	}
@@ -388,7 +400,7 @@ func mssqlInsertBcpFiles(transfer *Transfer, in <-chan string) error {
 	return nil
 }
 
-func (system Mssql) getPipeFileFormatters() map[string]func(interface{}) (string, error) {
+func (system Mssql) getPipeFileFormatters() (map[string]func(interface{}) (string, error), error) {
 	return map[string]func(interface{}) (string, error){
 		"nvarchar": func(v interface{}) (string, error) {
 			return fmt.Sprintf("%s", v), nil
@@ -488,7 +500,7 @@ func (system Mssql) getPipeFileFormatters() map[string]func(interface{}) (string
 		"xml": func(v interface{}) (string, error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-	}
+	}, nil
 }
 
 var mssqlPipeFileToBcpCsvFormatters = map[string]func(string) (string, error){
@@ -592,6 +604,9 @@ var mssqlPipeFileToBcpCsvFormatters = map[string]func(string) (string, error){
 		return v, nil
 	},
 	"xml": func(v string) (string, error) {
+		return v, nil
+	},
+	"varbit": func(v string) (string, error) {
 		return v, nil
 	},
 }
