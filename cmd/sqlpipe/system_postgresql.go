@@ -91,6 +91,7 @@ func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.Co
 		return "datetime", nil
 	case "TIMESTAMPTZ":
 		return "datetimetz", nil
+		// return "datetime", nil
 	case "DATE":
 		return "date", nil
 	case "INTERVAL":
@@ -187,7 +188,7 @@ func (system Postgresql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType
 	case "datetime":
 		return "timestamp", nil
 	case "datetimetz":
-		return "timestamptz", nil
+		return "timestamp", nil
 	case "date":
 		return "date", nil
 	case "time":
@@ -435,14 +436,14 @@ func postgresqlInsertPsqlCsvs(transfer *Transfer, in <-chan string) error {
 			return fmt.Errorf("failed to upload csv to postgresql :: stderr %v :: stdout %s", err, string(result))
 		}
 
-		psqlCsvFileName := psqlCsvFileName
-		insertErrGroup.Go(func() error {
-			err = os.Remove(psqlCsvFileName)
-			if err != nil {
-				return fmt.Errorf("error removing psql csv :: %v", err)
-			}
-			return nil
-		})
+		// psqlCsvFileName := psqlCsvFileName
+		// insertErrGroup.Go(func() error {
+		// 	err = os.Remove(psqlCsvFileName)
+		// 	if err != nil {
+		// 		return fmt.Errorf("error removing psql csv :: %v", err)
+		// 	}
+		// 	return nil
+		// })
 	}
 
 	infoLog.Printf("finished inserting psql csvs into for transfer %v\n", transfer.Id)
@@ -496,7 +497,12 @@ var postgresqlPipeFileToPsqlCsvFormatters = map[string]func(string) (string, err
 		return v, nil
 	},
 	"datetimetz": func(v string) (string, error) {
-		return v, nil
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error parsing datetimetz value in postgresql datetimetz psql formatter :: %v", err)
+		}
+
+		return valTime.UTC().Format(time.RFC3339Nano), nil
 	},
 	"date": func(v string) (string, error) {
 		valTime, err := time.Parse(time.RFC3339Nano, v)

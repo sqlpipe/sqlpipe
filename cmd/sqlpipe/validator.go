@@ -65,10 +65,10 @@ func validateTransfer(v validator, transfer Transfer) {
 	}
 
 	if transfer.TargetType == "mssql" {
-		v.check(transfer.BcpServer != "", "bcp-server", "must be provided")
-		v.check(transfer.BcpUsername != "", "bcp-user", "must be provided")
-		v.check(transfer.BcpPass != "", "bcp-password", "must be provided")
-		v.check(transfer.BcpDatabase != "", "bcp-database", "must be provided")
+		v.check(transfer.TargetHostname != "", "target-hostname", "must be provided for target type mssql")
+		v.check(transfer.TargetUsername != "", "target-username", "must be provided for target type mssql")
+		v.check(transfer.TargetPassword != "", "target-password", "must be provided for target type mssql")
+		v.check(transfer.TargetDatabase != "", "target-database", "must be provided for target type mssql")
 		v.check(bcpAvailable, "target-type", "bcp is not available on your os / cpu combination")
 	}
 

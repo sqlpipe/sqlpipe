@@ -141,22 +141,20 @@ func (system Mysql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 				return "", errors.New("transfer requires moving datetimetz pipetype, but source-timezone is not set for mysql")
 			}
 
-			valBytes, ok := v.([]byte)
-			if !ok {
-				return "", errors.New("non []uint8 value passed to datetimetz mysqlPipeFileFormatter")
-			}
-
-			valTime, err := time.Parse("2006-01-02 15:04:05.999999", string(valBytes))
-			if err != nil {
-				return "", fmt.Errorf("error parsing datetimetz value in mysqlPipeFileFormatter :: %v", err)
-			}
-
 			loc, err := time.LoadLocation(system.timezone)
 			if err != nil {
 				return "", fmt.Errorf("error loading timezone location in mysqlPipeFileFormatter :: %v", err)
 			}
 
-			valTime = valTime.In(loc)
+			valBytes, ok := v.([]byte)
+			if !ok {
+				return "", errors.New("non []uint8 value passed to datetimetz mysqlPipeFileFormatter")
+			}
+
+			valTime, err := time.ParseInLocation("2006-01-02 15:04:05.999999", string(valBytes), loc)
+			if err != nil {
+				return "", fmt.Errorf("error parsing datetimetz value in mysqlPipeFileFormatter :: %v", err)
+			}
 
 			return valTime.Format(time.RFC3339Nano), nil
 		},
@@ -266,6 +264,7 @@ func (system Mysql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 		return "datetime", nil
 	case "TIMESTAMP":
 		return "datetimetz", nil
+		// return "datetime", nil
 	case "DATE":
 		return "date", nil
 	case "TIME":

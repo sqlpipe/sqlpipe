@@ -107,6 +107,7 @@ func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 		return "datetime", nil
 	case "DATETIMEOFFSET":
 		return "datetimetz", nil
+		// return "datetime", nil
 	case "DATE":
 		return "date", nil
 	case "TIME":
@@ -119,7 +120,7 @@ func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 		return "blob", nil
 	case "UNIQUEIDENTIFIER":
 		return "uuid", nil
-	case "varbit":
+	case "BIT":
 		return "bool", nil
 	case "XML":
 		return "xml", nil
@@ -183,7 +184,7 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 	case "datetime":
 		return "datetime2", nil
 	case "datetimetz":
-		return "datetimeoffset", nil
+		return "datetime2", nil
 	case "date":
 		return "date", nil
 	case "time":
@@ -365,13 +366,13 @@ func mssqlInsertBcpFiles(transfer *Transfer, in <-chan string) error {
 	for bcpCsvFileName := range in {
 		cmd := exec.Command(
 			bcpTmpFile.Name(),
-			fmt.Sprintf("%s.%s.%s", transfer.BcpDatabase, transfer.TargetSchema, transfer.TargetTable),
+			fmt.Sprintf("%s.%s.%s", transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable),
 			"in",
 			bcpCsvFileName,
 			"-c",
-			"-S", transfer.BcpServer,
-			"-U", transfer.BcpUsername,
-			"-P", transfer.BcpPass,
+			"-S", transfer.TargetHostname,
+			"-U", transfer.TargetUsername,
+			"-P", transfer.TargetPassword,
 			"-t", transfer.Delimiter,
 			"-r", transfer.Newline,
 			"-e", "/tmp/errors.txt",
@@ -562,9 +563,10 @@ var mssqlPipeFileToBcpCsvFormatters = map[string]func(string) (string, error){
 	"datetimetz": func(v string) (string, error) {
 		valTime, err := time.Parse(time.RFC3339Nano, v)
 		if err != nil {
-			return "", fmt.Errorf("error writing date value to bcp csv :: %v", err)
+			return "", fmt.Errorf("error parsing datetimetz value in mssql datetimetz psql formatter :: %v", err)
 		}
-		return valTime.Format("2006-01-02 15:04:05.9999999 -07:00"), nil
+
+		return valTime.UTC().Format("2006-01-02 15:04:05.9999999"), nil
 	},
 	"date": func(v string) (string, error) {
 		valTime, err := time.Parse(time.RFC3339Nano, v)

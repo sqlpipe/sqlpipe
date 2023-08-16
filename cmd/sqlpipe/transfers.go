@@ -48,10 +48,14 @@ type Transfer struct {
 	TargetType             string `json:"target-type"`
 	TargetConnectionString string `json:"-"`
 	Target                 System `json:"-"`
+	TargetHostname         string `json:"target-hostname"`
+	TargetUsername         string `json:"target-username"`
+	TargetPassword         string `json:"-"`
+	TargetDatabase         string `json:"target-database"`
+	TargetSchema           string `json:"target-schema,omitempty"`
 
-	Query        string `json:"query"`
-	TargetSchema string `json:"target-schema,omitempty"`
-	TargetTable  string `json:"target-table"`
+	Query       string `json:"query"`
+	TargetTable string `json:"target-table"`
 
 	DropTargetTable   bool `json:"drop-target-table"`
 	CreateTargetTable bool `json:"create-target-table"`
@@ -63,11 +67,6 @@ type Transfer struct {
 	Delimiter string `json:"delimiter"`
 	Newline   string `json:"newline"`
 	Null      string `json:"null"`
-
-	BcpDatabase string `json:"bcp-database,omitempty"`
-	BcpServer   string `json:"bcp-server,omitempty"`
-	BcpUsername string `json:"bcp-user,omitempty"`
-	BcpPass     string `json:"-"`
 }
 
 func createTransferHandler(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +79,10 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		TargetType             string `json:"target-type"`
 		TargetConnectionString string `json:"target-connection-string"`
 		TargetSchema           string `json:"target-schema"`
+		TargetHostname         string `json:"target-hostname"`
+		TargetUsername         string `json:"target-username"`
+		TargetPassword         string `json:"target-password"`
+		TargetDatabase         string `json:"target-database"`
 		Query                  string `json:"query"`
 		TargetTable            string `json:"target-table"`
 		DropTargetTable        bool   `json:"drop-target-table"`
@@ -87,10 +90,6 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		Delimiter              string `json:"delimiter"`
 		Newline                string `json:"newline"`
 		Null                   string `json:"null"`
-		BcpServer              string `json:"bcp-server"`
-		BcpUsername            string `json:"bcp-user"`
-		BcpPass                string `json:"bcp-password"`
-		BcpDatabase            string `json:"bcp-database"`
 	}
 
 	err := readJSON(w, r, &input)
@@ -151,10 +150,10 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		Delimiter:              input.Delimiter,
 		Newline:                input.Newline,
 		Null:                   input.Null,
-		BcpServer:              input.BcpServer,
-		BcpUsername:            input.BcpUsername,
-		BcpPass:                input.BcpPass,
-		BcpDatabase:            input.BcpDatabase,
+		TargetHostname:         input.TargetHostname,
+		TargetUsername:         input.TargetUsername,
+		TargetPassword:         input.TargetPassword,
+		TargetDatabase:         input.TargetDatabase,
 	}
 
 	v := newValidator()
