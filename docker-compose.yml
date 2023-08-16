@@ -1,29 +1,29 @@
 version: '3.8'
 
 services:
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: mssql
-    environment:
-      ACCEPT_EULA: Y
-      SA_PASSWORD: Mypass123
-    platform: linux/amd64
-    volumes:
-      - ./setup-sql/mssql.sql:/setup.sql
-    command: >
-      /bin/bash -c "
-        export TZ=US/Pacific
-        /opt/mssql/bin/sqlservr &
-        sleep 25;
-        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
-        tail -f /dev/null
-      "
-    ports:
-      - "1433:1433"
-    deploy:
-      resources:
-        limits:
-          memory: 8G
+  # mssql:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   container_name: mssql
+  #   environment:
+  #     ACCEPT_EULA: Y
+  #     SA_PASSWORD: Mypass123
+  #   platform: linux/amd64
+  #   volumes:
+  #     - ./setup-sql/mssql.sql:/setup.sql
+  #   command: >
+  #     /bin/bash -c "
+  #       export TZ=US/Pacific
+  #       /opt/mssql/bin/sqlservr &
+  #       sleep 25;
+  #       /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
+  #       tail -f /dev/null
+  #     "
+  #   ports:
+  #     - "1433:1433"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 8G
 
   postgresql:
     image: postgres:15.3

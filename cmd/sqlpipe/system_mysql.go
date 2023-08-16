@@ -95,13 +95,6 @@ func (system Mysql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 			}
 			return string(valBytes), nil
 		},
-		"int8": func(v interface{}) (string, error) {
-			valBytes, ok := v.([]byte)
-			if !ok {
-				return "", errors.New("non []uint8 value passed to int8 mysqlPipeFileFormatter")
-			}
-			return string(valBytes), nil
-		},
 		"float64": func(v interface{}) (string, error) {
 			valBytes, ok := v.([]byte)
 			if !ok {
@@ -293,6 +286,68 @@ func (system Mysql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 
 func (system Mysql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error) {
 	switch columnInfo.pipeType {
+	case "nvarchar":
+		return "longtext", nil
+	case "varchar":
+		return "longtext", nil
+	case "ntext":
+		return "longtext", nil
+	case "text":
+		return "longtext", nil
+	case "int64":
+		return "bigint", nil
+	case "int32":
+		return "integer", nil
+	case "int16":
+		return "smallint", nil
+	case "float64":
+		return "double", nil
+	case "float32":
+		return "float", nil
+	case "decimal":
+		if columnInfo.decimalOk {
+			if columnInfo.precision > 65 {
+				return "", fmt.Errorf("precision on column %v is greater than 65", columnInfo.name)
+			}
+			if columnInfo.scale > 30 {
+				return "", fmt.Errorf("scale on column %v is greater than 30", columnInfo.name)
+			}
+			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
+		}
+		return "float", nil
+	case "money":
+		if columnInfo.decimalOk {
+			if columnInfo.precision > 65 {
+				return "", fmt.Errorf("precision on column %v is greater than 65", columnInfo.name)
+			}
+			if columnInfo.scale > 30 {
+				return "", fmt.Errorf("scale on column %v is greater than 30", columnInfo.name)
+			}
+			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
+		}
+		return "float", nil
+	case "datetime":
+		return "datetime", nil
+	case "datetimetz":
+		return "datetime", nil
+	case "date":
+		return "date", nil
+	case "time":
+		return "time", nil
+	case "varbinary":
+		return "blob", nil
+	case "blob":
+		return "blob", nil
+	case "uuid":
+		return "binary(16)", nil
+	case "bool":
+		return "tinyint(1)", nil
+	case "json":
+		return "json", nil
+	case "xml":
+		return "longtext", nil
+	case "varbit":
+		return "longtext", nil
 	default:
 		return "", fmt.Errorf("unsupported pipeType for mysql: %v", columnInfo.pipeType)
 	}

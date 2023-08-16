@@ -88,7 +88,7 @@ func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 	case "SMALLINT":
 		return "int16", nil
 	case "TINYINT":
-		return "int8", nil
+		return "int16", nil
 	case "FLOAT":
 		return "float64", nil
 	case "REAL":
@@ -165,8 +165,6 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 		return "integer", nil
 	case "int16":
 		return "smallint", nil
-	case "int8":
-		return "tinyint", nil
 	case "float64":
 		return "float", nil
 	case "float32":
@@ -424,9 +422,6 @@ func (system Mssql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 		"int16": func(v interface{}) (string, error) {
 			return fmt.Sprintf("%d", v), nil
 		},
-		"int8": func(v interface{}) (string, error) {
-			return fmt.Sprintf("%d", v), nil
-		},
 		"float64": func(v interface{}) (string, error) {
 			return fmt.Sprintf("%f", v), nil
 		},
@@ -536,9 +531,6 @@ var mssqlPipeFileToBcpCsvFormatters = map[string]func(string) (string, error){
 		return v, nil
 	},
 	"int16": func(v string) (string, error) {
-		return v, nil
-	},
-	"int8": func(v string) (string, error) {
 		return v, nil
 	},
 	"float64": func(v string) (string, error) {
