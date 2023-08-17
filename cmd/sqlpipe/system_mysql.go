@@ -2,10 +2,16 @@ package main
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -36,8 +42,8 @@ func (system Mysql) dropTable(schema, table string) error {
 	return dropTableIfExistsCommon(schema, table, system)
 }
 
-func (system Mysql) createTable(schema, table string, columnInfo []ColumnInfo) error {
-	return createTableCommon(schema, table, columnInfo, system)
+func (system Mysql) createTable(transfer *Transfer) error {
+	return createTableCommon(transfer)
 }
 
 func (system Mysql) query(query string) (*sql.Rows, error) {
@@ -56,8 +62,8 @@ func (system Mysql) exec(query string) error {
 	return nil
 }
 
-func (system Mysql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
-	return getColumnInfoCommon(rows, system)
+func (system Mysql) getColumnInfo(transfer *Transfer) ([]ColumnInfo, error) {
+	return getColumnInfoCommon(transfer)
 }
 
 func (system Mysql) getPipeFileFormatters() (map[string]func(interface{}) (string, error), error) {
@@ -116,52 +122,24 @@ func (system Mysql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 			return fmt.Sprintf("%s", v), nil
 		},
 		"datetime": func(v interface{}) (string, error) {
-			valBytes, ok := v.([]byte)
+			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non []uint8 value passed to datetime mysqlPipeFileFormatter")
+				return "", errors.New("non time.Time value passed to datetime mysqlPipeFileFormatters")
 			}
-
-			valTime, err := time.Parse("2006-01-02 15:04:05.999999", string(valBytes))
-			if err != nil {
-				return "", fmt.Errorf("error parsing datetime value in mysqlPipeFileFormatter :: %v", err)
-			}
-
 			return valTime.Format(time.RFC3339Nano), nil
 		},
 		"datetimetz": func(v interface{}) (string, error) {
-
-			if system.timezone == "" {
-				return "", errors.New("transfer requires moving datetimetz pipetype, but source-timezone is not set for mysql")
-			}
-
-			loc, err := time.LoadLocation(system.timezone)
-			if err != nil {
-				return "", fmt.Errorf("error loading timezone location in mysqlPipeFileFormatter :: %v", err)
-			}
-
-			valBytes, ok := v.([]byte)
+			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non []uint8 value passed to datetimetz mysqlPipeFileFormatter")
+				return "", errors.New("non time.Time value passed to datetime mysqlPipeFileFormatters")
 			}
-
-			valTime, err := time.ParseInLocation("2006-01-02 15:04:05.999999", string(valBytes), loc)
-			if err != nil {
-				return "", fmt.Errorf("error parsing datetimetz value in mysqlPipeFileFormatter :: %v", err)
-			}
-
-			return valTime.Format(time.RFC3339Nano), nil
+			return valTime.UTC().Format(time.RFC3339Nano), nil
 		},
 		"date": func(v interface{}) (string, error) {
-			valBytes, ok := v.([]byte)
+			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non []uint8 value passed to date mysqlPipeFileFormatter")
+				return "", errors.New("non time.Time value passed to datetime mysqlPipeFileFormatters")
 			}
-
-			valTime, err := time.Parse("2006-01-02", string(valBytes))
-			if err != nil {
-				return "", fmt.Errorf("error parsing date value in mysqlPipeFileFormatter :: %v", err)
-			}
-
 			return valTime.Format(time.RFC3339Nano), nil
 		},
 		"time": func(v interface{}) (string, error) {
@@ -215,7 +193,7 @@ func (system Mysql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 	return funcMap, nil
 }
 
-func (system Mysql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
+func (system Mysql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType, transfer *Transfer) (pipeType string, err error) {
 	switch columnType.DatabaseTypeName() {
 	case "VARCHAR":
 		return "nvarchar", nil
@@ -256,8 +234,13 @@ func (system Mysql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 	case "DATETIME":
 		return "datetime", nil
 	case "TIMESTAMP":
+		if !strings.Contains(transfer.SourceConnectionString, "parseTime=true") {
+			return "", errors.New("source-connection-string must contain parseTime=true to move timestamp with time zone data from mysql")
+		}
+		if !strings.Contains(transfer.SourceConnectionString, "loc=") {
+			return "", errors.New(`source-connection-string must contain loc=(valid, url encoded IANA time zone name) to move timestamp with time zone data from mysql. for example: loc=US%2FPacific`)
+		}
 		return "datetimetz", nil
-		// return "datetime", nil
 	case "DATE":
 		return "date", nil
 	case "TIME":
@@ -358,6 +341,240 @@ func (system Mysql) createPipeFiles(transfer *Transfer, transferErrGroup *errgro
 }
 
 func (system Mysql) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
-	infoLog.Println("now inserting mysql pipe files")
+	mysqlFiles, err := mysqlConvertPipeFiles(transfer, in, transferErrGroup)
+	if err != nil {
+		return fmt.Errorf("error converting pipeFiles :: %v", err)
+	}
+
+	err = mysqlInsertMysqlCsvs(transfer, mysqlFiles)
+	if err != nil {
+		return fmt.Errorf("error inserting pipeFiles :: %v", err)
+	}
+
+	return nil
+}
+
+func mysqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
+
+	out := make(chan string)
+
+	mysqlCsvDirPath := filepath.Join(transfer.TmpDir, "mysql-csv")
+	err := os.Mkdir(mysqlCsvDirPath, os.ModePerm)
+	if err != nil {
+		return out, fmt.Errorf("error creating mysql-csv directory :: %v", err)
+	}
+
+	transferErrGroup.Go(func() error {
+		defer close(out)
+		for pipeFileName := range in {
+
+			pipeFileName := pipeFileName
+			conversionErrGroup := errgroup.Group{}
+
+			conversionErrGroup.Go(func() error {
+				pipeFile, err := os.Open(pipeFileName)
+				if err != nil {
+					return fmt.Errorf("error opening pipeFile :: %v", err)
+				}
+				defer pipeFile.Close()
+
+				// strip path from pipeFile name, get number
+				pipeFileNameClean := filepath.Base(pipeFileName)
+				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
+
+				mysqlCsvFile, err := os.Create(filepath.Join(mysqlCsvDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
+				if err != nil {
+					return fmt.Errorf("error creating mysql csv file :: %v", err)
+				}
+				defer mysqlCsvFile.Close()
+
+				csvReader := csv.NewReader(pipeFile)
+				csvWriter := csv.NewWriter(mysqlCsvFile)
+
+				for {
+					row, err := csvReader.Read()
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							break
+						}
+						return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
+					}
+
+					for i := range row {
+						if row[i] != transfer.Null {
+							row[i], err = mysqlPipeFileToMysqlCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
+							if err != nil {
+								return fmt.Errorf("error formatting pipe file to mysql csv :: %v", err)
+							}
+						} else {
+							row[i] = `\N`
+						}
+					}
+
+					err = csvWriter.Write(row)
+					if err != nil {
+						return fmt.Errorf("error writing mysql csv :: %v", err)
+					}
+				}
+
+				err = pipeFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing pipeFile :: %v", err)
+				}
+
+				conversionErrGroup.Go(func() error {
+					err := os.Remove(pipeFileName)
+					if err != nil {
+						return fmt.Errorf("error removing pipeFile :: %v", err)
+					}
+					return nil
+				})
+
+				csvWriter.Flush()
+
+				err = mysqlCsvFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing mysql csv file :: %v", err)
+				}
+
+				out <- mysqlCsvFile.Name()
+
+				return nil
+			})
+
+			err = conversionErrGroup.Wait()
+			if err != nil {
+				return fmt.Errorf("error converting pipeFiles :: %v", err)
+			}
+		}
+
+		infoLog.Printf("converted pipe files to mysql csvs at %v\n", mysqlCsvDirPath)
+		return nil
+	})
+
+	return out, nil
+}
+
+var mysqlPipeFileToMysqlCsvFormatters = map[string]func(string) (string, error){
+	"nvarchar": func(v string) (string, error) {
+		return v, nil
+	},
+	"varchar": func(v string) (string, error) {
+		return v, nil
+	},
+	"ntext": func(v string) (string, error) {
+		return v, nil
+	},
+	"text": func(v string) (string, error) {
+		return v, nil
+	},
+	"int64": func(v string) (string, error) {
+		return v, nil
+	},
+	"int32": func(v string) (string, error) {
+		return v, nil
+	},
+	"int16": func(v string) (string, error) {
+		return v, nil
+	},
+	"float64": func(v string) (string, error) {
+		return v, nil
+	},
+	"float32": func(v string) (string, error) {
+		return v, nil
+	},
+	"decimal": func(v string) (string, error) {
+		return v, nil
+	},
+	"money": func(v string) (string, error) {
+		return v, nil
+	},
+	"datetime": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error parsing datetimetz value in mysql datetime mysql formatter :: %v", err)
+		}
+
+		return valTime.Format("2006-01-02 15:04:05.999999"), nil
+	},
+	"datetimetz": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error parsing datetimetz value in mysql datetimetz mysql formatter :: %v", err)
+		}
+
+		return valTime.Format("2006-01-02 15:04:05.999999"), nil
+	},
+	"date": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error writing date value to mysql csv :: %v", err)
+		}
+		return valTime.Format("2006-01-02"), nil
+	},
+	"time": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error writing time value to mysql csv :: %v", err)
+		}
+
+		return valTime.Format("15:04:05.999999"), nil
+	},
+	"varbinary": func(v string) (string, error) {
+		return v, nil
+	},
+	"blob": func(v string) (string, error) {
+		return v, nil
+	},
+	"uuid": func(v string) (string, error) {
+		return v, nil
+	},
+	"bool": func(v string) (string, error) {
+		return v, nil
+	},
+	"json": func(v string) (string, error) {
+		return v, nil
+	},
+	"xml": func(v string) (string, error) {
+		return v, nil
+	},
+	"varbit": func(v string) (string, error) {
+		return v, nil
+	},
+}
+
+func mysqlInsertMysqlCsvs(transfer *Transfer, in <-chan string) error {
+
+	insertErrGroup := errgroup.Group{}
+	insertErrGroup.SetLimit(1)
+
+	for mysqlCsvFileName := range in {
+
+		mysqlCsvFileName := mysqlCsvFileName
+
+		insertErrGroup.Go(func() error {
+			defer os.Remove(mysqlCsvFileName)
+
+			mysql.RegisterLocalFile(mysqlCsvFileName)
+			defer mysql.DeregisterLocalFile(mysqlCsvFileName)
+
+			copyQuery := fmt.Sprintf(`load data local infile '%v' into table %v fields terminated by ',' optionally enclosed by '"' lines terminated by '\n';`, mysqlCsvFileName, transfer.TargetTable)
+
+			err := transfer.Target.exec(copyQuery)
+			if err != nil {
+				return fmt.Errorf("error inserting csv into mysql :: %v", err)
+			}
+
+			return nil
+		})
+	}
+
+	err := insertErrGroup.Wait()
+	if err != nil {
+		return fmt.Errorf("error inserting mysql csvs :: %v", err)
+	}
+
+	infoLog.Printf("finished inserting mysql csvs for transfer %v\n", transfer.Id)
+
 	return nil
 }

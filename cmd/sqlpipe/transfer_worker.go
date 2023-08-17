@@ -21,7 +21,7 @@ type ColumnInfo struct {
 	nullable   bool
 }
 
-func runTransfer(transfer Transfer) {
+func runTransfer(transfer *Transfer) {
 	if transfer.DropTargetTable {
 		err := transfer.Target.dropTable(transfer.TargetSchema, transfer.TargetTable)
 		if err != nil {
@@ -38,14 +38,14 @@ func runTransfer(transfer Transfer) {
 	}
 	defer transfer.Rows.Close()
 
-	transfer.ColumnInfo, err = transfer.Source.getColumnInfo(transfer.Rows)
+	transfer.ColumnInfo, err = transfer.Source.getColumnInfo(transfer)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error getting source column info :: %v", err))
 		return
 	}
 
 	if transfer.CreateTargetTable {
-		err = transfer.Target.createTable(transfer.TargetSchema, transfer.TargetTable, transfer.ColumnInfo)
+		err = transfer.Target.createTable(transfer)
 		if err != nil {
 			transferError(transfer, fmt.Errorf("error creating target table :: %v", err))
 			return
@@ -62,13 +62,13 @@ func runTransfer(transfer Transfer) {
 
 	transferErrGroup := &errgroup.Group{}
 
-	pipeFiles, err := transfer.Source.createPipeFiles(&transfer, transferErrGroup)
+	pipeFiles, err := transfer.Source.createPipeFiles(transfer, transferErrGroup)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error writing pipe file :: %v", err))
 		return
 	}
 
-	err = transfer.Target.insertPipeFiles(&transfer, pipeFiles, transferErrGroup)
+	err = transfer.Target.insertPipeFiles(transfer, pipeFiles, transferErrGroup)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error inserting data :: %v", err))
 		return

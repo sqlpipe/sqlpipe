@@ -55,19 +55,19 @@ func (system Mssql) dropTable(schema, table string) error {
 	return dropTableIfExistsCommon(schema, table, system)
 }
 
-func (system Mssql) createTable(schema, table string, columnInfo []ColumnInfo) error {
-	return createTableCommon(schema, table, columnInfo, system)
+func (system Mssql) createTable(transfer *Transfer) error {
+	return createTableCommon(transfer)
 }
 
-func (system Mssql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
-	return getColumnInfoCommon(rows, system)
+func (system Mssql) getColumnInfo(transfer *Transfer) ([]ColumnInfo, error) {
+	return getColumnInfoCommon(transfer)
 }
 
 func (system Mssql) createPipeFiles(transfer *Transfer, transferErrGroup *errgroup.Group) (<-chan string, error) {
 	return createPipeFilesCommon(transfer, transferErrGroup)
 }
 
-func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
+func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType, transfer *Transfer) (pipeType string, err error) {
 	switch columnType.DatabaseTypeName() {
 	case "NVARCHAR":
 		return "nvarchar", nil
@@ -107,7 +107,6 @@ func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 		return "datetime", nil
 	case "DATETIMEOFFSET":
 		return "datetimetz", nil
-		// return "datetime", nil
 	case "DATE":
 		return "date", nil
 	case "TIME":
@@ -362,40 +361,42 @@ func mssqlInsertBcpFiles(transfer *Transfer, in <-chan string) error {
 	insertErrGroup := errgroup.Group{}
 
 	for bcpCsvFileName := range in {
-		cmd := exec.Command(
-			bcpTmpFile.Name(),
-			fmt.Sprintf("%s.%s.%s", transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable),
-			"in",
-			bcpCsvFileName,
-			"-c",
-			"-S", transfer.TargetHostname,
-			"-U", transfer.TargetUsername,
-			"-P", transfer.TargetPassword,
-			"-t", transfer.Delimiter,
-			"-r", transfer.Newline,
-			"-e", "/tmp/errors.txt",
-		)
-		result, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to upload csv to mssql :: stderr %v :: stdout %s", err, string(result))
-		}
 
 		bcpCsvFileName := bcpCsvFileName
+
 		insertErrGroup.Go(func() error {
-			err = os.Remove(bcpCsvFileName)
+
+			defer os.Remove(bcpCsvFileName)
+
+			cmd := exec.Command(
+				bcpTmpFile.Name(),
+				fmt.Sprintf("%s.%s.%s", transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable),
+				"in",
+				bcpCsvFileName,
+				"-c",
+				"-S", transfer.TargetHostname,
+				"-U", transfer.TargetUsername,
+				"-P", transfer.TargetPassword,
+				"-t", transfer.Delimiter,
+				"-r", transfer.Newline,
+				"-e", "/tmp/errors.txt",
+			)
+			result, err := cmd.CombinedOutput()
 			if err != nil {
-				return fmt.Errorf("error removing bcp csv :: %v", err)
+				return fmt.Errorf("failed to upload csv to mssql :: stderr %v :: stdout %s", err, string(result))
 			}
+
 			return nil
 		})
 	}
-
-	infoLog.Printf("finished inserting bcp csvs into for transfer %v\n", transfer.Id)
 
 	err := insertErrGroup.Wait()
 	if err != nil {
 		return fmt.Errorf("error inserting bcp csvs :: %v", err)
 	}
+
+	infoLog.Printf("finished inserting bcp csvs into for transfer %v\n", transfer.Id)
+
 	return nil
 }
 
@@ -446,7 +447,7 @@ func (system Mssql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 			if !ok {
 				return "", errors.New("non time.Time value passed to datetimetz mssqlPipeFileFormatters")
 			}
-			return valTime.Format(time.RFC3339Nano), nil
+			return valTime.UTC().Format(time.RFC3339Nano), nil
 		},
 		"date": func(v interface{}) (string, error) {
 			valTime, ok := v.(time.Time)

@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	_ "time/tzdata"
+)
 
 type validator struct {
 	errors map[string]string
@@ -40,7 +43,7 @@ var permittedTargets = []string{"postgresql", "mysql", "mssql", "oracle", "snowf
 
 var schemaRequired = map[string]bool{"postgresql": true, "mysql": false, "mssql": true, "oracle": true, "snowflake": true}
 
-func validateTransfer(v validator, transfer Transfer) {
+func validateTransfer(v validator, transfer *Transfer) {
 	v.check(transfer.SourceType != "", "source-type", "must be provided")
 	v.check(permittedValue(transfer.SourceType, permittedSources...), "source-type", fmt.Sprintf("must be one of %v", permittedSources))
 	v.check(transfer.SourceConnectionString != "", "source-connection-string", "must be provided")

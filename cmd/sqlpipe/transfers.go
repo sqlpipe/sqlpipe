@@ -29,7 +29,7 @@ var (
 	DriverSnowflake  = "snowflake"
 )
 
-var transferMap = map[string]Transfer{}
+var transferMap = map[string]*Transfer{}
 
 type Transfer struct {
 	Id        string     `json:"id"`
@@ -130,7 +130,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		input.Null = "{nll}"
 	}
 
-	transfer := Transfer{
+	transfer := &Transfer{
 		Id:                     uuid.New().String(),
 		CreatedAt:              time.Now(),
 		Status:                 StatusRunning,

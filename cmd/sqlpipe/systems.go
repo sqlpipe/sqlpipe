@@ -15,12 +15,12 @@ import (
 
 type System interface {
 	dropTable(schema, table string) (err error)
-	createTable(schema, table string, columnInfo []ColumnInfo) error
+	createTable(transfer *Transfer) error
 	query(query string) (*sql.Rows, error)
 	exec(query string) (err error)
-	getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error)
+	getColumnInfo(transfer *Transfer) ([]ColumnInfo, error)
 	getPipeFileFormatters() (map[string]func(interface{}) (string, error), error)
-	dbTypeToPipeType(databaseTypeName string, columnType sql.ColumnType) (pipeType string, err error)
+	dbTypeToPipeType(databaseTypeName string, columnType sql.ColumnType, transfer *Transfer) (pipeType string, err error)
 	pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error)
 	createPipeFiles(transfer *Transfer, transferErrGroup *errgroup.Group) (out <-chan string, err error)
 	insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error
@@ -72,15 +72,15 @@ func dropTableIfExistsCommon(schema, table string, system System) error {
 	return err
 }
 
-func getColumnInfoCommon(rows *sql.Rows, system System) ([]ColumnInfo, error) {
+func getColumnInfoCommon(transfer *Transfer) ([]ColumnInfo, error) {
 	columnInfo := []ColumnInfo{}
 
-	columnNames, err := rows.Columns()
+	columnNames, err := transfer.Rows.Columns()
 	if err != nil {
 		return columnInfo, fmt.Errorf("error getting column names :: %v", err)
 	}
 
-	columnTypes, err := rows.ColumnTypes()
+	columnTypes, err := transfer.Rows.ColumnTypes()
 	if err != nil {
 		return columnInfo, fmt.Errorf("error getting column types :: %v", err)
 	}
@@ -93,7 +93,7 @@ func getColumnInfoCommon(rows *sql.Rows, system System) ([]ColumnInfo, error) {
 		nullable, nullableOk := columnTypes[i].Nullable()
 		scanType := getScanType(columnTypes[i])
 
-		pipeType, err := system.dbTypeToPipeType(columnTypes[i].DatabaseTypeName(), *columnTypes[i])
+		pipeType, err := transfer.Source.dbTypeToPipeType(columnTypes[i].DatabaseTypeName(), *columnTypes[i], transfer)
 		if err != nil {
 			return columnInfo, fmt.Errorf("error getting pipeTypes :: %v", err)
 		}
@@ -115,37 +115,39 @@ func getColumnInfoCommon(rows *sql.Rows, system System) ([]ColumnInfo, error) {
 	return columnInfo, nil
 }
 
-func createTableCommon(schema, table string, columnInfo []ColumnInfo, system System) error {
+func createTableCommon(transfer *Transfer) error {
+	createSchema := transfer.TargetSchema
+
 	var queryBuilder = strings.Builder{}
 
 	queryBuilder.WriteString("create table ")
-	if schema != "" {
-		schema = fmt.Sprintf("%v.", schema)
-		queryBuilder.WriteString(schema)
+	if createSchema != "" {
+		createSchema = fmt.Sprintf("%v.", createSchema)
+		queryBuilder.WriteString(createSchema)
 	}
-	queryBuilder.WriteString(table)
+	queryBuilder.WriteString(transfer.TargetTable)
 	queryBuilder.WriteString(" (")
 
-	for i := range columnInfo {
+	for i := range transfer.ColumnInfo {
 		if i > 0 {
 			queryBuilder.WriteString(", ")
 		}
-		queryBuilder.WriteString(columnInfo[i].name)
+		queryBuilder.WriteString(transfer.ColumnInfo[i].name)
 		queryBuilder.WriteString(" ")
-		createType, err := system.pipeTypeToCreateType(columnInfo[i])
+		createType, err := transfer.Target.pipeTypeToCreateType(transfer.ColumnInfo[i])
 		if err != nil {
-			return fmt.Errorf("error getting create type for column %v :: %v", columnInfo[i].name, err)
+			return fmt.Errorf("error getting create type for column %v :: %v", transfer.ColumnInfo[i].name, err)
 		}
 		queryBuilder.WriteString(createType)
 	}
 	queryBuilder.WriteString(")")
 
-	err := system.exec(queryBuilder.String())
+	err := transfer.Target.exec(queryBuilder.String())
 	if err != nil {
-		return fmt.Errorf("error running create table %v.%v :: %v", schema, table, err)
+		return fmt.Errorf("error running create table %v.%v :: %v", createSchema, transfer.TargetTable, err)
 	}
 
-	infoLog.Printf("created table %v%v", schema, table)
+	infoLog.Printf("created table %v%v", createSchema, transfer.TargetTable)
 
 	return nil
 }

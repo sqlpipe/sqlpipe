@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func transferError(transfer Transfer, err error) {
+func transferError(transfer *Transfer, err error) {
 
 	errorLog.Printf("error running transfer %v from %v to %v :: %v", transfer.Id, transfer.SourceType, transfer.TargetType, err)
 
