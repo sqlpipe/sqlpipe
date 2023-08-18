@@ -34,6 +34,8 @@ func newSystem(name, systemType, connectionString string, timezone string) (Syst
 		return newMssql(name, connectionString)
 	case "mysql":
 		return newMysql(name, connectionString, timezone)
+	case "oracle":
+		return newOracle(name, connectionString)
 	default:
 		return nil, fmt.Errorf("unsupported system type %v", systemType)
 	}
@@ -72,6 +74,18 @@ func dropTableIfExistsCommon(schema, table string, system System) error {
 	return err
 }
 
+func getScanType(columnType *sql.ColumnType) (scanType string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			scanType = ""
+			err = fmt.Errorf("panic caught while trying to get scantype for db type %v :: %v", columnType.DatabaseTypeName(), r)
+		}
+	}()
+
+	scanType = columnType.ScanType().String()
+	return scanType, err
+}
+
 func getColumnInfoCommon(transfer *Transfer) ([]ColumnInfo, error) {
 	columnInfo := []ColumnInfo{}
 
@@ -91,7 +105,11 @@ func getColumnInfoCommon(transfer *Transfer) ([]ColumnInfo, error) {
 		precision, scale, decimalOk := columnTypes[i].DecimalSize()
 		length, lengthOk := columnTypes[i].Length()
 		nullable, nullableOk := columnTypes[i].Nullable()
-		scanType := getScanType(columnTypes[i])
+
+		scanType, err := getScanType(columnTypes[i])
+		if err != nil {
+			warningLog.Printf("error getting scantype for column %v :: %v", columnNames[i], err)
+		}
 
 		pipeType, err := transfer.Source.dbTypeToPipeType(columnTypes[i].DatabaseTypeName(), *columnTypes[i], transfer)
 		if err != nil {
@@ -192,7 +210,7 @@ func createPipeFilesCommon(transfer *Transfer, transferErrGroup *errgroup.Group)
 
 		dataInRam := false
 
-		for i := 0; transfer.Rows.Next(); i++ {
+		for transfer.Rows.Next() {
 			err := transfer.Rows.Scan(valuePtrs...)
 			if err != nil {
 				return fmt.Errorf("error scanning row :: %v", err)

@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -51,14 +49,6 @@ func runTransfer(transfer *Transfer) {
 			return
 		}
 	}
-
-	transfer.TmpDir = filepath.Join(os.TempDir(), fmt.Sprintf("sqlpipe-transfer-%v", transfer.Id))
-	err = os.Mkdir(transfer.TmpDir, os.ModePerm)
-	if err != nil {
-		transferError(transfer, fmt.Errorf("error creating transfer dir :: %v", err))
-		return
-	}
-	// defer os.RemoveAll(transfer.TmpDir)
 
 	transferErrGroup := &errgroup.Group{}
 

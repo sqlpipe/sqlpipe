@@ -169,13 +169,24 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 	case "float32":
 		return "real", nil
 	case "decimal":
+		scaleOk := false
+		precisionOk := false
+
 		if columnInfo.decimalOk {
-			if columnInfo.precision > 38 {
-				return "", fmt.Errorf("precision on column %v is greater than 38", columnInfo.name)
+			if columnInfo.scale > 0 && columnInfo.scale <= 38 {
+				scaleOk = true
 			}
-			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
+
+			if columnInfo.precision > 0 && columnInfo.precision <= 38 && columnInfo.precision > columnInfo.scale {
+				precisionOk = true
+			}
 		}
-		return "float", nil
+
+		if scaleOk && precisionOk {
+			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
+		} else {
+			return "varchar(64)", nil
+		}
 	case "money":
 		return "money", nil
 	case "datetime":

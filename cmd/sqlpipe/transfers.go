@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,16 +44,16 @@ type Transfer struct {
 	SourceType             string `json:"source-type"`
 	SourceConnectionString string `json:"-"`
 	Source                 System `json:"-"`
-	SourceTimezone         string `json:"source-timezone"`
+	SourceTimezone         string `json:"source-timezone,omitempty"`
 
 	TargetName             string `json:"target-name"`
 	TargetType             string `json:"target-type"`
 	TargetConnectionString string `json:"-"`
 	Target                 System `json:"-"`
-	TargetHostname         string `json:"target-hostname"`
-	TargetUsername         string `json:"target-username"`
+	TargetHostname         string `json:"target-hostname,omitempty"`
+	TargetUsername         string `json:"target-username,omitempty"`
 	TargetPassword         string `json:"-"`
-	TargetDatabase         string `json:"target-database"`
+	TargetDatabase         string `json:"target-database,omitempty"`
 	TargetSchema           string `json:"target-schema,omitempty"`
 
 	Query       string `json:"query"`
@@ -61,7 +63,7 @@ type Transfer struct {
 	CreateTargetTable bool `json:"create-target-table"`
 
 	Rows       *sql.Rows    `json:"-"`
-	ColumnInfo []ColumnInfo `json:"column-info"`
+	ColumnInfo []ColumnInfo `json:"-"`
 	TmpDir     string       `json:"tmp-dir"`
 
 	Delimiter string `json:"delimiter"`
@@ -155,6 +157,14 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		TargetPassword:         input.TargetPassword,
 		TargetDatabase:         input.TargetDatabase,
 	}
+
+	transfer.TmpDir = filepath.Join(os.TempDir(), fmt.Sprintf("sqlpipe-transfer-%v", transfer.Id))
+	err = os.Mkdir(transfer.TmpDir, os.ModePerm)
+	if err != nil {
+		transferError(transfer, fmt.Errorf("error creating transfer dir :: %v", err))
+		return
+	}
+	// defer os.RemoveAll(transfer.TmpDir)
 
 	v := newValidator()
 	if validateTransfer(v, transfer); !v.valid() {

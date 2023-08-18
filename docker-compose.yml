@@ -57,19 +57,19 @@ services:
     command: --local-infile=1
 
 
-  # oracle:
-  #   image: oracle/database:21.3.0-ee
-  #   container_name: oracle
-  #   ports:
-  #     - "1521:1521"
-  #   environment:
-  #     - ORACLE_PWD=Mypass123
-  #   volumes:
-  #     - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 8G
+  oracle:
+    image: oracle/database:21.3.0-ee
+    container_name: oracle
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=Mypass123
+    volumes:
+      - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 8G
 
   # babelfish:
   #   platform: linux/amd64

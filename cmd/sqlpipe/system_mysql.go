@@ -288,16 +288,24 @@ func (system Mysql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 	case "float32":
 		return "float", nil
 	case "decimal":
+		scaleOk := false
+		precisionOk := false
+
 		if columnInfo.decimalOk {
-			if columnInfo.precision > 65 {
-				return "", fmt.Errorf("precision on column %v is greater than 65", columnInfo.name)
+			if columnInfo.scale > 0 && columnInfo.scale <= 65 {
+				scaleOk = true
 			}
-			if columnInfo.scale > 30 {
-				return "", fmt.Errorf("scale on column %v is greater than 30", columnInfo.name)
+
+			if columnInfo.precision > 0 && columnInfo.precision <= 65 && columnInfo.precision > columnInfo.scale {
+				precisionOk = true
 			}
-			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
 		}
-		return "float", nil
+
+		if scaleOk && precisionOk {
+			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
+		} else {
+			return "varchar(128)", nil
+		}
 	case "money":
 		if columnInfo.decimalOk {
 			if columnInfo.precision > 65 {

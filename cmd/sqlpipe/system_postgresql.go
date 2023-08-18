@@ -174,13 +174,24 @@ func (system Postgresql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType
 	case "float32":
 		return "float", nil
 	case "decimal":
+		scaleOk := false
+		precisionOk := false
+
 		if columnInfo.decimalOk {
-			if columnInfo.precision > 1000 {
-				return "", fmt.Errorf("precision on column %v is greater than 1000", columnInfo.name)
+			if columnInfo.scale > 0 && columnInfo.scale <= 1000 {
+				scaleOk = true
 			}
-			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
+
+			if columnInfo.precision > 0 && columnInfo.precision <= 1000 && columnInfo.precision > columnInfo.scale {
+				precisionOk = true
+			}
 		}
-		return "decimal", nil
+
+		if scaleOk && precisionOk {
+			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
+		} else {
+			return "decimal", nil
+		}
 	case "money":
 		return "money", nil
 	case "datetime":

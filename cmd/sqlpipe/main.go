@@ -20,6 +20,7 @@ var (
 	version        = ProgramVersion()
 	port           int
 	infoLog        = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	warningLog     = log.New(os.Stdout, "WARNING\t", log.Ldate|log.Ltime)
 	errorLog       = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 	acceptLicenses = false
 	psqlAvailable  = false
