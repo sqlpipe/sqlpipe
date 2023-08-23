@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -20,6 +21,10 @@ type ColumnInfo struct {
 }
 
 func runTransfer(transfer *Transfer) {
+	if !transfer.KeepFiles {
+		defer os.RemoveAll(transfer.TmpDir)
+	}
+
 	if transfer.DropTargetTable {
 		err := transfer.Target.dropTable(transfer.TargetSchema, transfer.TargetTable)
 		if err != nil {

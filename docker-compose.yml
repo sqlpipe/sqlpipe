@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+
+  sqlpipe:
+    build:
+      context: .
+      dockerfile: sqlpipe.dockerfile
+    container_name: sqlpipe
+    ports:
+      - "9000:9000"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql
@@ -58,7 +71,7 @@ services:
 
 
   oracle:
-    image: oracle/database:21.3.0-ee
+    image: oracle:21.3.0
     container_name: oracle
     ports:
       - "1521:1521"
@@ -70,13 +83,6 @@ services:
       resources:
         limits:
           memory: 8G
-
-  # babelfish:
-  #   platform: linux/amd64
-  #   image: jonathanpotts/babelfishpg:2.3.0
-  #   ports:
-  #     - "5432:5432"
-  #     - "1434:1433"
 
 # volumes:
 #   mssql-data:

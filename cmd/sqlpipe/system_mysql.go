@@ -386,6 +386,10 @@ func mysqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 				}
 				defer pipeFile.Close()
 
+				if !transfer.KeepFiles {
+					defer os.Remove(pipeFileName)
+				}
+
 				// strip path from pipeFile name, get number
 				pipeFileNameClean := filepath.Base(pipeFileName)
 				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
@@ -429,14 +433,6 @@ func mysqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 				if err != nil {
 					return fmt.Errorf("error closing pipeFile :: %v", err)
 				}
-
-				conversionErrGroup.Go(func() error {
-					err := os.Remove(pipeFileName)
-					if err != nil {
-						return fmt.Errorf("error removing pipeFile :: %v", err)
-					}
-					return nil
-				})
 
 				csvWriter.Flush()
 
@@ -554,14 +550,16 @@ var mysqlPipeFileToMysqlCsvFormatters = map[string]func(string) (string, error){
 func mysqlInsertMysqlCsvs(transfer *Transfer, in <-chan string) error {
 
 	insertErrGroup := errgroup.Group{}
-	insertErrGroup.SetLimit(1)
 
 	for mysqlCsvFileName := range in {
 
 		mysqlCsvFileName := mysqlCsvFileName
 
 		insertErrGroup.Go(func() error {
-			defer os.Remove(mysqlCsvFileName)
+
+			if !transfer.KeepFiles {
+				defer os.Remove(mysqlCsvFileName)
+			}
 
 			mysql.RegisterLocalFile(mysqlCsvFileName)
 			defer mysql.DeregisterLocalFile(mysqlCsvFileName)
@@ -575,11 +573,10 @@ func mysqlInsertMysqlCsvs(transfer *Transfer, in <-chan string) error {
 
 			return nil
 		})
-	}
-
-	err := insertErrGroup.Wait()
-	if err != nil {
-		return fmt.Errorf("error inserting mysql csvs :: %v", err)
+		err := insertErrGroup.Wait()
+		if err != nil {
+			return fmt.Errorf("error inserting mysql csvs :: %v", err)
+		}
 	}
 
 	infoLog.Printf("finished inserting mysql csvs for transfer %v\n", transfer.Id)

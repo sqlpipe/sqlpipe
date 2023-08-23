@@ -309,7 +309,7 @@ github.com/sijms/go-ora/v2/trace
 # github.com/sirupsen/logrus v1.9.3
 ## explicit; go 1.13
 github.com/sirupsen/logrus
-# github.com/snowflakedb/gosnowflake v1.6.22
+# github.com/snowflakedb/gosnowflake v1.6.24
 ## explicit; go 1.19
 github.com/snowflakedb/gosnowflake
 # github.com/zeebo/xxh3 v1.0.2

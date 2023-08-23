@@ -47,7 +47,7 @@ DO $$
 DECLARE 
     counter INTEGER := 0;
 BEGIN 
-    WHILE counter < 1 LOOP
+    WHILE counter < 10000 LOOP
         INSERT INTO my_table (
             my_char,
             my_varchar,
@@ -193,4 +193,79 @@ BEGIN
 END $$;
 
 
-INSERT INTO my_table DEFAULT VALUES;
+INSERT INTO my_table
+(            my_char,
+            my_varchar,
+            my_text,
+            my_int8,
+            my_int4,
+            my_int2,
+            my_float8,
+            my_float4,
+            my_numeric,
+            my_timestamp,
+            my_timestamptz,
+            my_date,
+            my_time,
+            my_interval,
+            my_bytea,
+            my_box,
+            my_circle,
+            my_line,
+            my_path,
+            my_point,
+            my_polygon,
+            my_lseg,
+            my_bool,
+            my_bit,
+            my_varbit,
+            my_uuid,
+            my_json,
+            my_jsonb,
+            my_inet,
+            my_macaddr,
+            my_cidr,
+            my_xml,
+            my_timetz,
+            my_tsquery,
+            my_tsvector,
+            my_pg_lsn
+            )
+            values (
+                null,
+                'one not null',
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            )

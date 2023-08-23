@@ -51,6 +51,7 @@ type Transfer struct {
 	TargetConnectionString string `json:"-"`
 	Target                 System `json:"-"`
 	TargetHostname         string `json:"target-hostname,omitempty"`
+	TargetPort             int    `json:"target-port,omitempty"`
 	TargetUsername         string `json:"target-username,omitempty"`
 	TargetPassword         string `json:"-"`
 	TargetDatabase         string `json:"target-database,omitempty"`
@@ -69,6 +70,8 @@ type Transfer struct {
 	Delimiter string `json:"delimiter"`
 	Newline   string `json:"newline"`
 	Null      string `json:"null"`
+
+	KeepFiles bool `json:"keep-files"`
 }
 
 func createTransferHandler(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +85,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		TargetConnectionString string `json:"target-connection-string"`
 		TargetSchema           string `json:"target-schema"`
 		TargetHostname         string `json:"target-hostname"`
+		TargetPort             int    `json:"target-port"`
 		TargetUsername         string `json:"target-username"`
 		TargetPassword         string `json:"target-password"`
 		TargetDatabase         string `json:"target-database"`
@@ -92,6 +96,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		Delimiter              string `json:"delimiter"`
 		Newline                string `json:"newline"`
 		Null                   string `json:"null"`
+		KeepFiles              bool   `json:"keep-files"`
 	}
 
 	err := readJSON(w, r, &input)
@@ -153,18 +158,22 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		Newline:                input.Newline,
 		Null:                   input.Null,
 		TargetHostname:         input.TargetHostname,
+		TargetPort:             input.TargetPort,
 		TargetUsername:         input.TargetUsername,
 		TargetPassword:         input.TargetPassword,
 		TargetDatabase:         input.TargetDatabase,
+		KeepFiles:              input.KeepFiles,
 	}
+	infoLog.Printf(`IP address %v created transfer %v to transfer from "%v" to "%v"`, r.RemoteAddr, transfer.Id, transfer.SourceName, transfer.TargetName)
 
-	transfer.TmpDir = filepath.Join(os.TempDir(), fmt.Sprintf("sqlpipe-transfer-%v", transfer.Id))
+	transfer.TmpDir = filepath.Join(globalTmpDir, transfer.Id)
 	err = os.Mkdir(transfer.TmpDir, os.ModePerm)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error creating transfer dir :: %v", err))
 		return
 	}
-	// defer os.RemoveAll(transfer.TmpDir)
+
+	infoLog.Printf("temp dir %v created", transfer.TmpDir)
 
 	v := newValidator()
 	if validateTransfer(v, transfer); !v.valid() {
@@ -185,7 +194,6 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	infoLog.Printf(`IP address %v created transfer %v to transfer from "%v" to "%v"`, r.RemoteAddr, transfer.Id, transfer.SourceName, transfer.TargetName)
 }
 
 func showTransferHandler(w http.ResponseWriter, r *http.Request) {

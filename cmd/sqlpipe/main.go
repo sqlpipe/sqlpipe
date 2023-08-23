@@ -1,12 +1,12 @@
 package main
 
 import (
-	"embed"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -17,24 +17,19 @@ import (
 )
 
 var (
-	version        = ProgramVersion()
-	port           int
-	infoLog        = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
-	warningLog     = log.New(os.Stdout, "WARNING\t", log.Ldate|log.Ltime)
-	errorLog       = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
-	acceptLicenses = false
-	psqlAvailable  = false
-	psqlTmpFile    *os.File
-	bcpAvailable   = false
-	bcpTmpFile     *os.File
+	version         = ProgramVersion()
+	port            int
+	infoLog         = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	warningLog      = log.New(os.Stdout, "WARNING\t", log.Ldate|log.Ltime)
+	errorLog        = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+	globalTmpDir    string
+	psqlAvailable   = false
+	bcpAvailable    = false
+	sqlLdrAvailable = false
 )
-
-//go:embed deps
-var depsFs embed.FS
 
 func main() {
 	flag.IntVar(&port, "port", 9000, "API server port")
-	flag.BoolVar(&acceptLicenses, "accept-licenses", false, "Accept all licenses at https://sqlpipe.com/sqlpipe-licenses")
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 	flag.Parse()
 
@@ -47,13 +42,13 @@ func main() {
 		errorLog.Fatal("unsupported OS / CPU platform")
 	}
 
-	if !acceptLicenses {
-		errorLog.Fatal("you must provide the --accept-licenses flag to signify you all third party licenses at https://sqlpipe.com/sqlpipe-licenses")
-	}
+	checkDeps()
 
-	err := loadDeps()
+	// create tmp dir if not exists
+	globalTmpDir = filepath.Join(os.TempDir(), "sqlpipe")
+	err := os.MkdirAll(globalTmpDir, 0700)
 	if err != nil {
-		errorLog.Fatalf("failed to load dependencies :: %v", err)
+		errorLog.Fatalf("failed to create tmp dir :: %v", err)
 	}
 
 	srv := &http.Server{

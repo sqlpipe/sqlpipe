@@ -5,6 +5,7 @@ package gosnowflake
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"reflect"
@@ -215,6 +216,10 @@ func getBindValues(bindings []driver.NamedValue) (map[string]execBindParameter, 
 	var err error
 	bindValues := make(map[string]execBindParameter, len(bindings))
 	for _, binding := range bindings {
+		if tnt, ok := binding.Value.(TypedNullTime); ok {
+			tsmode = convertTzTypeToSnowflakeType(tnt.TzType)
+			binding.Value = tnt.Time
+		}
 		t := goTypeToSnowflake(binding.Value, tsmode)
 		if t == changeType {
 			tsmode, err = dataTypeMode(binding.Value)
@@ -235,7 +240,7 @@ func getBindValues(bindings []driver.NamedValue) (map[string]execBindParameter, 
 			if t == nullType || t == unSupportedType {
 				t = textType // if null or not supported, pass to GS as text
 			}
-			bindValues[strconv.Itoa(idx)] = execBindParameter{
+			bindValues[bindingName(binding, idx)] = execBindParameter{
 				Type:  t.String(),
 				Value: val,
 			}
@@ -243,6 +248,13 @@ func getBindValues(bindings []driver.NamedValue) (map[string]execBindParameter, 
 		}
 	}
 	return bindValues, nil
+}
+
+func bindingName(nv driver.NamedValue, idx int) string {
+	if nv.Name != "" {
+		return nv.Name
+	}
+	return strconv.Itoa(idx)
 }
 
 func arrayBindValueCount(bindValues []driver.NamedValue) int {
@@ -297,4 +309,13 @@ func supportedArrayBind(nv *driver.NamedValue) bool {
 		}
 		return false
 	}
+}
+
+func supportedNullBind(nv *driver.NamedValue) bool {
+	switch reflect.TypeOf(nv.Value) {
+	case reflect.TypeOf(sql.NullString{}), reflect.TypeOf(sql.NullInt64{}),
+		reflect.TypeOf(sql.NullBool{}), reflect.TypeOf(sql.NullFloat64{}), reflect.TypeOf(TypedNullTime{}):
+		return true
+	}
+	return false
 }

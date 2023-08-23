@@ -345,6 +345,7 @@ func postgresqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferEr
 
 			pipeFileName := pipeFileName
 			conversionErrGroup := errgroup.Group{}
+			conversionErrGroup.SetLimit(1)
 
 			conversionErrGroup.Go(func() error {
 				pipeFile, err := os.Open(pipeFileName)
@@ -352,6 +353,10 @@ func postgresqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferEr
 					return fmt.Errorf("error opening pipeFile :: %v", err)
 				}
 				defer pipeFile.Close()
+
+				if !transfer.KeepFiles {
+					defer os.Remove(pipeFileName)
+				}
 
 				// strip path from pipeFile name, get number
 				pipeFileNameClean := filepath.Base(pipeFileName)
@@ -395,14 +400,6 @@ func postgresqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferEr
 					return fmt.Errorf("error closing pipeFile :: %v", err)
 				}
 
-				conversionErrGroup.Go(func() error {
-					err := os.Remove(pipeFileName)
-					if err != nil {
-						return fmt.Errorf("error removing pipeFile :: %v", err)
-					}
-					return nil
-				})
-
 				csvWriter.Flush()
 
 				err = psqlCsvFile.Close()
@@ -431,17 +428,18 @@ func postgresqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferEr
 func postgresqlInsertPsqlCsvs(transfer *Transfer, in <-chan string) error {
 
 	insertErrGroup := errgroup.Group{}
-	insertErrGroup.SetLimit(1)
 
 	for psqlCsvFileName := range in {
 		psqlCsvFileName := psqlCsvFileName
 
 		insertErrGroup.Go(func() error {
-			defer os.Remove(psqlCsvFileName)
+			if !transfer.KeepFiles {
+				defer os.Remove(psqlCsvFileName)
+			}
 
 			copyCmd := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '%v', ENCODING 'UTF8')`, transfer.TargetSchema, transfer.TargetTable, psqlCsvFileName, transfer.Null)
 
-			cmd := exec.Command(psqlTmpFile.Name(), transfer.TargetConnectionString, "-c", copyCmd)
+			cmd := exec.Command("psql", transfer.TargetConnectionString, "-c", copyCmd)
 
 			result, err := cmd.CombinedOutput()
 			if err != nil {
@@ -450,11 +448,10 @@ func postgresqlInsertPsqlCsvs(transfer *Transfer, in <-chan string) error {
 
 			return nil
 		})
-	}
-
-	err := insertErrGroup.Wait()
-	if err != nil {
-		return fmt.Errorf("error inserting psql csvs :: %v", err)
+		err := insertErrGroup.Wait()
+		if err != nil {
+			return fmt.Errorf("error inserting psql csvs :: %v", err)
+		}
 	}
 
 	infoLog.Printf("finished inserting psql csvs for transfer %v\n", transfer.Id)

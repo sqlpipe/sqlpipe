@@ -18,23 +18,17 @@ confirm:
 # DEVELOPMENT
 # ==================================================================================== #
 
-## run/sqlpipe: run the cmd/sqlpipe application
-.PHONY: run/sqlpipe
-run/sqlpipe:
-	go run ./cmd/sqlpipe --accept-licenses
-
-## compose: run docker-compose
-.PHONY: compose
-compose:
-	docker-compose stop
-	docker-compose up -d
-	docker-compose logs -f
+## sqlpipe: run the cmd/sqlpipe application
+.PHONY: sqlpipe
+sqlpipe: build/sqlpipe
+	docker rm -f sqlpipe
+	docker-compose up --build sqlpipe
 
 ## compose-reset: run docker-compose
-.PHONY: compose-reset
-compose-reset:
+.PHONY: compose
+compose: build/sqlpipe
 	docker-compose down -v
-	docker-compose up -d
+	docker-compose up --build -d
 	docker-compose logs -f
 
 # ==================================================================================== #
@@ -69,5 +63,4 @@ vendor:
 .PHONY: build/sqlpipe
 build/sqlpipe:
 	@echo 'Building cmd/sqlpipe...'
-	go build -tags linuxAmd64 -ldflags="-s" -o=./bin/api ./cmd/sqlpipe
-	# GOOS=linux GOARCH=amd64 go build -ldflags="-s" -o=./bin/linux_amd64/api ./cmd/sqlpipe
+	go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe

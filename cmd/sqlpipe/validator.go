@@ -78,4 +78,12 @@ func validateTransfer(v validator, transfer *Transfer) {
 	if transfer.TargetType == "postgresql" {
 		v.check(psqlAvailable, "target-type", "psql is not available on your os / cpu combination")
 	}
+
+	if transfer.TargetType == "oracle" {
+		v.check(sqlLdrAvailable, "target-type", "sqlldr is not available on your os / cpu combination")
+	}
+
+	if transfer.TargetType == "snowflake" {
+		v.check(transfer.TargetSchema != "", "target-schema", "must be provided for target type snowflake")
+	}
 }

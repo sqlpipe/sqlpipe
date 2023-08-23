@@ -1,4 +1,6 @@
 .envrc
 /hidden
-/bin
+bin/*
 dataSources
+.idea
+.hidden/

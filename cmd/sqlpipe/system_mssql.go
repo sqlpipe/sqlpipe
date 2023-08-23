@@ -285,6 +285,10 @@ func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 				}
 				defer pipeFile.Close()
 
+				if !transfer.KeepFiles {
+					defer os.Remove(pipeFileName)
+				}
+
 				// strip path from pipeFile name, get number
 				pipeFileNameClean := filepath.Base(pipeFileName)
 				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
@@ -331,14 +335,6 @@ func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 					return fmt.Errorf("error closing pipe file :: %v", err)
 				}
 
-				conversionErrGroup.Go(func() error {
-					err := os.Remove(pipeFileName)
-					if err != nil {
-						return fmt.Errorf("error removing pipeFile :: %v", err)
-					}
-					return nil
-				})
-
 				_, err = bcpCsvFile.WriteString(csvBuilder.String())
 				if err != nil {
 					return fmt.Errorf("error writing to bcp csv file :: %v", err)
@@ -377,15 +373,23 @@ func mssqlInsertBcpFiles(transfer *Transfer, in <-chan string) error {
 
 		insertErrGroup.Go(func() error {
 
-			defer os.Remove(bcpCsvFileName)
+			if !transfer.KeepFiles {
+				defer os.Remove(bcpCsvFileName)
+			}
+
+			hostName := transfer.TargetHostname
+
+			if transfer.TargetPort != 0 {
+				hostName = fmt.Sprintf("%s,%d", hostName, transfer.TargetPort)
+			}
 
 			cmd := exec.Command(
-				bcpTmpFile.Name(),
+				"bcp",
 				fmt.Sprintf("%s.%s.%s", transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable),
 				"in",
 				bcpCsvFileName,
 				"-c",
-				"-S", transfer.TargetHostname,
+				"-S", hostName,
 				"-U", transfer.TargetUsername,
 				"-P", transfer.TargetPassword,
 				"-t", transfer.Delimiter,
@@ -399,11 +403,10 @@ func mssqlInsertBcpFiles(transfer *Transfer, in <-chan string) error {
 
 			return nil
 		})
-	}
-
-	err := insertErrGroup.Wait()
-	if err != nil {
-		return fmt.Errorf("error inserting bcp csvs :: %v", err)
+		err := insertErrGroup.Wait()
+		if err != nil {
+			return fmt.Errorf("error inserting bcp csvs :: %v", err)
+		}
 	}
 
 	infoLog.Printf("finished inserting bcp csvs into for transfer %v\n", transfer.Id)

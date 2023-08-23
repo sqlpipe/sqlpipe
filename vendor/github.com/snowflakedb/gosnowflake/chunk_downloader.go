@@ -106,7 +106,7 @@ func (scd *snowflakeChunkDownloader) start() error {
 		// if the rowsetbase64 retrieved from the server is empty, move on to downloading chunks
 		var err error
 		var loc *time.Location
-		if scd.sc != nil {
+		if scd.sc != nil && scd.sc.cfg != nil {
 			loc = getCurrentLocation(scd.sc.cfg.Params)
 		}
 		firstArrowChunk := buildFirstArrowChunk(scd.RowSet.RowSetBase64, loc, scd.pool)
@@ -271,7 +271,7 @@ func (scd *snowflakeChunkDownloader) startArrowBatches() error {
 	var err error
 	chunkMetaLen := len(scd.ChunkMetas)
 	var loc *time.Location
-	if scd.sc != nil {
+	if scd.sc != nil && scd.sc.cfg != nil {
 		loc = getCurrentLocation(scd.sc.cfg.Params)
 	}
 	firstArrowChunk := buildFirstArrowChunk(scd.RowSet.RowSetBase64, loc, scd.pool)
@@ -430,7 +430,7 @@ func decodeChunk(scd *snowflakeChunkDownloader, idx int, bufStream *bufio.Reader
 			return err
 		}
 		var loc *time.Location
-		if scd.sc != nil {
+		if scd.sc != nil && scd.sc.cfg != nil {
 			loc = getCurrentLocation(scd.sc.cfg.Params)
 		}
 		arc := arrowResultChunk{
@@ -707,6 +707,13 @@ type ArrowBatch struct {
 	rowCount           int
 	scd                *snowflakeChunkDownloader
 	funcDownloadHelper func(context.Context, *snowflakeChunkDownloader, int) error
+	ctx                context.Context
+}
+
+// WithContext sets the context which will be used for this ArrowBatch.
+func (rb *ArrowBatch) WithContext(ctx context.Context) *ArrowBatch {
+	rb.ctx = ctx
+	return rb
 }
 
 // Fetch returns an array of records representing a chunk in the query
@@ -717,7 +724,13 @@ func (rb *ArrowBatch) Fetch() (*[]arrow.Record, error) {
 		rb.rowCount = countArrowBatchRows(rb.rec)
 		return rb.rec, nil
 	}
-	if err := rb.funcDownloadHelper(context.Background(), rb.scd, rb.idx); err != nil {
+	var ctx context.Context
+	if rb.ctx != nil {
+		ctx = rb.ctx
+	} else {
+		ctx = context.Background()
+	}
+	if err := rb.funcDownloadHelper(ctx, rb.scd, rb.idx); err != nil {
 		return nil, err
 	}
 	return rb.rec, nil

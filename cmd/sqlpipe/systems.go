@@ -36,6 +36,8 @@ func newSystem(name, systemType, connectionString string, timezone string) (Syst
 		return newMysql(name, connectionString, timezone)
 	case "oracle":
 		return newOracle(name, connectionString)
+	case "snowflake":
+		return newSnowflake(name, connectionString)
 	default:
 		return nil, fmt.Errorf("unsupported system type %v", systemType)
 	}

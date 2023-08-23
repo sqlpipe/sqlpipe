@@ -2,8 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -179,7 +184,7 @@ func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType str
 		}
 
 		if precisionOk && scaleOk {
-			createType = fmt.Sprintf("decimal(%v, %v)", columnInfo.scale, columnInfo.precision)
+			createType = fmt.Sprintf("decimal(%v, %v)", columnInfo.precision, columnInfo.scale)
 		} else {
 			createType = "varchar2(64)"
 		}
@@ -217,17 +222,7 @@ func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType str
 	case "bool":
 		createType = "number(1)"
 	case "json":
-		if columnInfo.lengthOk {
-			if columnInfo.length <= 0 {
-				createType = "varchar2(4000)"
-			} else if columnInfo.length <= 4000 {
-				createType = fmt.Sprintf("varchar2(%v)", columnInfo.length)
-			} else {
-				createType = "clob"
-			}
-		} else {
-			createType = "varchar2(4000)"
-		}
+		createType = "clob"
 	case "xml":
 		if columnInfo.lengthOk {
 			if columnInfo.length <= 0 {
@@ -261,9 +256,222 @@ func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType str
 
 func (system Oracle) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
 
-	for pipeFileName := range in {
-		fmt.Println("inserting pipe file: ", pipeFileName)
+	oracleFiles, err := oracleConvertPipeFiles(transfer, in, transferErrGroup)
+	if err != nil {
+		return fmt.Errorf("error converting pipe files :: %v", err)
 	}
+
+	err = oracleInsertFiles(transfer, oracleFiles)
+	if err != nil {
+		return fmt.Errorf("error inserting oracle files :: %v", err)
+	}
+	return nil
+}
+
+func oracleConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
+	out := make(chan string)
+
+	oracleFileDirPath := filepath.Join(transfer.TmpDir, "oracle")
+	err := os.Mkdir(oracleFileDirPath, os.ModePerm)
+	if err != nil {
+		return out, fmt.Errorf("error creating oracle directory :: %v", err)
+	}
+
+	transferErrGroup.Go(func() error {
+		defer close(out)
+
+		for pipeFileName := range in {
+
+			pipeFileName := pipeFileName
+			conversionErrGroup := errgroup.Group{}
+
+			conversionErrGroup.Go(func() error {
+				pipeFile, err := os.Open(pipeFileName)
+				if err != nil {
+					return fmt.Errorf("error opening pipeFile :: %v", err)
+				}
+				defer pipeFile.Close()
+
+				if !transfer.KeepFiles {
+					defer os.Remove(pipeFileName)
+				}
+
+				// strip path from pipeFile name, get number
+				pipeFileNameClean := filepath.Base(pipeFileName)
+				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
+
+				oracleCtlFile, err := os.Create(filepath.Join(oracleFileDirPath, fmt.Sprintf("%s.ctl", pipeFileNum)))
+				if err != nil {
+					return fmt.Errorf("error creating oracle file :: %v", err)
+				}
+				defer oracleCtlFile.Close()
+
+				controlFileBuilder := strings.Builder{}
+
+				controlFileBuilder.WriteString("LOAD DATA infile '")
+				controlFileBuilder.WriteString(filepath.Join(oracleFileDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
+				controlFileBuilder.WriteString(`' append into table `)
+				controlFileBuilder.WriteString(transfer.TargetSchema)
+				controlFileBuilder.WriteString(".")
+				controlFileBuilder.WriteString(transfer.TargetTable)
+				controlFileBuilder.WriteString(` fields csv with embedded terminated by ',' optionally enclosed by '"' trailing nullcols (`)
+
+				firstCol := true
+				for _, column := range transfer.ColumnInfo {
+
+					if !firstCol {
+						controlFileBuilder.WriteString(",")
+					}
+
+					controlFileBuilder.WriteString(column.name)
+
+					switch column.pipeType {
+					case "date":
+						controlFileBuilder.WriteString(" date 'YYYY-MM-DD'")
+					case "datetime":
+						controlFileBuilder.WriteString(" timestamp 'YYYY-MM-DD HH24:MI:SS.FF'")
+					case "datetimetz":
+						controlFileBuilder.WriteString(" timestamp with time zone 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM'")
+					}
+
+					controlFileBuilder.WriteString(" nullif ")
+					controlFileBuilder.WriteString(column.name)
+					controlFileBuilder.WriteString("='")
+					controlFileBuilder.WriteString(transfer.Null)
+					controlFileBuilder.WriteString("'")
+
+					firstCol = false
+				}
+
+				controlFileBuilder.WriteString(")")
+
+				// write frontmatter to oracle file
+				_, err = oracleCtlFile.WriteString(controlFileBuilder.String())
+				if err != nil {
+					return fmt.Errorf("error writing oracle ctl file :: %v", err)
+				}
+
+				err = oracleCtlFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing oracle ctl file :: %v", err)
+				}
+
+				oracleCsvFile, err := os.Create(filepath.Join(oracleFileDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
+				if err != nil {
+					return fmt.Errorf("error creating oracle csv file :: %v", err)
+				}
+				defer oracleCtlFile.Close()
+
+				csvReader := csv.NewReader(pipeFile)
+				csvWriter := csv.NewWriter(oracleCsvFile)
+
+				for {
+					row, err := csvReader.Read()
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							break
+						}
+						return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
+					}
+
+					for i := range row {
+						if row[i] != transfer.Null {
+							row[i], err = oraclePipeFileToCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
+							if err != nil {
+								return fmt.Errorf("error formatting pipe file to oracle csv :: %v", err)
+							}
+						}
+					}
+
+					err = csvWriter.Write(row)
+					if err != nil {
+						return fmt.Errorf("error writing oracle csv :: %v", err)
+					}
+				}
+
+				err = pipeFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing pipeFile :: %v", err)
+				}
+
+				csvWriter.Flush()
+
+				err = oracleCsvFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing oracle csv file :: %v", err)
+				}
+
+				out <- oracleCsvFile.Name()
+
+				return nil
+			})
+
+			err = conversionErrGroup.Wait()
+			if err != nil {
+				return fmt.Errorf("error converting pipeFiles :: %v", err)
+			}
+
+		}
+
+		infoLog.Printf("converted pipe files to oracle csvs at %v\n", oracleFileDirPath)
+		return nil
+	})
+
+	return out, nil
+}
+
+func oracleInsertFiles(transfer *Transfer, in <-chan string) error {
+	insertErrGroup := errgroup.Group{}
+
+	oracleFileDirPath := filepath.Join(transfer.TmpDir, "oracle")
+
+	for oracleCsvFileName := range in {
+		oracleCsvFileName := oracleCsvFileName
+
+		insertErrGroup.Go(func() error {
+
+			csvFileNameClean := filepath.Base(oracleCsvFileName)
+			csvFileNum := strings.Split(csvFileNameClean, ".")[0]
+
+			ctlFileName := filepath.Join(oracleFileDirPath, fmt.Sprintf("%s.ctl", csvFileNum))
+			logFileName := filepath.Join(oracleFileDirPath, fmt.Sprintf("%s.log", csvFileNum))
+			badFileName := filepath.Join(oracleFileDirPath, fmt.Sprintf("%s.bad", csvFileNum))
+			discardFileName := filepath.Join(oracleFileDirPath, fmt.Sprintf("%s.discard", csvFileNum))
+
+			if !transfer.KeepFiles {
+				defer os.Remove(oracleCsvFileName)
+				defer os.Remove(ctlFileName)
+			}
+
+			cmd := exec.Command(
+				"sqlldr",
+				fmt.Sprintf("%s/%s@%s:%d/%s", transfer.TargetUsername, transfer.TargetPassword, transfer.TargetHostname, transfer.TargetPort, transfer.TargetDatabase),
+				fmt.Sprintf("control=%s", ctlFileName),
+				fmt.Sprintf("LOG=%s", logFileName),
+				fmt.Sprintf("BAD=%s", badFileName),
+				fmt.Sprintf("DISCARD=%s", discardFileName),
+			)
+
+			result, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to upload csv to oracle :: stderr %v :: stdout %s", err, string(result))
+			}
+
+			if !transfer.KeepFiles {
+				defer os.Remove(logFileName)
+				defer os.Remove(badFileName)
+				defer os.Remove(discardFileName)
+			}
+
+			return nil
+		})
+		err := insertErrGroup.Wait()
+		if err != nil {
+			return fmt.Errorf("error inserting oracle csvs :: %v", err)
+		}
+	}
+
+	infoLog.Printf("finished inserting oracle csvs for transfer %v\n", transfer.Id)
 
 	return nil
 }
@@ -306,21 +514,21 @@ func (system Oracle) getPipeFileFormatters() (map[string]func(interface{}) (stri
 		"datetime": func(v interface{}) (string, error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non time.Time value passed to datetime mssqlPipeFileFormatters")
+				return "", errors.New("non time.Time value passed to datetime oraclePipeFileFormatters")
 			}
 			return valTime.Format(time.RFC3339Nano), nil
 		},
 		"datetimetz": func(v interface{}) (string, error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non time.Time value passed to datetimetz mssqlPipeFileFormatters")
+				return "", errors.New("non time.Time value passed to datetimetz oraclePipeFileFormatters")
 			}
 			return valTime.UTC().Format(time.RFC3339Nano), nil
 		},
 		"date": func(v interface{}) (string, error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non time.Time value passed to date mssqlPipeFileFormatters")
+				return "", errors.New("non time.Time value passed to date oraclePipeFileFormatters")
 			}
 			return valTime.Format(time.RFC3339Nano), nil
 		},
@@ -346,4 +554,93 @@ func (system Oracle) getPipeFileFormatters() (map[string]func(interface{}) (stri
 			return fmt.Sprintf("%s", v), nil
 		},
 	}, nil
+}
+
+var oraclePipeFileToCsvFormatters = map[string]func(string) (string, error){
+	"nvarchar": func(v string) (string, error) {
+		return v, nil
+	},
+	"varchar": func(v string) (string, error) {
+		return v, nil
+	},
+	"ntext": func(v string) (string, error) {
+		return v, nil
+	},
+	"text": func(v string) (string, error) {
+		return v, nil
+	},
+	"int64": func(v string) (string, error) {
+		return v, nil
+	},
+	"int32": func(v string) (string, error) {
+		return v, nil
+	},
+	"int16": func(v string) (string, error) {
+		return v, nil
+	},
+	"float64": func(v string) (string, error) {
+		return v, nil
+	},
+	"float32": func(v string) (string, error) {
+		return v, nil
+	},
+	"decimal": func(v string) (string, error) {
+		return v, nil
+	},
+	"money": func(v string) (string, error) {
+		return v, nil
+	},
+	"datetime": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error writing datetime value to oracle csv :: %v", err)
+		}
+		return valTime.Format("2006-01-02 15:04:05.999999"), nil
+	},
+	"datetimetz": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error writing datetime value to oracle csv :: %v", err)
+		}
+		return valTime.UTC().Format("2006-01-02 15:04:05.999999 -07:00"), nil
+	},
+	"date": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error writing date value to oracle csv :: %v", err)
+		}
+		return valTime.Format("2006-01-02"), nil
+	},
+	"time": func(v string) (string, error) {
+		valTime, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return "", fmt.Errorf("error writing time value to oracle csv :: %v", err)
+		}
+
+		return valTime.Format("15:04:05.999999"), nil
+	},
+	"varbinary": func(v string) (string, error) {
+		return v, nil
+	},
+	"blob": func(v string) (string, error) {
+		return v, nil
+	},
+	"uuid": func(v string) (string, error) {
+		return strings.Replace(v, "-", "", -1), nil
+	},
+	"bool": func(v string) (string, error) {
+		if v == "1" {
+			return "1", nil
+		}
+		return "0", nil
+	},
+	"json": func(v string) (string, error) {
+		return v, nil
+	},
+	"xml": func(v string) (string, error) {
+		return v, nil
+	},
+	"varbit": func(v string) (string, error) {
+		return v, nil
+	},
 }
