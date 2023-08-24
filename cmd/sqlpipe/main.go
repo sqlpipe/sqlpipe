@@ -38,10 +38,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	if platform == "" {
-		errorLog.Fatal("unsupported OS / CPU platform")
-	}
-
 	checkDeps()
 
 	// create tmp dir if not exists
