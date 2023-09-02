@@ -22,7 +22,8 @@ confirm:
 .PHONY: sqlpipe
 sqlpipe: build/sqlpipe
 	docker rm -f sqlpipe
-	docker-compose up --build sqlpipe
+	docker-compose up --build -d sqlpipe
+	docker-compose logs -f sqlpipe
 
 ## compose-reset: run docker-compose
 .PHONY: compose

@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +26,8 @@ type System interface {
 	pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error)
 	createPipeFiles(transfer *Transfer, transferErrGroup *errgroup.Group) (out <-chan string, err error)
 	insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error
+	getFinalCsvFormatters() map[string]func(string) (string, error)
+	runUploadCmd(transfer *Transfer, csvFileName string) error
 }
 
 func newSystem(name, systemType, connectionString string, timezone string) (System, error) {
@@ -173,19 +177,11 @@ func createTableCommon(transfer *Transfer) error {
 }
 
 func createPipeFilesCommon(transfer *Transfer, transferErrGroup *errgroup.Group) (<-chan string, error) {
-	var err error
 	out := make(chan string)
 
 	transferErrGroup.Go(func() error {
 
 		defer close(out)
-
-		pipeFilesDirPath := filepath.Join(transfer.TmpDir, "pipe-files")
-
-		err = os.Mkdir(pipeFilesDirPath, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("unable to create temp dir for pipe files:: %v", err)
-		}
 
 		pipeFileFormatters, err := transfer.Source.getPipeFileFormatters()
 		if err != nil {
@@ -194,7 +190,7 @@ func createPipeFilesCommon(transfer *Transfer, transferErrGroup *errgroup.Group)
 
 		pipeFileNum := 1
 
-		pipeFile, err := os.Create(filepath.Join(pipeFilesDirPath, fmt.Sprintf("%b.pipe", pipeFileNum)))
+		pipeFile, err := os.Create(filepath.Join(transfer.PipeFileDir, fmt.Sprintf("%b.pipe", pipeFileNum)))
 		if err != nil {
 			return fmt.Errorf("error creating temp file :: %v", err)
 		}
@@ -250,7 +246,7 @@ func createPipeFilesCommon(transfer *Transfer, transferErrGroup *errgroup.Group)
 
 				pipeFileNum++
 				// create the file names in binary so it sorts correctly
-				pipeFile, err = os.Create(filepath.Join(pipeFilesDirPath, fmt.Sprintf("%b.pipe", pipeFileNum)))
+				pipeFile, err = os.Create(filepath.Join(transfer.PipeFileDir, fmt.Sprintf("%b.pipe", pipeFileNum)))
 				if err != nil {
 					return fmt.Errorf("error creating temp file :: %v", err)
 				}
@@ -273,9 +269,131 @@ func createPipeFilesCommon(transfer *Transfer, transferErrGroup *errgroup.Group)
 			out <- pipeFile.Name()
 		}
 
-		infoLog.Printf("pipe files written at %v", pipeFilesDirPath)
+		infoLog.Printf("pipe files written at %v", transfer.PipeFileDir)
 		return nil
 	})
 
 	return out, nil
+}
+
+func convertPipeFilesCommon(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
+
+	out := make(chan string)
+
+	finalCsvFormatters := transfer.Target.getFinalCsvFormatters()
+
+	transferErrGroup.Go(func() error {
+		defer close(out)
+
+		for pipeFileName := range in {
+
+			pipeFileName := pipeFileName
+			conversionErrGroup := errgroup.Group{}
+			conversionErrGroup.SetLimit(1)
+
+			conversionErrGroup.Go(func() error {
+				pipeFile, err := os.Open(pipeFileName)
+				if err != nil {
+					return fmt.Errorf("error opening pipeFile :: %v", err)
+				}
+				defer pipeFile.Close()
+
+				if !transfer.KeepFiles {
+					defer os.Remove(pipeFileName)
+				}
+
+				// strip path from pipeFile name, get number
+				pipeFileNameClean := filepath.Base(pipeFileName)
+				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
+
+				psqlCsvFile, err := os.Create(filepath.Join(transfer.FinalCsvDir, fmt.Sprintf("%s.csv", pipeFileNum)))
+				if err != nil {
+					return fmt.Errorf("error creating final csv file :: %v", err)
+				}
+				defer psqlCsvFile.Close()
+
+				csvReader := csv.NewReader(pipeFile)
+				csvWriter := csv.NewWriter(psqlCsvFile)
+
+				for {
+					row, err := csvReader.Read()
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							break
+						}
+						return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
+					}
+
+					for i := range row {
+						if row[i] != transfer.Null {
+							row[i], err = finalCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
+							if err != nil {
+								return fmt.Errorf("error formatting pipe file to final csv :: %v", err)
+							}
+						}
+					}
+
+					err = csvWriter.Write(row)
+					if err != nil {
+						return fmt.Errorf("error writing final csv :: %v", err)
+					}
+				}
+
+				err = pipeFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing pipeFile :: %v", err)
+				}
+
+				csvWriter.Flush()
+
+				err = psqlCsvFile.Close()
+				if err != nil {
+					return fmt.Errorf("error closing final csv file :: %v", err)
+				}
+
+				out <- psqlCsvFile.Name()
+
+				return nil
+			})
+
+			err := conversionErrGroup.Wait()
+			if err != nil {
+				return fmt.Errorf("error converting pipeFiles :: %v", err)
+			}
+		}
+
+		infoLog.Printf("converted pipe files to final csvs at %v\n", transfer.FinalCsvDir)
+		return nil
+	})
+
+	return out, nil
+}
+
+func insertFinalCsvCommon(transfer *Transfer, in <-chan string) error {
+	insertErrGroup := errgroup.Group{}
+
+	for finalCsvFileName := range in {
+		finalCsvFileName := finalCsvFileName
+
+		insertErrGroup.Go(func() error {
+			if !transfer.KeepFiles {
+				defer os.Remove(finalCsvFileName)
+			}
+
+			err := transfer.Target.runUploadCmd(transfer, finalCsvFileName)
+			if err != nil {
+				return fmt.Errorf("error running upload cmd :: %v", err)
+			}
+
+			return nil
+		})
+		err := insertErrGroup.Wait()
+		if err != nil {
+			return fmt.Errorf("error inserting final csvs :: %v", err)
+		}
+	}
+
+	infoLog.Printf("finished inserting final csvs for transfer %v\n", transfer.Id)
+
+	return nil
 }

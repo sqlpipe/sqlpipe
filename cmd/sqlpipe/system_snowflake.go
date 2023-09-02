@@ -2,12 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"encoding/csv"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -253,12 +250,12 @@ func (system Snowflake) insertPipeFiles(transfer *Transfer, in <-chan string, tr
 
 	infoLog.Println("created file format in snowflake")
 
-	snowflakeFiles, err := snowflakeConvertPipeFiles(transfer, in, transferErrGroup)
+	csvFiles, err := convertPipeFilesCommon(transfer, in, transferErrGroup)
 	if err != nil {
 		return fmt.Errorf("error converting pipeFiles :: %v", err)
 	}
 
-	putFiles, err := snowflakePutCsvs(transfer, snowflakeFiles, transferErrGroup)
+	putFiles, err := snowflakePutCsvs(transfer, csvFiles, transferErrGroup)
 	if err != nil {
 		return fmt.Errorf("error putting csvs :: %v", err)
 	}
@@ -271,101 +268,8 @@ func (system Snowflake) insertPipeFiles(transfer *Transfer, in <-chan string, tr
 	return nil
 }
 
-func snowflakeConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
-
-	out := make(chan string)
-
-	snowflakeDirPath := filepath.Join(transfer.TmpDir, "snowflake")
-	err := os.Mkdir(snowflakeDirPath, os.ModePerm)
-	if err != nil {
-		return out, fmt.Errorf("error creating snowflake directory :: %v", err)
-	}
-
-	transferErrGroup.Go(func() error {
-		defer close(out)
-
-		for pipeFileName := range in {
-
-			pipeFileName := pipeFileName
-			conversionErrGroup := errgroup.Group{}
-			conversionErrGroup.SetLimit(1)
-
-			conversionErrGroup.Go(func() error {
-				pipeFile, err := os.Open(pipeFileName)
-				if err != nil {
-					return fmt.Errorf("error opening pipeFile :: %v", err)
-				}
-				defer pipeFile.Close()
-
-				if !transfer.KeepFiles {
-					defer os.Remove(pipeFileName)
-				}
-
-				// strip path from pipeFile name, get number
-				pipeFileNameClean := filepath.Base(pipeFileName)
-				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
-
-				snowflakeFile, err := os.Create(filepath.Join(snowflakeDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
-				if err != nil {
-					return fmt.Errorf("error creating snowflake csv file :: %v", err)
-				}
-				defer snowflakeFile.Close()
-
-				csvReader := csv.NewReader(pipeFile)
-				csvWriter := csv.NewWriter(snowflakeFile)
-
-				for {
-					row, err := csvReader.Read()
-					if err != nil {
-						if errors.Is(err, io.EOF) {
-							break
-						}
-						return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
-					}
-
-					for i := range row {
-						if row[i] != transfer.Null {
-							row[i], err = snowflakePipeFileToCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
-							if err != nil {
-								return fmt.Errorf("error formatting pipe file to snowflake csv :: %v", err)
-							}
-						}
-					}
-
-					err = csvWriter.Write(row)
-					if err != nil {
-						return fmt.Errorf("error writing snowflake csv :: %v", err)
-					}
-				}
-
-				err = pipeFile.Close()
-				if err != nil {
-					return fmt.Errorf("error closing pipeFile :: %v", err)
-				}
-
-				csvWriter.Flush()
-
-				err = snowflakeFile.Close()
-				if err != nil {
-					return fmt.Errorf("error closing snowflake csv file :: %v", err)
-				}
-
-				out <- snowflakeFile.Name()
-
-				return nil
-			})
-
-			err = conversionErrGroup.Wait()
-			if err != nil {
-				return fmt.Errorf("error converting pipeFiles :: %v", err)
-			}
-		}
-
-		infoLog.Printf("converted pipe files to snowflake csvs at %v\n", snowflakeDirPath)
-		return nil
-	})
-
-	return out, nil
+func (system Snowflake) runUploadCmd(transfer *Transfer, csvFileName string) error {
+	return errors.New("snowflake does not implement runUploadCmd, use snowflakePutCsvs and snowflakeCopyCsvs instead")
 }
 
 func snowflakePutCsvs(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
@@ -453,80 +357,82 @@ func snowflakeCopyCsvs(transfer *Transfer, in <-chan string) error {
 	return nil
 }
 
-var snowflakePipeFileToCsvFormatters = map[string]func(string) (string, error){
-	"nvarchar": func(v string) (string, error) {
-		return v, nil
-	},
-	"varchar": func(v string) (string, error) {
-		return v, nil
-	},
-	"ntext": func(v string) (string, error) {
-		return v, nil
-	},
-	"text": func(v string) (string, error) {
-		return v, nil
-	},
-	"int64": func(v string) (string, error) {
-		return v, nil
-	},
-	"int32": func(v string) (string, error) {
-		return v, nil
-	},
-	"int16": func(v string) (string, error) {
-		return v, nil
-	},
-	"float64": func(v string) (string, error) {
-		return v, nil
-	},
-	"float32": func(v string) (string, error) {
-		return v, nil
-	},
-	"decimal": func(v string) (string, error) {
-		return v, nil
-	},
-	"money": func(v string) (string, error) {
-		return v, nil
-	},
-	"datetime": func(v string) (string, error) {
-		return v, nil
-	},
-	"datetimetz": func(v string) (string, error) {
-		return v, nil
-	},
-	"date": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error writing date value to psql csv :: %v", err)
-		}
-		return valTime.Format("2006-01-02"), nil
-	},
-	"time": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error writing time value to psql csv :: %v", err)
-		}
+func (system Snowflake) getFinalCsvFormatters() map[string]func(string) (string, error) {
+	return map[string]func(string) (string, error){
+		"nvarchar": func(v string) (string, error) {
+			return v, nil
+		},
+		"varchar": func(v string) (string, error) {
+			return v, nil
+		},
+		"ntext": func(v string) (string, error) {
+			return v, nil
+		},
+		"text": func(v string) (string, error) {
+			return v, nil
+		},
+		"int64": func(v string) (string, error) {
+			return v, nil
+		},
+		"int32": func(v string) (string, error) {
+			return v, nil
+		},
+		"int16": func(v string) (string, error) {
+			return v, nil
+		},
+		"float64": func(v string) (string, error) {
+			return v, nil
+		},
+		"float32": func(v string) (string, error) {
+			return v, nil
+		},
+		"decimal": func(v string) (string, error) {
+			return v, nil
+		},
+		"money": func(v string) (string, error) {
+			return v, nil
+		},
+		"datetime": func(v string) (string, error) {
+			return v, nil
+		},
+		"datetimetz": func(v string) (string, error) {
+			return v, nil
+		},
+		"date": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error writing date value to psql csv :: %v", err)
+			}
+			return valTime.Format("2006-01-02"), nil
+		},
+		"time": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error writing time value to psql csv :: %v", err)
+			}
 
-		return valTime.Format("15:04:05.999999"), nil
-	},
-	"varbinary": func(v string) (string, error) {
-		return v, nil
-	},
-	"blob": func(v string) (string, error) {
-		return v, nil
-	},
-	"uuid": func(v string) (string, error) {
-		return strings.Replace(v, "-", "", -1), nil
-	},
-	"bool": func(v string) (string, error) {
-		return v, nil
-	},
-	"json": func(v string) (string, error) {
-		return v, nil
-	},
-	"xml": func(v string) (string, error) {
-		return v, nil
-	},
-	"varbit": func(v string) (string, error) {
-		return v, nil
-	},
+			return valTime.Format("15:04:05.999999"), nil
+		},
+		"varbinary": func(v string) (string, error) {
+			return v, nil
+		},
+		"blob": func(v string) (string, error) {
+			return v, nil
+		},
+		"uuid": func(v string) (string, error) {
+			return strings.Replace(v, "-", "", -1), nil
+		},
+		"bool": func(v string) (string, error) {
+			return v, nil
+		},
+		"json": func(v string) (string, error) {
+			return v, nil
+		},
+		"xml": func(v string) (string, error) {
+			return v, nil
+		},
+		"varbit": func(v string) (string, error) {
+			return v, nil
+		},
+	}
 }

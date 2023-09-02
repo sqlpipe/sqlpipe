@@ -252,9 +252,9 @@ func (system Mssql) insertPipeFiles(transfer *Transfer, in <-chan string, transf
 		return fmt.Errorf("error converting pipe files :: %v", err)
 	}
 
-	err = mssqlInsertBcpFiles(transfer, bcpFiles)
+	err = insertFinalCsvCommon(transfer, bcpFiles)
 	if err != nil {
-		return fmt.Errorf("error inserting bcp files :: %v", err)
+		return fmt.Errorf("error inserting final files :: %v", err)
 	}
 
 	return nil
@@ -264,11 +264,7 @@ func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 
 	out := make(chan string)
 
-	bcpCsvDirPath := filepath.Join(transfer.TmpDir, "bcp-csv")
-	err := os.Mkdir(bcpCsvDirPath, os.ModePerm)
-	if err != nil {
-		return out, fmt.Errorf("error creating bcp-csv directory :: %v", err)
-	}
+	finalCsvFormatters := transfer.Target.getFinalCsvFormatters()
 
 	transferErrGroup.Go(func() error {
 		defer close(out)
@@ -293,7 +289,7 @@ func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 				pipeFileNameClean := filepath.Base(pipeFileName)
 				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
 
-				bcpCsvFile, err := os.Create(filepath.Join(bcpCsvDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
+				bcpCsvFile, err := os.Create(filepath.Join(transfer.FinalCsvDir, fmt.Sprintf("%s.csv", pipeFileNum)))
 				if err != nil {
 					return fmt.Errorf("error creating bcp csv file :: %v", err)
 				}
@@ -320,7 +316,7 @@ func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 						if row[i] == transfer.Null {
 							csvBuilder.WriteString("")
 						} else {
-							value, err = mssqlPipeFileToBcpCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
+							value, err = finalCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
 							if err != nil {
 								return fmt.Errorf("error formatting pipe file to bcp csv :: %v", err)
 							}
@@ -350,66 +346,43 @@ func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 				return nil
 			})
 
-			err = conversionErrGroup.Wait()
+			err := conversionErrGroup.Wait()
 			if err != nil {
 				return fmt.Errorf("error converting pipeFiles :: %v", err)
 			}
 		}
 
-		infoLog.Printf("converted pipe files to bcp csvs at %v\n", bcpCsvDirPath)
+		infoLog.Printf("converted pipe files to bcp csvs at %v\n", transfer.FinalCsvDir)
 		return nil
 	})
 
 	return out, nil
 }
 
-func mssqlInsertBcpFiles(transfer *Transfer, in <-chan string) error {
+func (system Mssql) runUploadCmd(transfer *Transfer, csvFileName string) error {
+	hostName := transfer.TargetHostname
 
-	insertErrGroup := errgroup.Group{}
-
-	for bcpCsvFileName := range in {
-
-		bcpCsvFileName := bcpCsvFileName
-
-		insertErrGroup.Go(func() error {
-
-			if !transfer.KeepFiles {
-				defer os.Remove(bcpCsvFileName)
-			}
-
-			hostName := transfer.TargetHostname
-
-			if transfer.TargetPort != 0 {
-				hostName = fmt.Sprintf("%s,%d", hostName, transfer.TargetPort)
-			}
-
-			cmd := exec.Command(
-				"bcp",
-				fmt.Sprintf("%s.%s.%s", transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable),
-				"in",
-				bcpCsvFileName,
-				"-c",
-				"-S", hostName,
-				"-U", transfer.TargetUsername,
-				"-P", transfer.TargetPassword,
-				"-t", transfer.Delimiter,
-				"-r", transfer.Newline,
-				"-e", "/tmp/errors.txt",
-			)
-			result, err := cmd.CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("failed to upload csv to mssql :: stderr %v :: stdout %s", err, string(result))
-			}
-
-			return nil
-		})
-		err := insertErrGroup.Wait()
-		if err != nil {
-			return fmt.Errorf("error inserting bcp csvs :: %v", err)
-		}
+	if transfer.TargetPort != 0 {
+		hostName = fmt.Sprintf("%s,%d", hostName, transfer.TargetPort)
 	}
 
-	infoLog.Printf("finished inserting bcp csvs into for transfer %v\n", transfer.Id)
+	cmd := exec.Command(
+		"bcp",
+		fmt.Sprintf("%s.%s.%s", transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable),
+		"in",
+		csvFileName,
+		"-c",
+		"-S", hostName,
+		"-U", transfer.TargetUsername,
+		"-P", transfer.TargetPassword,
+		"-t", transfer.Delimiter,
+		"-r", transfer.Newline,
+		"-e", "/tmp/errors.txt",
+	)
+	result, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to upload csv to mssql :: stderr %v :: stdout %s", err, string(result))
+	}
 
 	return nil
 }
@@ -514,108 +487,110 @@ func (system Mssql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 	}, nil
 }
 
-var mssqlPipeFileToBcpCsvFormatters = map[string]func(string) (string, error){
-	"nvarchar": func(v string) (string, error) {
-		if v == "" {
-			return "\x00", nil
-		}
-		return v, nil
-	},
-	"varchar": func(v string) (string, error) {
-		if v == "" {
-			return "\x00", nil
-		}
-		return v, nil
-	},
-	"ntext": func(v string) (string, error) {
-		if v == "" {
-			return "\x00", nil
-		}
-		return v, nil
-	},
-	"text": func(v string) (string, error) {
-		if v == "" {
-			return "\x00", nil
-		}
-		return v, nil
-	},
-	"int64": func(v string) (string, error) {
-		return v, nil
-	},
-	"int32": func(v string) (string, error) {
-		return v, nil
-	},
-	"int16": func(v string) (string, error) {
-		return v, nil
-	},
-	"float64": func(v string) (string, error) {
-		return v, nil
-	},
-	"float32": func(v string) (string, error) {
-		return v, nil
-	},
-	"decimal": func(v string) (string, error) {
-		return v, nil
-	},
-	"money": func(v string) (string, error) {
-		return v, nil
-	},
-	"datetime": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error writing date value to bcp csv :: %v", err)
-		}
-		return valTime.Format("2006-01-02 15:04:05.9999999"), nil
-	},
-	"datetimetz": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error parsing datetimetz value in mssql datetimetz psql formatter :: %v", err)
-		}
+func (system Mssql) getFinalCsvFormatters() map[string]func(string) (string, error) {
+	return map[string]func(string) (string, error){
+		"nvarchar": func(v string) (string, error) {
+			if v == "" {
+				return "\x00", nil
+			}
+			return v, nil
+		},
+		"varchar": func(v string) (string, error) {
+			if v == "" {
+				return "\x00", nil
+			}
+			return v, nil
+		},
+		"ntext": func(v string) (string, error) {
+			if v == "" {
+				return "\x00", nil
+			}
+			return v, nil
+		},
+		"text": func(v string) (string, error) {
+			if v == "" {
+				return "\x00", nil
+			}
+			return v, nil
+		},
+		"int64": func(v string) (string, error) {
+			return v, nil
+		},
+		"int32": func(v string) (string, error) {
+			return v, nil
+		},
+		"int16": func(v string) (string, error) {
+			return v, nil
+		},
+		"float64": func(v string) (string, error) {
+			return v, nil
+		},
+		"float32": func(v string) (string, error) {
+			return v, nil
+		},
+		"decimal": func(v string) (string, error) {
+			return v, nil
+		},
+		"money": func(v string) (string, error) {
+			return v, nil
+		},
+		"datetime": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error writing date value to bcp csv :: %v", err)
+			}
+			return valTime.Format("2006-01-02 15:04:05.9999999"), nil
+		},
+		"datetimetz": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error parsing datetimetz value in mssql datetimetz psql formatter :: %v", err)
+			}
 
-		return valTime.UTC().Format("2006-01-02 15:04:05.9999999"), nil
-	},
-	"date": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error writing date value to bcp csv :: %v", err)
-		}
-		return valTime.Format("2006-01-02"), nil
-	},
-	"time": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error writing time value to bcp csv :: %v", err)
-		}
+			return valTime.UTC().Format("2006-01-02 15:04:05.9999999"), nil
+		},
+		"date": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error writing date value to bcp csv :: %v", err)
+			}
+			return valTime.Format("2006-01-02"), nil
+		},
+		"time": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error writing time value to bcp csv :: %v", err)
+			}
 
-		return valTime.Format("15:04:05.999999"), nil
-	},
-	"varbinary": func(v string) (string, error) {
-		return v, nil
-	},
-	"blob": func(v string) (string, error) {
-		return v, nil
-	},
-	"uuid": func(v string) (string, error) {
-		return v, nil
-	},
-	"bool": func(v string) (string, error) {
-		switch v {
-		case "true":
-			return "1", nil
-		case "false":
-			return "0", nil
-		default:
-			return "", fmt.Errorf("error writing bool value to bcp csv :: %v", v)
-		}
-	},
-	"json": func(v string) (string, error) {
-		return v, nil
-	},
-	"xml": func(v string) (string, error) {
-		return v, nil
-	},
-	"varbit": func(v string) (string, error) {
-		return v, nil
-	},
+			return valTime.Format("15:04:05.999999"), nil
+		},
+		"varbinary": func(v string) (string, error) {
+			return v, nil
+		},
+		"blob": func(v string) (string, error) {
+			return v, nil
+		},
+		"uuid": func(v string) (string, error) {
+			return v, nil
+		},
+		"bool": func(v string) (string, error) {
+			switch v {
+			case "true":
+				return "1", nil
+			case "false":
+				return "0", nil
+			default:
+				return "", fmt.Errorf("error writing bool value to bcp csv :: %v", v)
+			}
+		},
+		"json": func(v string) (string, error) {
+			return v, nil
+		},
+		"xml": func(v string) (string, error) {
+			return v, nil
+		},
+		"varbit": func(v string) (string, error) {
+			return v, nil
+		},
+	}
 }

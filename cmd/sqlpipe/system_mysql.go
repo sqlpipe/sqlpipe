@@ -2,12 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"encoding/csv"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -349,12 +346,12 @@ func (system Mysql) createPipeFiles(transfer *Transfer, transferErrGroup *errgro
 }
 
 func (system Mysql) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
-	mysqlFiles, err := mysqlConvertPipeFiles(transfer, in, transferErrGroup)
+	csvFiles, err := convertPipeFilesCommon(transfer, in, transferErrGroup)
 	if err != nil {
 		return fmt.Errorf("error converting pipeFiles :: %v", err)
 	}
 
-	err = mysqlInsertMysqlCsvs(transfer, mysqlFiles)
+	err = insertFinalCsvCommon(transfer, csvFiles)
 	if err != nil {
 		return fmt.Errorf("error inserting pipeFiles :: %v", err)
 	}
@@ -362,189 +359,94 @@ func (system Mysql) insertPipeFiles(transfer *Transfer, in <-chan string, transf
 	return nil
 }
 
-func mysqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
-
-	out := make(chan string)
-
-	mysqlCsvDirPath := filepath.Join(transfer.TmpDir, "mysql-csv")
-	err := os.Mkdir(mysqlCsvDirPath, os.ModePerm)
-	if err != nil {
-		return out, fmt.Errorf("error creating mysql-csv directory :: %v", err)
-	}
-
-	transferErrGroup.Go(func() error {
-		defer close(out)
-		for pipeFileName := range in {
-
-			pipeFileName := pipeFileName
-			conversionErrGroup := errgroup.Group{}
-
-			conversionErrGroup.Go(func() error {
-				pipeFile, err := os.Open(pipeFileName)
-				if err != nil {
-					return fmt.Errorf("error opening pipeFile :: %v", err)
-				}
-				defer pipeFile.Close()
-
-				if !transfer.KeepFiles {
-					defer os.Remove(pipeFileName)
-				}
-
-				// strip path from pipeFile name, get number
-				pipeFileNameClean := filepath.Base(pipeFileName)
-				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
-
-				mysqlCsvFile, err := os.Create(filepath.Join(mysqlCsvDirPath, fmt.Sprintf("%s.csv", pipeFileNum)))
-				if err != nil {
-					return fmt.Errorf("error creating mysql csv file :: %v", err)
-				}
-				defer mysqlCsvFile.Close()
-
-				csvReader := csv.NewReader(pipeFile)
-				csvWriter := csv.NewWriter(mysqlCsvFile)
-
-				for {
-					row, err := csvReader.Read()
-					if err != nil {
-						if errors.Is(err, io.EOF) {
-							break
-						}
-						return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
-					}
-
-					for i := range row {
-						if row[i] != transfer.Null {
-							row[i], err = mysqlPipeFileToMysqlCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
-							if err != nil {
-								return fmt.Errorf("error formatting pipe file to mysql csv :: %v", err)
-							}
-						} else {
-							row[i] = `\N`
-						}
-					}
-
-					err = csvWriter.Write(row)
-					if err != nil {
-						return fmt.Errorf("error writing mysql csv :: %v", err)
-					}
-				}
-
-				err = pipeFile.Close()
-				if err != nil {
-					return fmt.Errorf("error closing pipeFile :: %v", err)
-				}
-
-				csvWriter.Flush()
-
-				err = mysqlCsvFile.Close()
-				if err != nil {
-					return fmt.Errorf("error closing mysql csv file :: %v", err)
-				}
-
-				out <- mysqlCsvFile.Name()
-
-				return nil
-			})
-
-			err = conversionErrGroup.Wait()
+func (system Mysql) getFinalCsvFormatters() map[string]func(string) (string, error) {
+	return map[string]func(string) (string, error){
+		"nvarchar": func(v string) (string, error) {
+			return v, nil
+		},
+		"varchar": func(v string) (string, error) {
+			return v, nil
+		},
+		"ntext": func(v string) (string, error) {
+			return v, nil
+		},
+		"text": func(v string) (string, error) {
+			return v, nil
+		},
+		"int64": func(v string) (string, error) {
+			return v, nil
+		},
+		"int32": func(v string) (string, error) {
+			return v, nil
+		},
+		"int16": func(v string) (string, error) {
+			return v, nil
+		},
+		"float64": func(v string) (string, error) {
+			return v, nil
+		},
+		"float32": func(v string) (string, error) {
+			return v, nil
+		},
+		"decimal": func(v string) (string, error) {
+			return v, nil
+		},
+		"money": func(v string) (string, error) {
+			return v, nil
+		},
+		"datetime": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
 			if err != nil {
-				return fmt.Errorf("error converting pipeFiles :: %v", err)
+				return "", fmt.Errorf("error parsing datetimetz value in mysql datetime mysql formatter :: %v", err)
 			}
-		}
 
-		infoLog.Printf("converted pipe files to mysql csvs at %v\n", mysqlCsvDirPath)
-		return nil
-	})
+			return valTime.Format("2006-01-02 15:04:05.999999"), nil
+		},
+		"datetimetz": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error parsing datetimetz value in mysql datetimetz mysql formatter :: %v", err)
+			}
 
-	return out, nil
-}
+			return valTime.Format("2006-01-02 15:04:05.999999"), nil
+		},
+		"date": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error writing date value to mysql csv :: %v", err)
+			}
+			return valTime.Format("2006-01-02"), nil
+		},
+		"time": func(v string) (string, error) {
+			valTime, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", fmt.Errorf("error writing time value to mysql csv :: %v", err)
+			}
 
-var mysqlPipeFileToMysqlCsvFormatters = map[string]func(string) (string, error){
-	"nvarchar": func(v string) (string, error) {
-		return v, nil
-	},
-	"varchar": func(v string) (string, error) {
-		return v, nil
-	},
-	"ntext": func(v string) (string, error) {
-		return v, nil
-	},
-	"text": func(v string) (string, error) {
-		return v, nil
-	},
-	"int64": func(v string) (string, error) {
-		return v, nil
-	},
-	"int32": func(v string) (string, error) {
-		return v, nil
-	},
-	"int16": func(v string) (string, error) {
-		return v, nil
-	},
-	"float64": func(v string) (string, error) {
-		return v, nil
-	},
-	"float32": func(v string) (string, error) {
-		return v, nil
-	},
-	"decimal": func(v string) (string, error) {
-		return v, nil
-	},
-	"money": func(v string) (string, error) {
-		return v, nil
-	},
-	"datetime": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error parsing datetimetz value in mysql datetime mysql formatter :: %v", err)
-		}
-
-		return valTime.Format("2006-01-02 15:04:05.999999"), nil
-	},
-	"datetimetz": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error parsing datetimetz value in mysql datetimetz mysql formatter :: %v", err)
-		}
-
-		return valTime.Format("2006-01-02 15:04:05.999999"), nil
-	},
-	"date": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error writing date value to mysql csv :: %v", err)
-		}
-		return valTime.Format("2006-01-02"), nil
-	},
-	"time": func(v string) (string, error) {
-		valTime, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			return "", fmt.Errorf("error writing time value to mysql csv :: %v", err)
-		}
-
-		return valTime.Format("15:04:05.999999"), nil
-	},
-	"varbinary": func(v string) (string, error) {
-		return v, nil
-	},
-	"blob": func(v string) (string, error) {
-		return v, nil
-	},
-	"uuid": func(v string) (string, error) {
-		return v, nil
-	},
-	"bool": func(v string) (string, error) {
-		return v, nil
-	},
-	"json": func(v string) (string, error) {
-		return v, nil
-	},
-	"xml": func(v string) (string, error) {
-		return v, nil
-	},
-	"varbit": func(v string) (string, error) {
-		return v, nil
-	},
+			return valTime.Format("15:04:05.999999"), nil
+		},
+		"varbinary": func(v string) (string, error) {
+			return v, nil
+		},
+		"blob": func(v string) (string, error) {
+			return v, nil
+		},
+		"uuid": func(v string) (string, error) {
+			return v, nil
+		},
+		"bool": func(v string) (string, error) {
+			return v, nil
+		},
+		"json": func(v string) (string, error) {
+			return v, nil
+		},
+		"xml": func(v string) (string, error) {
+			return v, nil
+		},
+		"varbit": func(v string) (string, error) {
+			return v, nil
+		},
+	}
 }
 
 func mysqlInsertMysqlCsvs(transfer *Transfer, in <-chan string) error {
@@ -561,14 +463,9 @@ func mysqlInsertMysqlCsvs(transfer *Transfer, in <-chan string) error {
 				defer os.Remove(mysqlCsvFileName)
 			}
 
-			mysql.RegisterLocalFile(mysqlCsvFileName)
-			defer mysql.DeregisterLocalFile(mysqlCsvFileName)
-
-			copyQuery := fmt.Sprintf(`load data local infile '%v' into table %v fields terminated by ',' optionally enclosed by '"' lines terminated by '\n';`, mysqlCsvFileName, transfer.TargetTable)
-
-			err := transfer.Target.exec(copyQuery)
+			err := transfer.Target.runUploadCmd(transfer, mysqlCsvFileName)
 			if err != nil {
-				return fmt.Errorf("error inserting csv into mysql :: %v", err)
+				return fmt.Errorf("error running mysql upload cmd :: %v", err)
 			}
 
 			return nil
@@ -580,6 +477,20 @@ func mysqlInsertMysqlCsvs(transfer *Transfer, in <-chan string) error {
 	}
 
 	infoLog.Printf("finished inserting mysql csvs for transfer %v\n", transfer.Id)
+
+	return nil
+}
+
+func (system Mysql) runUploadCmd(transfer *Transfer, csvFileName string) error {
+	mysql.RegisterLocalFile(csvFileName)
+	defer mysql.DeregisterLocalFile(csvFileName)
+
+	copyQuery := fmt.Sprintf(`load data local infile '%v' into table %v fields terminated by ',' optionally enclosed by '"' lines terminated by '\n';`, csvFileName, transfer.TargetTable)
+
+	err := transfer.Target.exec(copyQuery)
+	if err != nil {
+		return fmt.Errorf("error inserting csv into mysql :: %v", err)
+	}
 
 	return nil
 }

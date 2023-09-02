@@ -63,9 +63,11 @@ type Transfer struct {
 	DropTargetTable   bool `json:"drop-target-table"`
 	CreateTargetTable bool `json:"create-target-table"`
 
-	Rows       *sql.Rows    `json:"-"`
-	ColumnInfo []ColumnInfo `json:"-"`
-	TmpDir     string       `json:"tmp-dir"`
+	Rows        *sql.Rows    `json:"-"`
+	ColumnInfo  []ColumnInfo `json:"-"`
+	TmpDir      string       `json:"tmp-dir"`
+	PipeFileDir string       `json:"pipe-file-dir"`
+	FinalCsvDir string       `json:"final-csv-dir"`
 
 	Delimiter string `json:"delimiter"`
 	Newline   string `json:"newline"`
@@ -135,6 +137,9 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 
 	if input.Null == "" {
 		input.Null = "{nll}"
+		if input.TargetType == "mysql" {
+			input.Null = `NULL`
+		}
 	}
 
 	transfer := &Transfer{
@@ -170,6 +175,20 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	err = os.Mkdir(transfer.TmpDir, os.ModePerm)
 	if err != nil {
 		transferError(transfer, fmt.Errorf("error creating transfer dir :: %v", err))
+		return
+	}
+
+	transfer.PipeFileDir = filepath.Join(transfer.TmpDir, "pipe-files")
+	err = os.Mkdir(transfer.PipeFileDir, os.ModePerm)
+	if err != nil {
+		transferError(transfer, fmt.Errorf("error creating pipe file dir :: %v", err))
+		return
+	}
+
+	transfer.FinalCsvDir = filepath.Join(transfer.TmpDir, "final-csv")
+	err = os.Mkdir(transfer.FinalCsvDir, os.ModePerm)
+	if err != nil {
+		transferError(transfer, fmt.Errorf("error creating final csv dir :: %v", err))
 		return
 	}
 
