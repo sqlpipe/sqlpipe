@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -447,38 +446,6 @@ func (system Mysql) getFinalCsvFormatters() map[string]func(string) (string, err
 			return v, nil
 		},
 	}
-}
-
-func mysqlInsertMysqlCsvs(transfer *Transfer, in <-chan string) error {
-
-	insertErrGroup := errgroup.Group{}
-
-	for mysqlCsvFileName := range in {
-
-		mysqlCsvFileName := mysqlCsvFileName
-
-		insertErrGroup.Go(func() error {
-
-			if !transfer.KeepFiles {
-				defer os.Remove(mysqlCsvFileName)
-			}
-
-			err := transfer.Target.runUploadCmd(transfer, mysqlCsvFileName)
-			if err != nil {
-				return fmt.Errorf("error running mysql upload cmd :: %v", err)
-			}
-
-			return nil
-		})
-		err := insertErrGroup.Wait()
-		if err != nil {
-			return fmt.Errorf("error inserting mysql csvs :: %v", err)
-		}
-	}
-
-	infoLog.Printf("finished inserting mysql csvs for transfer %v\n", transfer.Id)
-
-	return nil
 }
 
 func (system Mysql) runUploadCmd(transfer *Transfer, csvFileName string) error {
