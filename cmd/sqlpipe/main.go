@@ -22,27 +22,26 @@ var (
 	infoLog         = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	warningLog      = log.New(os.Stdout, "WARNING\t", log.Ldate|log.Ltime)
 	errorLog        = log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+	psqlAvailable   bool
+	bcpAvailable    bool
+	sqlldrAvailable bool
 	globalTmpDir    string
-	psqlAvailable   = false
-	bcpAvailable    = false
-	sqlLdrAvailable = false
 )
 
 func main() {
-	flag.IntVar(&port, "port", 9000, "API server port")
-	displayVersion := flag.Bool("version", false, "Display version and exit")
+	flag.IntVar(&port, "port", 9000, "api server port")
+	displayVersion := flag.Bool("version", false, "display version and exit")
 	flag.Parse()
 
 	if *displayVersion {
-		fmt.Printf("Version:\t%s\n", version)
+		fmt.Printf("version:\t%s\n", version)
 		os.Exit(0)
 	}
 
 	checkDeps()
 
-	// create tmp dir if not exists
 	globalTmpDir = filepath.Join(os.TempDir(), "sqlpipe")
-	err := os.MkdirAll(globalTmpDir, 0700)
+	err := os.MkdirAll(globalTmpDir, 0600)
 	if err != nil {
 		errorLog.Fatalf("failed to create tmp dir :: %v", err)
 	}
@@ -52,10 +51,10 @@ func main() {
 		Handler:      routes(),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 10 * time.Second,
 	}
 
-	infoLog.Printf("starting SQLpipe on port %d\n", port)
+	infoLog.Printf("starting sqlpipe on port %d", port)
 
 	err = srv.ListenAndServe()
 	if err != nil {

@@ -21,9 +21,9 @@ type Oracle struct {
 
 func newOracle(name, connectionString string) (oracle Oracle, err error) {
 	if name == "" {
-		name = "oracle"
+		name = TypeOracle
 	}
-	db, err := openDbCommon(name, connectionString, "oracle")
+	db, err := openDbCommon(name, connectionString, DriverOracle)
 	if err != nil {
 		return oracle, fmt.Errorf("error opening oracle db :: %v", err)
 	}
@@ -49,29 +49,19 @@ func (system Oracle) exec(query string) error {
 	return nil
 }
 
-func (system Oracle) dropTable(schema, table string) error {
+func (system Oracle) dropTable(schema, table string) (string, error) {
 
-	dropped := true
+	toDrop := fmt.Sprintf("%v.%v", schema, table)
 
-	query := fmt.Sprintf("drop table %v.%v", schema, table)
+	query := fmt.Sprintf("drop table %v", toDrop)
 	err := system.exec(query)
 	if err != nil {
 		if !strings.Contains(err.Error(), "ORA-00942") {
-			return fmt.Errorf("error dropping %v.%v :: %v", schema, table, err)
+			return "", fmt.Errorf("error dropping %v :: %v", toDrop, err)
 		}
-		dropped = false
-		infoLog.Printf("table %v.%v does not exist in oracle", schema, table)
 	}
 
-	if dropped {
-		infoLog.Printf("dropped %v.%v", schema, table)
-	}
-
-	return nil
-}
-
-func (system Oracle) createTable(transfer *Transfer) error {
-	return createTableCommon(transfer)
+	return toDrop, nil
 }
 
 func (system Oracle) getColumnInfo(transfer *Transfer) ([]ColumnInfo, error) {
@@ -254,19 +244,19 @@ func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType str
 
 func (system Oracle) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
 
-	csvFiles, err := convertPipeFilesCommon(transfer, in, transferErrGroup)
+	finalCsvs, err := convertPipeFilesCommon(transfer, in, transferErrGroup)
 	if err != nil {
 		return fmt.Errorf("error converting pipe files :: %v", err)
 	}
 
-	ctlFiles, err := oracleCreateCtlFiles(transfer, csvFiles, transferErrGroup)
+	ctlFiles, err := oracleCreateCtlFiles(transfer, finalCsvs, transferErrGroup)
 	if err != nil {
-		return fmt.Errorf("error creating ctl files :: %v", err)
+		return fmt.Errorf("error creating sqlldr ctl files :: %v", err)
 	}
 
 	err = insertFinalCsvCommon(transfer, ctlFiles)
 	if err != nil {
-		return fmt.Errorf("error inserting oracle files :: %v", err)
+		return fmt.Errorf("error inserting final csvs :: %v", err)
 	}
 	return nil
 }
@@ -367,7 +357,7 @@ func oracleCreateCtlFiles(transfer *Transfer, in <-chan string, transferErrGroup
 
 		}
 
-		infoLog.Printf("created oracle ctl files at %v\n", transfer.FinalCsvDir)
+		infoLog.Printf("transfer %v finished creating sqllder ctl", transfer.Id)
 		return nil
 	})
 

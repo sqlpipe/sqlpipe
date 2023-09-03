@@ -23,9 +23,9 @@ type Mssql struct {
 
 func newMssql(name, connectionString string) (mssql Mssql, err error) {
 	if name == "" {
-		name = "mssql"
+		name = TypeMSSQL
 	}
-	db, err := openDbCommon(name, connectionString, "sqlserver")
+	db, err := openDbCommon(name, connectionString, DriverMSSQL)
 	if err != nil {
 		return mssql, fmt.Errorf("error opening mssql db :: %v", err)
 	}
@@ -51,12 +51,8 @@ func (system Mssql) exec(query string) error {
 	return nil
 }
 
-func (system Mssql) dropTable(schema, table string) error {
+func (system Mssql) dropTable(schema, table string) (string, error) {
 	return dropTableIfExistsCommon(schema, table, system)
-}
-
-func (system Mssql) createTable(transfer *Transfer) error {
-	return createTableCommon(transfer)
 }
 
 func (system Mssql) getColumnInfo(transfer *Transfer) ([]ColumnInfo, error) {
@@ -247,14 +243,14 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 }
 
 func (system Mssql) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
-	bcpFiles, err := mssqlConvertPipeFiles(transfer, in, transferErrGroup)
+	finalCsvs, err := mssqlConvertPipeFiles(transfer, in, transferErrGroup)
 	if err != nil {
 		return fmt.Errorf("error converting pipe files :: %v", err)
 	}
 
-	err = insertFinalCsvCommon(transfer, bcpFiles)
+	err = insertFinalCsvCommon(transfer, finalCsvs)
 	if err != nil {
-		return fmt.Errorf("error inserting final files :: %v", err)
+		return fmt.Errorf("error inserting final csvs :: %v", err)
 	}
 
 	return nil
@@ -352,7 +348,7 @@ func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 			}
 		}
 
-		infoLog.Printf("converted pipe files to bcp csvs at %v\n", transfer.FinalCsvDir)
+		infoLog.Printf("transfer %v finished converting pipe files", transfer.Id)
 		return nil
 	})
 
@@ -362,17 +358,13 @@ func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGrou
 func (system Mssql) runUploadCmd(transfer *Transfer, csvFileName string) error {
 	hostName := transfer.TargetHostname
 
-	if transfer.TargetPort != 0 {
-		hostName = fmt.Sprintf("%s,%d", hostName, transfer.TargetPort)
-	}
-
 	cmd := exec.Command(
 		"bcp",
 		fmt.Sprintf("%s.%s.%s", transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable),
 		"in",
 		csvFileName,
 		"-c",
-		"-S", hostName,
+		"-S", fmt.Sprintf("%s,%d", hostName, transfer.TargetPort),
 		"-U", transfer.TargetUsername,
 		"-P", transfer.TargetPassword,
 		"-t", transfer.Delimiter,

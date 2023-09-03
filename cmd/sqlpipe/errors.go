@@ -4,20 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 )
 
-func transferError(transfer *Transfer, err error) {
+// func transferError(transferId string, err error) {
 
-	errorLog.Printf("error running transfer %v from %v to %v :: %v", transfer.Id, transfer.SourceType, transfer.TargetType, err)
-
-	transfer.Status = StatusError
-	transfer.Err = err.Error()
-	now := time.Now()
-	transfer.StoppedAt = &now
-
-	transferMap[transfer.Id] = transfer
-}
+// }
 
 func logError(r *http.Request, err error) {
 	errorLog.Printf("error handling %s request to %s :: %v", r.Method, r.URL.String(), err)
@@ -29,7 +20,7 @@ func clientErrorResponse(w http.ResponseWriter, r *http.Request, status int, err
 	err = writeJSON(w, status, env, nil)
 	if err != nil {
 		logError(r, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 	}
 }
 

@@ -46,7 +46,7 @@ CREATE PROCEDURE InsertDataMultipleTimes()
 BEGIN
     DECLARE i INT DEFAULT 0;
 
-    WHILE i < 1000 DO
+    WHILE i < 10000 DO
         INSERT INTO my_table (
             my_char, my_varchar, my_longtext, my_mediumtext, my_text, my_tinytext,
             my_enum, my_unsigned_bigint, my_bigint, my_unsigned_int, my_int,

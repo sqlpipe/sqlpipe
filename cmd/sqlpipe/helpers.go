@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"sync"
 )
+
+var backgroundWg sync.WaitGroup
 
 type envelope map[string]any
 

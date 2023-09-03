@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -18,9 +19,9 @@ type Postgresql struct {
 
 func newPostgresql(name, connectionString string) (postgresql Postgresql, err error) {
 	if name == "" {
-		name = "postgresql"
+		name = TypePostgreSQL
 	}
-	db, err := openDbCommon(name, connectionString, "pgx")
+	db, err := openDbCommon(name, connectionString, DriverPostgreSQL)
 	if err != nil {
 		return postgresql, fmt.Errorf("error opening postgresql db :: %v", err)
 	}
@@ -30,12 +31,8 @@ func newPostgresql(name, connectionString string) (postgresql Postgresql, err er
 	return postgresql, nil
 }
 
-func (system Postgresql) dropTable(schema, table string) error {
+func (system Postgresql) dropTable(schema, table string) (string, error) {
 	return dropTableIfExistsCommon(schema, table, system)
-}
-
-func (system Postgresql) createTable(transfer *Transfer) error {
-	return createTableCommon(transfer)
 }
 
 func (system Postgresql) query(query string) (*sql.Rows, error) {
@@ -54,15 +51,15 @@ func (system Postgresql) exec(query string) error {
 	return nil
 }
 
-func (system Postgresql) getColumnInfo(transfer *Transfer) ([]ColumnInfo, error) {
-	return getColumnInfoCommon(transfer)
+func (system Postgresql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
+	return getColumnInfoCommon(rows, system)
 }
 
-func (system Postgresql) createPipeFiles(transfer *Transfer, transferErrGroup *errgroup.Group) (out <-chan string, err error) {
-	return createPipeFilesCommon(transfer, transferErrGroup)
+func (system Postgresql) createPipeFiles(transferErrGroup *errgroup.Group, pipeFileDir, null, transferId string, columnInfo []ColumnInfo, rows *sql.Rows) (out <-chan string, err error) {
+	return createPipeFilesCommon(system, transferErrGroup, pipeFileDir, null, transferId, columnInfo, rows)
 }
 
-func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType, transfer *Transfer) (pipeType string, err error) {
+func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
 	switch columnType.DatabaseTypeName() {
 	case "VARCHAR":
 		return "nvarchar", nil
@@ -86,7 +83,6 @@ func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.Co
 		return "datetime", nil
 	case "TIMESTAMPTZ":
 		return "datetimetz", nil
-		// return "datetime", nil
 	case "DATE":
 		return "date", nil
 	case "INTERVAL":
@@ -309,24 +305,24 @@ func (system Postgresql) getPipeFileFormatters() (map[string]func(interface{}) (
 	}, nil
 }
 
-func (system Postgresql) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
-	psqlFiles, err := convertPipeFilesCommon(transfer, in, transferErrGroup)
+func (system Postgresql) insertPipeFiles(ctx context.Context, targetSchema, targetTable, csvFileName, transferId, finalCsvDir, null, targetConnectionString string, target System, keepFiles bool, columnInfo []ColumnInfo, in <-chan string, transferErrGroup *errgroup.Group) error {
+	finalCsvs, err := convertPipeFilesCommon(ctx, transferId, finalCsvDir, null, target, keepFiles, columnInfo, in, transferErrGroup)
 	if err != nil {
-		return fmt.Errorf("error converting pipeFiles :: %v", err)
+		return fmt.Errorf("error converting pipe files :: %v", err)
 	}
 
-	err = insertFinalCsvCommon(transfer, psqlFiles)
+	err = insertFinalCsvCommon(ctx, targetSchema, targetTable, null, targetConnectionString, transferId, keepFiles, target, finalCsvs)
 	if err != nil {
-		return fmt.Errorf("error inserting pipeFiles :: %v", err)
+		return fmt.Errorf("error inserting final csvs :: %v", err)
 	}
 
 	return nil
 }
 
-func (system Postgresql) runUploadCmd(transfer *Transfer, csvFileName string) error {
-	copyCmd := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '%v', ENCODING 'UTF8')`, transfer.TargetSchema, transfer.TargetTable, csvFileName, transfer.Null)
+func (system Postgresql) runUploadCmd(targetSchema, targetTable, csvFileName, null, targetConnectionString string) error {
+	copyCmd := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '%v', ENCODING 'UTF8')`, targetSchema, targetTable, csvFileName, null)
 
-	cmd := exec.Command("psql", transfer.TargetConnectionString, "-c", copyCmd)
+	cmd := exec.Command("psql", targetConnectionString, "-c", copyCmd)
 
 	result, err := cmd.CombinedOutput()
 	if err != nil {

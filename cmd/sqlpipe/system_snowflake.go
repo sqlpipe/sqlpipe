@@ -20,9 +20,9 @@ type Snowflake struct {
 
 func newSnowflake(name, connectionString string) (snowflake Snowflake, err error) {
 	if name == "" {
-		name = "snowflake"
+		name = TypeSnowflake
 	}
-	db, err := openDbCommon(name, connectionString, "snowflake")
+	db, err := openDbCommon(name, connectionString, DriverSnowflake)
 	if err != nil {
 		return snowflake, fmt.Errorf("error opening snowflake db :: %v", err)
 	}
@@ -32,12 +32,8 @@ func newSnowflake(name, connectionString string) (snowflake Snowflake, err error
 	return snowflake, nil
 }
 
-func (system Snowflake) dropTable(schema, table string) error {
+func (system Snowflake) dropTable(schema, table string) (string, error) {
 	return dropTableIfExistsCommon(schema, table, system)
-}
-
-func (system Snowflake) createTable(transfer *Transfer) error {
-	return createTableCommon(transfer)
 }
 
 func (system Snowflake) query(query string) (*sql.Rows, error) {
@@ -237,18 +233,20 @@ func (system Snowflake) createPipeFiles(transfer *Transfer, transferErrGroup *er
 
 func (system Snowflake) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
 
-	err := system.exec(fmt.Sprintf(`CREATE FILE FORMAT %s."sqlpipe-%s" type = CSV ESCAPE_UNENCLOSED_FIELD = 'NONE' FIELD_OPTIONALLY_ENCLOSED_BY = '\"' NULL_IF = ('%s');;`, transfer.TargetSchema, transfer.Id, transfer.Null))
+	fileFormatName := fmt.Sprintf(`"sqlpipe-%s"`, transfer.Id)
+
+	err := system.exec(fmt.Sprintf(`CREATE FILE FORMAT %s.%s type = CSV ESCAPE_UNENCLOSED_FIELD = 'NONE' FIELD_OPTIONALLY_ENCLOSED_BY = '\"' NULL_IF = ('%s');;`, transfer.TargetSchema, fileFormatName, transfer.Null))
 	if err != nil {
 		return fmt.Errorf("error creating snowflake file format :: %v", err)
 	}
 	defer func() {
 		err := system.exec(fmt.Sprintf(`DROP FILE FORMAT %s."sqlpipe-%s"`, transfer.TargetSchema, transfer.Id))
 		if err != nil {
-			warningLog.Printf("error dropping snowflake file format :: %v", err)
+			warningLog.Printf("error dropping snowflake file format %s :: %v", fileFormatName, err)
 		}
 	}()
 
-	infoLog.Println("created file format in snowflake")
+	infoLog.Printf("created file format %v in snowflake", fileFormatName)
 
 	csvFiles, err := convertPipeFilesCommon(transfer, in, transferErrGroup)
 	if err != nil {
@@ -260,7 +258,7 @@ func (system Snowflake) insertPipeFiles(transfer *Transfer, in <-chan string, tr
 		return fmt.Errorf("error putting csvs :: %v", err)
 	}
 
-	err = snowflakeCopyCsvs(transfer, putFiles)
+	err = insertFinalCsvCommon(transfer, putFiles)
 	if err != nil {
 		return fmt.Errorf("error putting csvs :: %v", err)
 	}
@@ -268,8 +266,20 @@ func (system Snowflake) insertPipeFiles(transfer *Transfer, in <-chan string, tr
 	return nil
 }
 
-func (system Snowflake) runUploadCmd(transfer *Transfer, csvFileName string) error {
-	return errors.New("snowflake does not implement runUploadCmd, use snowflakePutCsvs and snowflakeCopyCsvs instead")
+func (system Snowflake) runUploadCmd(transfer *Transfer, stageName string) error {
+	defer func() {
+		err := transfer.Target.exec(fmt.Sprintf(`DROP STAGE %s."%s"`, transfer.TargetSchema, stageName))
+		if err != nil {
+			warningLog.Printf("error dropping snowflake stage :: %v", err)
+		}
+	}()
+
+	err := transfer.Target.exec(fmt.Sprintf(`COPY INTO %s.%s FROM @%s."%s" file_format = (format_name = %s."sqlpipe-%s")`, transfer.TargetSchema, transfer.TargetTable, transfer.TargetSchema, stageName, transfer.TargetSchema, transfer.Id))
+	if err != nil {
+		return fmt.Errorf("error copying csv into snowflake :: %v", err)
+	}
+
+	return nil
 }
 
 func snowflakePutCsvs(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
@@ -313,48 +323,12 @@ func snowflakePutCsvs(transfer *Transfer, in <-chan string, transferErrGroup *er
 			}
 		}
 
-		infoLog.Printf("finished putting snowflake csvs for transfer %v\n", transfer.Id)
+		infoLog.Printf("transfer %v finished uploading snowflake csvs", transfer.Id)
 
 		return nil
 	})
 
 	return out, nil
-}
-
-func snowflakeCopyCsvs(transfer *Transfer, in <-chan string) error {
-
-	insertErrGroup := errgroup.Group{}
-
-	for stageName := range in {
-
-		stageName := stageName
-
-		insertErrGroup.Go(func() error {
-			defer func() {
-				err := transfer.Target.exec(fmt.Sprintf(`DROP STAGE %s."%s"`, transfer.TargetSchema, stageName))
-				if err != nil {
-					warningLog.Printf("error dropping snowflake stage :: %v", err)
-				}
-			}()
-
-			err := transfer.Target.exec(fmt.Sprintf(`COPY INTO %s.%s FROM @%s."%s" file_format = (format_name = %s."sqlpipe-%s")`, transfer.TargetSchema, transfer.TargetTable, transfer.TargetSchema, stageName, transfer.TargetSchema, transfer.Id))
-			if err != nil {
-				return fmt.Errorf("error copying csv into snowflake :: %v", err)
-			}
-
-			return nil
-		})
-
-		err := insertErrGroup.Wait()
-		if err != nil {
-			return fmt.Errorf("error inserting snowflake csvs :: %v", err)
-		}
-
-	}
-
-	infoLog.Printf("finished copying snowflake csvs for transfer %v\n", transfer.Id)
-
-	return nil
 }
 
 func (system Snowflake) getFinalCsvFormatters() map[string]func(string) (string, error) {

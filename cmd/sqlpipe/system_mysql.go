@@ -15,31 +15,25 @@ import (
 type Mysql struct {
 	name             string
 	connectionString string
-	timezone         string
 	connection       *sql.DB
 }
 
-func newMysql(name, connectionString, timezone string) (mysql Mysql, err error) {
+func newMysql(name, connectionString string) (mysql Mysql, err error) {
 	if name == "" {
-		name = "mysql"
+		name = TypeMySQL
 	}
-	db, err := openDbCommon(name, connectionString, "mysql")
+	db, err := openDbCommon(name, connectionString, DriverMySQL)
 	if err != nil {
 		return mysql, fmt.Errorf("error opening mysql db :: %v", err)
 	}
 	mysql.connection = db
 	mysql.name = name
 	mysql.connectionString = connectionString
-	mysql.timezone = timezone
 	return mysql, nil
 }
 
-func (system Mysql) dropTable(schema, table string) error {
+func (system Mysql) dropTable(schema, table string) (string, error) {
 	return dropTableIfExistsCommon(schema, table, system)
-}
-
-func (system Mysql) createTable(transfer *Transfer) error {
-	return createTableCommon(transfer)
 }
 
 func (system Mysql) query(query string) (*sql.Rows, error) {
@@ -189,7 +183,7 @@ func (system Mysql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 	return funcMap, nil
 }
 
-func (system Mysql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType, transfer *Transfer) (pipeType string, err error) {
+func (system Mysql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
 	switch columnType.DatabaseTypeName() {
 	case "VARCHAR":
 		return "nvarchar", nil
@@ -230,12 +224,6 @@ func (system Mysql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 	case "DATETIME":
 		return "datetime", nil
 	case "TIMESTAMP":
-		if !strings.Contains(transfer.SourceConnectionString, "parseTime=true") {
-			return "", errors.New("source-connection-string must contain parseTime=true to move timestamp with time zone data from mysql")
-		}
-		if !strings.Contains(transfer.SourceConnectionString, "loc=") {
-			return "", errors.New(`source-connection-string must contain loc=(valid, url encoded IANA time zone name) to move timestamp with time zone data from mysql. for example: loc=US%2FPacific`)
-		}
 		return "datetimetz", nil
 	case "DATE":
 		return "date", nil
@@ -345,14 +333,14 @@ func (system Mysql) createPipeFiles(transfer *Transfer, transferErrGroup *errgro
 }
 
 func (system Mysql) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
-	csvFiles, err := convertPipeFilesCommon(transfer, in, transferErrGroup)
+	finalCsvs, err := convertPipeFilesCommon(transfer, in, transferErrGroup)
 	if err != nil {
-		return fmt.Errorf("error converting pipeFiles :: %v", err)
+		return fmt.Errorf("error converting pipe files :: %v", err)
 	}
 
-	err = insertFinalCsvCommon(transfer, csvFiles)
+	err = insertFinalCsvCommon(transfer, finalCsvs)
 	if err != nil {
-		return fmt.Errorf("error inserting pipeFiles :: %v", err)
+		return fmt.Errorf("error inserting final csvs :: %v", err)
 	}
 
 	return nil
