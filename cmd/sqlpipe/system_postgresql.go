@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os/exec"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 type Postgresql struct {
@@ -31,35 +29,47 @@ func newPostgresql(name, connectionString string) (postgresql Postgresql, err er
 	return postgresql, nil
 }
 
-func (system Postgresql) dropTable(schema, table string) (string, error) {
-	return dropTableIfExistsCommon(schema, table, system)
-}
-
-func (system Postgresql) query(query string) (*sql.Rows, error) {
-	rows, err := system.connection.Query(query)
+func (system Postgresql) query(query string) (rows *sql.Rows, err error) {
+	rows, err = system.connection.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("error running dql on %v :: %v :: %v", system.name, query, err)
 	}
 	return rows, nil
 }
 
-func (system Postgresql) exec(query string) error {
-	_, err := system.connection.Exec(query)
+func (system Postgresql) exec(query string) (err error) {
+	_, err = system.connection.Exec(query)
 	if err != nil {
 		return fmt.Errorf("error running ddl/dml on %v :: %v :: %v", system.name, query, err)
 	}
 	return nil
 }
 
-func (system Postgresql) getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error) {
+func (system Postgresql) dropTableIfExists(transfer Transfer) (dropped string, err error) {
+	return dropTableIfExistsCommon(transfer, system)
+}
+
+func (system Postgresql) getColumnInfo(rows *sql.Rows) (columnInfo []ColumnInfo, err error) {
 	return getColumnInfoCommon(rows, system)
 }
 
-func (system Postgresql) createPipeFiles(transferErrGroup *errgroup.Group, pipeFileDir, null, transferId string, columnInfo []ColumnInfo, rows *sql.Rows) (out <-chan string, err error) {
-	return createPipeFilesCommon(system, transferErrGroup, pipeFileDir, null, transferId, columnInfo, rows)
+func (system Postgresql) createTable(
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+) (
+	created string,
+	err error,
+) {
+	return createTableCommon(columnInfo, transfer, system)
 }
 
-func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType) (pipeType string, err error) {
+func (system Postgresql) dbTypeToPipeType(
+	columnType *sql.ColumnType,
+	databaseTypeName string,
+) (
+	pipeType string,
+	err error,
+) {
 	switch columnType.DatabaseTypeName() {
 	case "VARCHAR":
 		return "nvarchar", nil
@@ -144,7 +154,12 @@ func (system Postgresql) dbTypeToPipeType(databaseType string, columnType sql.Co
 	}
 }
 
-func (system Postgresql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error) {
+func (system Postgresql) pipeTypeToCreateType(
+	columnInfo ColumnInfo,
+) (
+	createType string,
+	err error,
+) {
 	switch columnInfo.pipeType {
 	case "nvarchar":
 		return "text", nil
@@ -212,63 +227,75 @@ func (system Postgresql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType
 	}
 }
 
-func (system Postgresql) getPipeFileFormatters() (map[string]func(interface{}) (string, error), error) {
-	return map[string]func(interface{}) (string, error){
-		"nvarchar": func(v interface{}) (string, error) {
+func (system Postgresql) createPipeFiles(
+	ctx context.Context,
+	errorChannel chan<- error,
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+	rows *sql.Rows,
+) <-chan string {
+	return createPipeFilesCommon(ctx, errorChannel, columnInfo, transfer, rows, system)
+}
+
+func (system Postgresql) getPipeFileFormatters() (
+	pipeFileFormatters map[string]func(interface{}) (pipeFileValue string, err error),
+) {
+	return map[string]func(interface{}) (pipeFileValue string, err error){
+		"nvarchar": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"varchar": func(v interface{}) (string, error) {
+		"varchar": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"ntext": func(v interface{}) (string, error) {
+		"ntext": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"text": func(v interface{}) (string, error) {
+		"text": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"int64": func(v interface{}) (string, error) {
+		"int64": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%d", v), nil
 		},
-		"int32": func(v interface{}) (string, error) {
+		"int32": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%d", v), nil
 		},
-		"int16": func(v interface{}) (string, error) {
+		"int16": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%d", v), nil
 		},
-		"float64": func(v interface{}) (string, error) {
+		"float64": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%f", v), nil
 		},
-		"float32": func(v interface{}) (string, error) {
+		"float32": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%f", v), nil
 		},
-		"decimal": func(v interface{}) (string, error) {
+		"decimal": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"money": func(v interface{}) (string, error) {
+		"money": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"datetime": func(v interface{}) (string, error) {
+		"datetime": func(v interface{}) (pipeFileValue string, err error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
 				return "", errors.New("non time.Time value passed to datetime postgresqlPipeFileFormatters")
 			}
 			return valTime.Format(time.RFC3339Nano), nil
 		},
-		"datetimetz": func(v interface{}) (string, error) {
+		"datetimetz": func(v interface{}) (pipeFileValue string, err error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
 				return "", errors.New("non time.Time value passed to datetimetz postgresqlPipeFileFormatters")
 			}
 			return valTime.UTC().Format(time.RFC3339Nano), nil
 		},
-		"date": func(v interface{}) (string, error) {
+		"date": func(v interface{}) (pipeFileValue string, err error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
 				return "", errors.New("non time.Time value passed to date postgresqlPipeFileFormatters")
 			}
 			return valTime.Format(time.RFC3339Nano), nil
 		},
-		"time": func(v interface{}) (string, error) {
+		"time": func(v interface{}) (pipeFileValue string, err error) {
 			timeString, ok := v.(string)
 			if !ok {
 				return "", errors.New("unable to cast value to string in postgresqlPipeFileFormatters")
@@ -281,37 +308,43 @@ func (system Postgresql) getPipeFileFormatters() (map[string]func(interface{}) (
 
 			return timeVal.Format(time.RFC3339Nano), nil
 		},
-		"varbinary": func(v interface{}) (string, error) {
+		"varbinary": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%x", v), nil
 		},
-		"blob": func(v interface{}) (string, error) {
+		"blob": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%x", v), nil
 		},
-		"uuid": func(v interface{}) (string, error) {
+		"uuid": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"bool": func(v interface{}) (string, error) {
+		"bool": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%t", v), nil
 		},
-		"json": func(v interface{}) (string, error) {
+		"json": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"xml": func(v interface{}) (string, error) {
+		"xml": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"varbit": func(v interface{}) (string, error) {
+		"varbit": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-	}, nil
+	}
 }
 
-func (system Postgresql) insertPipeFiles(ctx context.Context, targetSchema, targetTable, csvFileName, transferId, finalCsvDir, null, targetConnectionString string, target System, keepFiles bool, columnInfo []ColumnInfo, in <-chan string, transferErrGroup *errgroup.Group) error {
-	finalCsvs, err := convertPipeFilesCommon(ctx, transferId, finalCsvDir, null, target, keepFiles, columnInfo, in, transferErrGroup)
-	if err != nil {
-		return fmt.Errorf("error converting pipe files :: %v", err)
-	}
+func (system Postgresql) insertPipeFiles(
+	ctx context.Context,
+	pipeFileChannel <-chan string,
+	errorChannel chan<- error,
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+) (
+	err error,
+) {
+	finalCsvChannel := system.convertPipeFiles(
+		ctx, pipeFileChannel, errorChannel, columnInfo, transfer)
 
-	err = insertFinalCsvCommon(ctx, targetSchema, targetTable, null, targetConnectionString, transferId, keepFiles, target, finalCsvs)
+	err = system.insertFinalCsvs(ctx, finalCsvChannel, transfer)
 	if err != nil {
 		return fmt.Errorf("error inserting final csvs :: %v", err)
 	}
@@ -319,20 +352,19 @@ func (system Postgresql) insertPipeFiles(ctx context.Context, targetSchema, targ
 	return nil
 }
 
-func (system Postgresql) runUploadCmd(targetSchema, targetTable, csvFileName, null, targetConnectionString string) error {
-	copyCmd := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH (FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '%v', ENCODING 'UTF8')`, targetSchema, targetTable, csvFileName, null)
-
-	cmd := exec.Command("psql", targetConnectionString, "-c", copyCmd)
-
-	result, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to upload csv to postgresql :: stderr %v :: stdout %s", err, string(result))
-	}
-
-	return nil
+func (system Postgresql) convertPipeFiles(
+	ctx context.Context,
+	pipeFileChannel <-chan string,
+	errorChannel chan<- error,
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+) <-chan string {
+	return convertPipeFilesCommon(ctx, pipeFileChannel, errorChannel, columnInfo, transfer, system)
 }
 
-func (system Postgresql) getFinalCsvFormatters() map[string]func(string) (string, error) {
+func (system Postgresql) getFinalCsvFormatters() (
+	finalCsvFormatters map[string]func(string) (finalCsvValue string, err error),
+) {
 	return map[string]func(string) (string, error){
 		"nvarchar": func(v string) (string, error) {
 			return v, nil
@@ -410,4 +442,36 @@ func (system Postgresql) getFinalCsvFormatters() map[string]func(string) (string
 			return v, nil
 		},
 	}
+}
+
+func (system Postgresql) insertFinalCsvs(
+	ctx context.Context,
+	finalCsvChannel <-chan string,
+	transfer Transfer,
+) (
+	err error,
+) {
+	return insertFinalCsvsCommon(ctx, finalCsvChannel, transfer, system)
+}
+
+func (system Postgresql) runInsertCmd(
+	ctx context.Context,
+	finalCsvLocation string,
+	transfer Transfer,
+) (
+	err error,
+) {
+	copyCmd := fmt.Sprintf(`\copy %s.%s FROM '%s' WITH 
+	(FORMAT csv, HEADER false, DELIMITER ',', QUOTE '"', ESCAPE '"', NULL '%v', ENCODING 'UTF8')`,
+		transfer.TargetSchema, transfer.TargetTable, finalCsvLocation, transfer.Null)
+
+	cmd := exec.CommandContext(ctx, "psql", transfer.TargetConnectionString, "-c", copyCmd)
+
+	result, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to upload csv to postgresql :: stderr %v :: stdout %s",
+			err, string(result))
+	}
+
+	return nil
 }

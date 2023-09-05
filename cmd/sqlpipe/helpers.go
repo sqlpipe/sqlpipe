@@ -6,14 +6,24 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"strings"
-	"sync"
 )
 
-var backgroundWg sync.WaitGroup
-
 type envelope map[string]any
+
+func getFileNum(fileName string) (fileNum int, err error) {
+	fileNameClean := filepath.Base(fileName)
+	fileNumString := strings.Split(fileNameClean, ".")[0]
+	fileNum, err = strconv.Atoi(fileNumString)
+	if err != nil {
+		return 0, fmt.Errorf("error converting file number to int :: %v", err)
+	}
+
+	return fileNum, nil
+}
 
 func readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	maxBytes := 1_048_576

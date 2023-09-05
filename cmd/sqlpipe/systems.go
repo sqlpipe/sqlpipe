@@ -11,42 +11,131 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 type System interface {
-	dropTable(schema, table string) (dropped string, err error)
-	query(query string) (*sql.Rows, error)
+	// The system interface abstracts differences between different database systems
+
+	// *******************
+	// ** sql execution **
+	// *******************
+
+	// runs a query and returns rows
+	query(query string) (rows *sql.Rows, err error)
+
+	// runs a query and returns nothing
 	exec(query string) (err error)
-	getColumnInfo(rows *sql.Rows) ([]ColumnInfo, error)
-	getPipeFileFormatters() (map[string]func(interface{}) (string, error), error)
-	dbTypeToPipeType(databaseTypeName string, columnType sql.ColumnType) (pipeType string, err error)
+
+	// *******************
+	// ** initial setup **
+	// *******************
+
+	// drops a table if it exists
+	dropTableIfExists(transfer Transfer) (dropped string, err error)
+
+	// gets info about each column, including pipe type, length, precision, scale, etc
+	getColumnInfo(rows *sql.Rows) (columnInfo []ColumnInfo, err error)
+
+	// creates a table in the target system
+	createTable(columnInfo []ColumnInfo, transfer Transfer) (created string, err error)
+
+	// called within getColumnInfo to get db specific mapping from db types to pipe types
+	dbTypeToPipeType(
+		columnType *sql.ColumnType,
+		databaseTypeName string,
+	) (
+		pipeType string,
+		err error,
+	)
+
+	// called within createTable to convert pipe types into db specific create table types
 	pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error)
-	createPipeFiles(transferErrGroup *errgroup.Group, pipeFileDir, null, transferId string, columnInfo []ColumnInfo, rows *sql.Rows) (out <-chan string, err error)
-	insertPipeFiles(ctx context.Context, targetSchema, targetTable, csvFileName, transferId, finalCsvDir, null, targetConnectionString string, target System, keepFiles bool, columnInfo []ColumnInfo, in <-chan string, transferErrGroup *errgroup.Group) error
-	getFinalCsvFormatters() map[string]func(string) (string, error)
-	runUploadCmd(targetSchema, targetTable, csvFileName, null, targetConnectionString string) error
+
+	// *******************
+	// ** data movement **
+	// *******************
+
+	// creates pipe file and sends it to an out channel for consumption by insertPipeFiles
+	createPipeFiles(
+		ctx context.Context,
+		errorChannel chan<- error,
+		columnInfo []ColumnInfo,
+		transfer Transfer,
+		rows *sql.Rows,
+	) <-chan string
+
+	// called within createPipeFiles to write pipe file values from db specific formatters
+	getPipeFileFormatters() (
+		pipeFileFormatters map[string]func(interface{}) (pipeFileValue string, err error),
+	)
+
+	// inserts pipe files into target system
+	insertPipeFiles(
+		ctx context.Context,
+		pipeFileChannel <-chan string,
+		errorChannel chan<- error,
+		columnInfo []ColumnInfo,
+		transfer Transfer,
+	) (
+		err error,
+	)
+
+	// (optional) called within insertPipeFiles to convert pipe file values to final csv values
+	convertPipeFiles(
+		ctx context.Context,
+		pipeFileChannel <-chan string,
+		errorChannel chan<- error,
+		columnInfo []ColumnInfo,
+		transfer Transfer,
+	) <-chan string
+
+	// (optional) called within insertPipeFiles to reformat pipe file values to values
+	// that db specific clients can understand in a csv
+	getFinalCsvFormatters() (
+		finalCsvFormatters map[string]func(string) (finalCsvValue string, err error),
+	)
+
+	// (optional) called within convertPipeFiles to format pipe file values to final csv values
+	insertFinalCsvs(
+		ctx context.Context,
+		finalCsvChannel <-chan string,
+		transfer Transfer,
+	) (
+		err error,
+	)
+
+	// (optional) called within insertFinalCsvs to run db specific insert commands
+	runInsertCmd(
+		ctx context.Context,
+		finalCsvLocation string,
+		transfer Transfer,
+	) (
+		err error,
+	)
 }
 
-func newSystem(name, systemType, connectionString string) (System, error) {
+func newSystem(name, systemType, connectionString string) (system System, err error) {
+	// creates a new system
+
 	switch systemType {
-	case TypePostgreSQL:
-		return newPostgresql(name, connectionString)
 	case TypeMSSQL:
 		return newMssql(name, connectionString)
 	case TypeMySQL:
 		return newMysql(name, connectionString)
 	case TypeOracle:
 		return newOracle(name, connectionString)
+	case TypePostgreSQL:
+		return newPostgresql(name, connectionString)
 	case TypeSnowflake:
 		return newSnowflake(name, connectionString)
 	default:
-		return nil, fmt.Errorf("unsupported system type %v", systemType)
+		return system, fmt.Errorf("unsupported system type %v", systemType)
 	}
 }
 
 func openDbCommon(name, connectionString, driverName string) (db *sql.DB, err error) {
+	// opens a connection to a a system and pings it
+
 	db, err = sql.Open(driverName, connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("error opening connection to %v :: %v", name, err)
@@ -60,38 +149,76 @@ func openDbCommon(name, connectionString, driverName string) (db *sql.DB, err er
 	}
 
 	return db, nil
+
 }
 
-func dropTableIfExistsCommon(schema, table string, system System) (string, error) {
+func dropTableIfExistsCommon(transfer Transfer, system System) (dropped string, err error) {
+	// drop a table if it exists
 
+	schema := transfer.TargetSchema
 	if schema != "" {
 		schema = fmt.Sprintf("%v.", schema)
 	}
 
-	toDrop := fmt.Sprintf("%v%v", schema, table)
+	dropped = fmt.Sprintf("%v%v", schema, transfer.TargetTable)
 
-	err := system.exec(fmt.Sprintf("drop table if exists %v", toDrop))
+	err = system.exec(fmt.Sprintf("drop table if exists %v", dropped))
 	if err != nil {
-		return "", fmt.Errorf("error dropping %v%v :: %v", schema, table, err)
+		return "", fmt.Errorf("error dropping %v%v :: %v", schema, transfer.TargetTable,
+			err)
 	}
 
-	return toDrop, nil
+	return dropped, nil
 }
 
-func getScanType(columnType *sql.ColumnType) (scanType string, err error) {
+func safeGetScanType(columnType *sql.ColumnType) (scanType string, err error) {
+	// safely gets scan type of a column
+
 	defer func() {
 		if r := recover(); r != nil {
 			scanType = ""
-			err = fmt.Errorf("panic caught while trying to get scantype for db type %v :: %v", columnType.DatabaseTypeName(), r)
+			err = fmt.Errorf("panic caught while trying getting %v scan type :: %v",
+				columnType.DatabaseTypeName(), r)
 		}
 	}()
 
 	scanType = columnType.ScanType().String()
+
 	return scanType, err
 }
 
-func getColumnInfoCommon(rows *sql.Rows, source System) ([]ColumnInfo, error) {
-	columnInfo := []ColumnInfo{}
+func safeGetDbTypeName(columnType *sql.ColumnType) (dbTypeName string, err error) {
+	// safely gets scan type of a column
+
+	defer func() {
+		if r := recover(); r != nil {
+			dbTypeName = ""
+			err = fmt.Errorf("panic caught while trying getting %v db type name :: %v",
+				columnType.Name(), r)
+		}
+	}()
+
+	return columnType.DatabaseTypeName(), err
+}
+
+type ColumnInfo struct {
+	name       string
+	pipeType   string
+	scanType   string
+	decimalOk  bool
+	precision  int64
+	scale      int64
+	lengthOk   bool
+	length     int64
+	nullableOk bool
+	nullable   bool
+}
+
+func getColumnInfoCommon(rows *sql.Rows, source System) (columnInfo []ColumnInfo, err error) {
+	// gets / consolidates info about columns, including
+	// pipe type, length, precision / scale, etc
+
+	columnInfo = []ColumnInfo{}
 
 	columnNames, err := rows.Columns()
 	if err != nil {
@@ -110,14 +237,20 @@ func getColumnInfoCommon(rows *sql.Rows, source System) ([]ColumnInfo, error) {
 		length, lengthOk := columnTypes[i].Length()
 		nullable, nullableOk := columnTypes[i].Nullable()
 
-		scanType, err := getScanType(columnTypes[i])
+		dbTypeName, err := safeGetDbTypeName(columnTypes[i])
 		if err != nil {
-			warningLog.Printf("error getting scantype for column %v :: %v", columnNames[i], err)
+			return columnInfo, fmt.Errorf("error getting dbTypeName :: %v", err)
 		}
 
-		pipeType, err := source.dbTypeToPipeType(columnTypes[i].DatabaseTypeName(), *columnTypes[i])
+		pipeType, err := source.dbTypeToPipeType(columnTypes[i], dbTypeName)
 		if err != nil {
 			return columnInfo, fmt.Errorf("error getting pipeTypes :: %v", err)
+		}
+
+		scanType, err := safeGetScanType(columnTypes[i])
+		if err != nil {
+			warningLog.Printf("error getting scantype for column %v :: %v",
+				columnNames[i], err)
 		}
 
 		columnInfo = append(columnInfo, ColumnInfo{
@@ -137,19 +270,29 @@ func getColumnInfoCommon(rows *sql.Rows, source System) ([]ColumnInfo, error) {
 	return columnInfo, nil
 }
 
-func createTableCommon(targetSchema, targetTable string, columnInfo []ColumnInfo, target System) (string, error) {
+func createTableCommon(
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+	target System,
+) (
+	created string,
+	err error,
+) {
+	// uses columnInfo to create a table in the target system
+
+	targetSchema := transfer.TargetSchema
 	if targetSchema != "" {
 		targetSchema = fmt.Sprintf("%v.", targetSchema)
 	}
 
-	toCreate := fmt.Sprintf("%v%v", targetSchema, targetTable)
+	created = fmt.Sprintf("%v%v", targetSchema, transfer.TargetTable)
 
 	createSchema := targetSchema
 
 	var queryBuilder = strings.Builder{}
 
 	queryBuilder.WriteString("create table ")
-	queryBuilder.WriteString(toCreate)
+	queryBuilder.WriteString(created)
 	queryBuilder.WriteString(" (")
 
 	for i := range columnInfo {
@@ -160,37 +303,48 @@ func createTableCommon(targetSchema, targetTable string, columnInfo []ColumnInfo
 		queryBuilder.WriteString(" ")
 		createType, err := target.pipeTypeToCreateType(columnInfo[i])
 		if err != nil {
-			return "", fmt.Errorf("error getting create type for column %v :: %v", columnInfo[i].name, err)
+			err = fmt.Errorf("error getting create type for column %v :: %v",
+				columnInfo[i].name, err)
+			return "", err
 		}
 		queryBuilder.WriteString(createType)
 	}
 	queryBuilder.WriteString(")")
 
-	err := target.exec(queryBuilder.String())
+	err = target.exec(queryBuilder.String())
 	if err != nil {
-		return "", fmt.Errorf("error running create table %v.%v :: %v", createSchema, targetTable, err)
+		err = fmt.Errorf("error running create table %v.%v :: %v",
+			createSchema, transfer.TargetTable, err)
+		return "", err
 	}
 
-	return toCreate, nil
+	return created, nil
 }
 
-func createPipeFilesCommon(source System, transferErrGroup *errgroup.Group, pipeFileDir, null, transferId string, columnInfo []ColumnInfo, rows *sql.Rows) (<-chan string, error) {
-	out := make(chan string)
+func createPipeFilesCommon(
+	ctx context.Context,
+	errorChannel chan<- error,
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+	rows *sql.Rows,
+	source System,
+) <-chan string {
 
-	transferErrGroup.Go(func() error {
+	pipeFileChannel := make(chan string)
 
-		defer close(out)
+	go func() {
 
-		pipeFileFormatters, err := source.getPipeFileFormatters()
+		defer close(pipeFileChannel)
+
+		pipeFileFormatters := source.getPipeFileFormatters()
+
+		pipeFileNum := 0
+
+		pipeFile, err := os.Create(
+			filepath.Join(transfer.PipeFileDir, fmt.Sprintf("%b.pipe", pipeFileNum)))
 		if err != nil {
-			return fmt.Errorf("error getting pipe file formatters :: %v", err)
-		}
-
-		pipeFileNum := 1
-
-		pipeFile, err := os.Create(filepath.Join(pipeFileDir, fmt.Sprintf("%b.pipe", pipeFileNum)))
-		if err != nil {
-			return fmt.Errorf("error creating temp file :: %v", err)
+			errorChannel <- fmt.Errorf("error creating temp file :: %v", err)
+			return
 		}
 		defer pipeFile.Close()
 
@@ -209,17 +363,22 @@ func createPipeFilesCommon(source System, transferErrGroup *errgroup.Group, pipe
 		for rows.Next() {
 			err := rows.Scan(valuePtrs...)
 			if err != nil {
-				return fmt.Errorf("error scanning row :: %v", err)
+				errorChannel <- fmt.Errorf("error scanning row :: %v", err)
+				return
 			}
 
 			for j := range columnInfo {
 				if values[j] == nil {
-					csvRow[j] = null
-					csvLength += 5
+					csvRow[j] = transfer.Null
+					csvLength += len(transfer.Null)
 				} else {
 					stringVal, err := pipeFileFormatters[columnInfo[j].pipeType](values[j])
 					if err != nil {
-						return fmt.Errorf("error while formatting pipe type %v :: %v", columnInfo[j].pipeType, err)
+						errorChannel <- fmt.Errorf(
+							"error while formatting pipe type %v :: %v",
+							columnInfo[j].pipeType, err,
+						)
+						return
 					}
 					csvRow[j] = stringVal
 					csvLength += len(stringVal)
@@ -228,25 +387,36 @@ func createPipeFilesCommon(source System, transferErrGroup *errgroup.Group, pipe
 
 			err = csvWriter.Write(csvRow)
 			if err != nil {
-				return fmt.Errorf("error writing csv row :: %v", err)
+				errorChannel <- fmt.Errorf("error writing csv row :: %v", err)
+				return
 			}
 			dataInRam = true
 
 			if csvLength > 10_000_000 {
+
 				csvWriter.Flush()
 
 				err = pipeFile.Close()
 				if err != nil {
-					return fmt.Errorf("error closing pipe file :: %v", err)
+					errorChannel <- fmt.Errorf("error closing pipe file :: %v", err)
+					return
 				}
 
-				out <- pipeFile.Name()
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					pipeFileChannel <- pipeFile.Name()
+				}
 
 				pipeFileNum++
-				// create the file names in binary so it sorts correctly
-				pipeFile, err = os.Create(filepath.Join(pipeFileDir, fmt.Sprintf("%b.pipe", pipeFileNum)))
+				pipeFileName := filepath.Join(
+					transfer.PipeFileDir, fmt.Sprintf("%b.pipe", pipeFileNum))
+
+				pipeFile, err = os.Create(pipeFileName)
 				if err != nil {
-					return fmt.Errorf("error creating temp file :: %v", err)
+					errorChannel <- fmt.Errorf("error creating temp file :: %v", err)
+					return
 				}
 				defer pipeFile.Close()
 
@@ -261,149 +431,161 @@ func createPipeFilesCommon(source System, transferErrGroup *errgroup.Group, pipe
 
 			err = pipeFile.Close()
 			if err != nil {
-				return fmt.Errorf("error closing pipe file :: %v", err)
+				errorChannel <- fmt.Errorf("error closing pipe file :: %v", err)
+				return
 			}
 
-			out <- pipeFile.Name()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				pipeFileChannel <- pipeFile.Name()
+			}
+
 		}
 
-		infoLog.Printf("transfer %v finished writing pipe files", transferId)
-		return nil
-	})
+		infoLog.Printf("transfer %v finished writing pipe files", transfer.Id)
+	}()
 
-	return out, nil
+	return pipeFileChannel
 }
 
-func convertPipeFilesCommon(ctx context.Context, transferId, finalCsvDir, null string, target System, keepFiles bool, columnInfo []ColumnInfo, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
+func convertPipeFilesCommon(
+	ctx context.Context,
+	pipeFileChannel <-chan string,
+	errorChannel chan<- error,
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+	target System,
+) <-chan string {
 
-	out := make(chan string)
+	finalCsvChannel := make(chan string)
 
 	finalCsvFormatters := target.getFinalCsvFormatters()
 
-	transferErrGroup.Go(func() error {
-		defer close(out)
+	go func() {
 
-		for pipeFileName := range in {
-			select {
-			case <-ctx.Done():
-				return errors.New("context cancelled")
-			default:
+		defer close(finalCsvChannel)
 
-				pipeFileName := pipeFileName
-				conversionErrGroup := errgroup.Group{}
-				conversionErrGroup.SetLimit(1)
+		for pipeFileName := range pipeFileChannel {
+			pipeFile, err := os.Open(pipeFileName)
+			if err != nil {
+				errorChannel <- fmt.Errorf("error opening pipeFile :: %v", err)
+				return
+			}
+			defer func() {
+				pipeFile.Close()
+				if !transfer.KeepFiles {
+					os.Remove(pipeFileName)
+				}
+			}()
 
-				conversionErrGroup.Go(func() error {
-					pipeFile, err := os.Open(pipeFileName)
-					if err != nil {
-						return fmt.Errorf("error opening pipeFile :: %v", err)
-					}
-					defer pipeFile.Close()
+			fileNum, err := getFileNum(pipeFileName)
+			if err != nil {
+				errorChannel <- fmt.Errorf(
+					"error getting file number :: %v", err)
+				return
+			}
 
-					if !keepFiles {
-						defer os.Remove(pipeFileName)
-					}
+			csvFileName := filepath.Join(transfer.FinalCsvDir, fmt.Sprintf(
+				"%v.csv", fileNum))
+			csvFile, err := os.Create(csvFileName)
+			if err != nil {
+				errorChannel <- fmt.Errorf(
+					"error creating final csv file :: %v", err)
+				return
+			}
+			defer csvFile.Close()
 
-					// strip path from pipeFile name, get number
-					pipeFileNameClean := filepath.Base(pipeFileName)
-					pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
+			csvReader := csv.NewReader(pipeFile)
+			csvWriter := csv.NewWriter(csvFile)
 
-					psqlCsvFile, err := os.Create(filepath.Join(finalCsvDir, fmt.Sprintf("%s.csv", pipeFileNum)))
-					if err != nil {
-						return fmt.Errorf("error creating final csv file :: %v", err)
-					}
-					defer psqlCsvFile.Close()
-
-					csvReader := csv.NewReader(pipeFile)
-					csvWriter := csv.NewWriter(psqlCsvFile)
-
-					for {
-						row, err := csvReader.Read()
-						if err != nil {
-							if errors.Is(err, io.EOF) {
-								break
-							}
-							return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
-						}
-
-						for i := range row {
-							if row[i] != null {
-								row[i], err = finalCsvFormatters[columnInfo[i].pipeType](row[i])
-								if err != nil {
-									return fmt.Errorf("error formatting pipe file to final csv :: %v", err)
-								}
-							}
-						}
-
-						err = csvWriter.Write(row)
-						if err != nil {
-							return fmt.Errorf("error writing final csv :: %v", err)
-						}
-					}
-
-					err = pipeFile.Close()
-					if err != nil {
-						return fmt.Errorf("error closing pipeFile :: %v", err)
-					}
-
-					csvWriter.Flush()
-
-					err = psqlCsvFile.Close()
-					if err != nil {
-						return fmt.Errorf("error closing final csv file :: %v", err)
-					}
-
-					out <- psqlCsvFile.Name()
-
-					return nil
-				})
-
-				err := conversionErrGroup.Wait()
+			for {
+				row, err := csvReader.Read()
 				if err != nil {
-					return fmt.Errorf("error converting pipeFiles :: %v", err)
+					if errors.Is(err, io.EOF) {
+						break
+					}
+					errorChannel <- fmt.Errorf(
+						"error reading csv values in %v :: %v", pipeFile.Name(), err)
+					return
+				}
+
+				for i := range row {
+					if row[i] != transfer.Null {
+						row[i], err = finalCsvFormatters[columnInfo[i].pipeType](row[i])
+						if err != nil {
+							errorChannel <- fmt.Errorf(
+								"error formatting pipe file to final csv :: %v", err)
+							return
+						}
+					}
+				}
+
+				err = csvWriter.Write(row)
+				if err != nil {
+					errorChannel <- fmt.Errorf(
+						"error writing csv row :: %v", err)
+					return
 				}
 			}
+
+			err = pipeFile.Close()
+			if err != nil {
+				errorChannel <- fmt.Errorf("error closing pipeFile :: %v", err)
+				return
+			}
+
+			csvWriter.Flush()
+
+			err = csvFile.Close()
+			if err != nil {
+				errorChannel <- fmt.Errorf(
+					"error closing final csv file :: %v", err)
+				return
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				finalCsvChannel <- csvFile.Name()
+			}
 		}
-
-		infoLog.Printf("transfer %v finished converting pipe files to final csvs", transferId)
-		return nil
-	})
-
-	return out, nil
+		infoLog.Printf("transfer %v finished converting pipe files to final csvs", transfer.Id)
+	}()
+	return finalCsvChannel
 }
 
-func insertFinalCsvCommon(ctx context.Context, targetSchema, targetTable, null, targetConnectionString, transferId string, keepFiles bool, target System, in <-chan string) error {
+func insertFinalCsvsCommon(
+	ctx context.Context,
+	finalCsvChannel <-chan string,
+	transfer Transfer,
+	target System,
+) (
+	err error,
+) {
+	// inserts final csvs into the target system
 
-	insertErrGroup := errgroup.Group{}
-
-	for finalCsvFileName := range in {
+	for finalCsvLocation := range finalCsvChannel {
 		select {
 		case <-ctx.Done():
 			return errors.New("context cancelled")
 		default:
 
-			finalCsvFileName := finalCsvFileName
+			if !transfer.KeepFiles {
+				defer os.Remove(finalCsvLocation)
+			}
 
-			insertErrGroup.Go(func() error {
-				if !keepFiles {
-					defer os.Remove(finalCsvFileName)
-				}
+			err = target.runInsertCmd(ctx, finalCsvLocation, transfer)
 
-				err := target.runUploadCmd(targetSchema, targetTable, finalCsvFileName, null, targetConnectionString)
-				if err != nil {
-					return fmt.Errorf("error running upload cmd :: %v", err)
-				}
-
-				return nil
-			})
-			err := insertErrGroup.Wait()
 			if err != nil {
-				return fmt.Errorf("error inserting final csvs :: %v", err)
+				return fmt.Errorf("error inserting final csv :: %v", err)
 			}
 		}
 	}
 
-	infoLog.Printf("transfer %v finished inserting final csvs", transferId)
+	infoLog.Printf("transfer %v finished inserting final csvs", transfer.Id)
 
 	return nil
 }

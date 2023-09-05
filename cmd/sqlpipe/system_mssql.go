@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"errors"
@@ -11,8 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 type Mssql struct {
@@ -35,36 +34,48 @@ func newMssql(name, connectionString string) (mssql Mssql, err error) {
 	return mssql, nil
 }
 
-func (system Mssql) query(query string) (*sql.Rows, error) {
-	rows, err := system.connection.Query(query)
+func (system Mssql) query(query string) (rows *sql.Rows, err error) {
+	rows, err = system.connection.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("error running dql on %v :: %v :: %v", system.name, query, err)
 	}
 	return rows, nil
 }
 
-func (system Mssql) exec(query string) error {
-	_, err := system.connection.Exec(query)
+func (system Mssql) exec(query string) (err error) {
+	_, err = system.connection.Exec(query)
 	if err != nil {
 		return fmt.Errorf("error running ddl/dml on %v :: %v :: %v", system.name, query, err)
 	}
 	return nil
 }
 
-func (system Mssql) dropTable(schema, table string) (string, error) {
-	return dropTableIfExistsCommon(schema, table, system)
+func (system Mssql) dropTableIfExists(transfer Transfer) (dropped string, err error) {
+	return dropTableIfExistsCommon(transfer, system)
 }
 
-func (system Mssql) getColumnInfo(transfer *Transfer) ([]ColumnInfo, error) {
-	return getColumnInfoCommon(transfer)
+func (system Mssql) getColumnInfo(rows *sql.Rows) (columnInfo []ColumnInfo, err error) {
+	return getColumnInfoCommon(rows, system)
 }
 
-func (system Mssql) createPipeFiles(transfer *Transfer, transferErrGroup *errgroup.Group) (<-chan string, error) {
-	return createPipeFilesCommon(transfer, transferErrGroup)
+func (system Mssql) createTable(
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+) (
+	created string,
+	err error,
+) {
+	return createTableCommon(columnInfo, transfer, system)
 }
 
-func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnType, transfer *Transfer) (pipeType string, err error) {
-	switch columnType.DatabaseTypeName() {
+func (system Mssql) dbTypeToPipeType(
+	columnType *sql.ColumnType,
+	databaseTypeName string,
+) (
+	pipeType string,
+	err error,
+) {
+	switch databaseTypeName {
 	case "NVARCHAR":
 		return "nvarchar", nil
 	case "NCHAR":
@@ -120,7 +131,8 @@ func (system Mssql) dbTypeToPipeType(databaseType string, columnType sql.ColumnT
 	case "XML":
 		return "xml", nil
 	default:
-		return "", fmt.Errorf("unsupported database type for mssql: %v", columnType.DatabaseTypeName())
+		return "", fmt.Errorf(
+			"unsupported database type for mssql: %v", columnType.DatabaseTypeName())
 	}
 }
 
@@ -173,7 +185,9 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 				scaleOk = true
 			}
 
-			if columnInfo.precision > 0 && columnInfo.precision <= 38 && columnInfo.precision > columnInfo.scale {
+			if columnInfo.precision > 0 &&
+				columnInfo.precision <= 38 &&
+				columnInfo.precision > columnInfo.scale {
 				precisionOk = true
 			}
 		}
@@ -242,216 +256,101 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 	}
 }
 
-func (system Mssql) insertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) error {
-	finalCsvs, err := mssqlConvertPipeFiles(transfer, in, transferErrGroup)
-	if err != nil {
-		return fmt.Errorf("error converting pipe files :: %v", err)
-	}
-
-	err = insertFinalCsvCommon(transfer, finalCsvs)
-	if err != nil {
-		return fmt.Errorf("error inserting final csvs :: %v", err)
-	}
-
-	return nil
+func (system Mssql) createPipeFiles(
+	ctx context.Context,
+	errorChannel chan<- error,
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+	rows *sql.Rows,
+) <-chan string {
+	return createPipeFilesCommon(ctx, errorChannel, columnInfo, transfer, rows, system)
 }
 
-func mssqlConvertPipeFiles(transfer *Transfer, in <-chan string, transferErrGroup *errgroup.Group) (<-chan string, error) {
-
-	out := make(chan string)
-
-	finalCsvFormatters := transfer.Target.getFinalCsvFormatters()
-
-	transferErrGroup.Go(func() error {
-		defer close(out)
-
-		for pipeFileName := range in {
-
-			pipeFileName := pipeFileName
-			conversionErrGroup := errgroup.Group{}
-
-			conversionErrGroup.Go(func() error {
-				pipeFile, err := os.Open(pipeFileName)
-				if err != nil {
-					return fmt.Errorf("error opening pipeFile :: %v", err)
-				}
-				defer pipeFile.Close()
-
-				if !transfer.KeepFiles {
-					defer os.Remove(pipeFileName)
-				}
-
-				// strip path from pipeFile name, get number
-				pipeFileNameClean := filepath.Base(pipeFileName)
-				pipeFileNum := strings.Split(pipeFileNameClean, ".")[0]
-
-				bcpCsvFile, err := os.Create(filepath.Join(transfer.FinalCsvDir, fmt.Sprintf("%s.csv", pipeFileNum)))
-				if err != nil {
-					return fmt.Errorf("error creating bcp csv file :: %v", err)
-				}
-				defer bcpCsvFile.Close()
-
-				csvReader := csv.NewReader(pipeFile)
-				csvBuilder := strings.Builder{}
-
-				var value string
-
-				for {
-					row, err := csvReader.Read()
-					if err != nil {
-						if errors.Is(err, io.EOF) {
-							break
-						}
-						return fmt.Errorf("error reading csv values in %v :: %v", pipeFile.Name(), err)
-					}
-
-					for i := range row {
-						if i != 0 {
-							csvBuilder.WriteString(transfer.Delimiter)
-						}
-						if row[i] == transfer.Null {
-							csvBuilder.WriteString("")
-						} else {
-							value, err = finalCsvFormatters[transfer.ColumnInfo[i].pipeType](row[i])
-							if err != nil {
-								return fmt.Errorf("error formatting pipe file to bcp csv :: %v", err)
-							}
-							csvBuilder.WriteString(value)
-						}
-					}
-					csvBuilder.WriteString(transfer.Newline)
-				}
-
-				err = pipeFile.Close()
-				if err != nil {
-					return fmt.Errorf("error closing pipe file :: %v", err)
-				}
-
-				_, err = bcpCsvFile.WriteString(csvBuilder.String())
-				if err != nil {
-					return fmt.Errorf("error writing to bcp csv file :: %v", err)
-				}
-
-				err = bcpCsvFile.Close()
-				if err != nil {
-					return fmt.Errorf("error closing bcp csv file :: %v", err)
-				}
-
-				out <- bcpCsvFile.Name()
-
-				return nil
-			})
-
-			err := conversionErrGroup.Wait()
-			if err != nil {
-				return fmt.Errorf("error converting pipeFiles :: %v", err)
-			}
-		}
-
-		infoLog.Printf("transfer %v finished converting pipe files", transfer.Id)
-		return nil
-	})
-
-	return out, nil
-}
-
-func (system Mssql) runUploadCmd(transfer *Transfer, csvFileName string) error {
-	hostName := transfer.TargetHostname
-
-	cmd := exec.Command(
-		"bcp",
-		fmt.Sprintf("%s.%s.%s", transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable),
-		"in",
-		csvFileName,
-		"-c",
-		"-S", fmt.Sprintf("%s,%d", hostName, transfer.TargetPort),
-		"-U", transfer.TargetUsername,
-		"-P", transfer.TargetPassword,
-		"-t", transfer.Delimiter,
-		"-r", transfer.Newline,
-		"-e", "/tmp/errors.txt",
-	)
-	result, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to upload csv to mssql :: stderr %v :: stdout %s", err, string(result))
-	}
-
-	return nil
-}
-
-func (system Mssql) getPipeFileFormatters() (map[string]func(interface{}) (string, error), error) {
-	return map[string]func(interface{}) (string, error){
-		"nvarchar": func(v interface{}) (string, error) {
+func (system Mssql) getPipeFileFormatters() (
+	pipeFileFormatters map[string]func(interface{}) (pipeFileValue string, err error),
+) {
+	return map[string]func(interface{}) (pipeFileValue string, err error){
+		"nvarchar": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"varchar": func(v interface{}) (string, error) {
+		"varchar": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"ntext": func(v interface{}) (string, error) {
+		"ntext": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"text": func(v interface{}) (string, error) {
+		"text": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"int64": func(v interface{}) (string, error) {
+		"int64": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%d", v), nil
 		},
-		"int32": func(v interface{}) (string, error) {
+		"int32": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%d", v), nil
 		},
-		"int16": func(v interface{}) (string, error) {
+		"int16": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%d", v), nil
 		},
-		"float64": func(v interface{}) (string, error) {
+		"float64": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%f", v), nil
 		},
-		"float32": func(v interface{}) (string, error) {
+		"float32": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%f", v), nil
 		},
-		"decimal": func(v interface{}) (string, error) {
+		"decimal": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"money": func(v interface{}) (string, error) {
+		"money": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"datetime": func(v interface{}) (string, error) {
+		"datetime": func(v interface{}) (pipeFileValue string, err error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non time.Time value passed to datetime mssqlPipeFileFormatters")
+				return "", errors.New(
+					"non time.Time value passed to datetime mssqlPipeFileFormatters",
+				)
 			}
 			return valTime.Format(time.RFC3339Nano), nil
 		},
-		"datetimetz": func(v interface{}) (string, error) {
+		"datetimetz": func(v interface{}) (pipeFileValue string, err error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non time.Time value passed to datetimetz mssqlPipeFileFormatters")
+				return "", errors.New(
+					"non time.Time value passed to datetimetz mssqlPipeFileFormatters",
+				)
 			}
 			return valTime.UTC().Format(time.RFC3339Nano), nil
 		},
-		"date": func(v interface{}) (string, error) {
+		"date": func(v interface{}) (pipeFileValue string, err error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non time.Time value passed to date mssqlPipeFileFormatters")
+				return "", errors.New(
+					"non time.Time value passed to date mssqlPipeFileFormatters",
+				)
 			}
 			return valTime.Format(time.RFC3339Nano), nil
 		},
-		"time": func(v interface{}) (string, error) {
+		"time": func(v interface{}) (pipeFileValue string, err error) {
 			valTime, ok := v.(time.Time)
 			if !ok {
-				return "", errors.New("non time.Time value passed to time mssqlPipeFileFormatters")
+				return "", errors.New(
+					"non time.Time value passed to time mssqlPipeFileFormatters",
+				)
 			}
 			return valTime.Format(time.RFC3339Nano), nil
 		},
-		"varbinary": func(v interface{}) (string, error) {
+		"varbinary": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%x", v), nil
 		},
-		"blob": func(v interface{}) (string, error) {
+		"blob": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%x", v), nil
 		},
-		"uuid": func(v interface{}) (string, error) {
+		"uuid": func(v interface{}) (pipeFileValue string, err error) {
 			val, ok := v.([]uint8)
 			if !ok {
-				return "", errors.New("non byte array value passed to uuid mssqlPipeFileFormatters")
+				return "", errors.New(
+					"non byte array value passed to uuid mssqlPipeFileFormatters",
+				)
 			}
 			return fmt.Sprintf("%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X",
 				val[3],
@@ -467,16 +366,158 @@ func (system Mssql) getPipeFileFormatters() (map[string]func(interface{}) (strin
 				val[10:],
 			), nil
 		},
-		"bool": func(v interface{}) (string, error) {
+		"bool": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%t", v), nil
 		},
-		"json": func(v interface{}) (string, error) {
+		"json": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-		"xml": func(v interface{}) (string, error) {
+		"xml": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil
 		},
-	}, nil
+	}
+}
+
+func (system Mssql) insertPipeFiles(
+	ctx context.Context,
+	pipeFileChannel <-chan string,
+	errorChannel chan<- error,
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+) (
+	err error,
+) {
+
+	finalCsvChannel := system.convertPipeFiles(ctx, pipeFileChannel, errorChannel, columnInfo, transfer)
+
+	err = system.insertFinalCsvs(ctx, finalCsvChannel, transfer)
+	if err != nil {
+		return fmt.Errorf("error inserting final csvs :: %v", err)
+	}
+
+	return nil
+}
+
+func (system Mssql) convertPipeFiles(
+	ctx context.Context,
+	pipeFileChannel <-chan string,
+	errorChannel chan<- error,
+	columnInfo []ColumnInfo,
+	transfer Transfer,
+) <-chan string {
+	// converts a pipe file to a csv that can be uploaded by bcp
+
+	finalCsvChannel := make(chan string)
+
+	finalCsvFormatters := system.getFinalCsvFormatters()
+
+	go func() {
+
+		defer close(finalCsvChannel)
+
+		for pipeFileName := range pipeFileChannel {
+			if !transfer.KeepFiles {
+				defer os.Remove(pipeFileName)
+			}
+
+			pipeFile, err := os.Open(pipeFileName)
+			if err != nil {
+				errorChannel <- fmt.Errorf("error opening pipe file :: %v", err)
+				return
+			}
+			defer pipeFile.Close()
+
+			fileNum, err := getFileNum(pipeFileName)
+			if err != nil {
+				errorChannel <- fmt.Errorf("error getting file num :: %v", err)
+				return
+			}
+
+			finalCsvFile, err := os.Create(
+				filepath.Join(transfer.FinalCsvDir, fmt.Sprintf("%v.csv", fileNum)),
+			)
+			if err != nil {
+				errorChannel <- fmt.Errorf("error creating final csv file :: %v", err)
+				return
+			}
+			defer finalCsvFile.Close()
+
+			csvReader := csv.NewReader(pipeFile)
+			csvBuilder := strings.Builder{}
+
+			var value string
+
+			for {
+				row, err := csvReader.Read()
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						break
+					}
+					errorChannel <- fmt.Errorf("error reading csv values :: %v", err)
+					return
+				}
+
+				for i := range row {
+					if i != 0 {
+						csvBuilder.WriteString(transfer.Delimiter)
+					}
+					if row[i] == transfer.Null {
+						csvBuilder.WriteString("")
+					} else {
+						value, err = finalCsvFormatters[columnInfo[i].pipeType](row[i])
+						if err != nil {
+							errorChannel <- fmt.Errorf(
+								"error formatting pipe file to final csv :: %v", err)
+							return
+						}
+						csvBuilder.WriteString(value)
+					}
+				}
+				csvBuilder.WriteString(transfer.NewLine)
+			}
+
+			_, err = finalCsvFile.WriteString(csvBuilder.String())
+			if err != nil {
+				errorChannel <- fmt.Errorf("error writing to final csv file :: %v", err)
+				return
+			}
+
+			err = finalCsvFile.Close()
+			if err != nil {
+				errorChannel <- fmt.Errorf("error closing final csv file :: %v", err)
+				return
+			}
+
+			err = pipeFile.Close()
+			if err != nil {
+				if !strings.Contains(err.Error(), "file already closed") {
+					errorChannel <- fmt.Errorf("error closing pipe file :: %v", err)
+					return
+				}
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				finalCsvChannel <- finalCsvFile.Name()
+			}
+
+		}
+		infoLog.Printf("transfer %v finished converting pipe files", transfer.Id)
+	}()
+
+	return finalCsvChannel
+}
+
+func (system Mssql) insertFinalCsvs(
+	ctx context.Context,
+	finalCsvChannel <-chan string,
+	transfer Transfer,
+) (
+	err error,
+) {
+	return insertFinalCsvsCommon(ctx, finalCsvChannel, transfer, system)
 }
 
 func (system Mssql) getFinalCsvFormatters() map[string]func(string) (string, error) {
@@ -536,7 +577,9 @@ func (system Mssql) getFinalCsvFormatters() map[string]func(string) (string, err
 		"datetimetz": func(v string) (string, error) {
 			valTime, err := time.Parse(time.RFC3339Nano, v)
 			if err != nil {
-				return "", fmt.Errorf("error parsing datetimetz value in mssql datetimetz psql formatter :: %v", err)
+				return "", fmt.Errorf(
+					"error parsing datetimetz value in mssql datetimetz psql formatter :: %v",
+					err)
 			}
 
 			return valTime.UTC().Format("2006-01-02 15:04:05.9999999"), nil
@@ -585,4 +628,43 @@ func (system Mssql) getFinalCsvFormatters() map[string]func(string) (string, err
 			return v, nil
 		},
 	}
+}
+
+func (system Mssql) runInsertCmd(
+	ctx context.Context,
+	finalCsvLocation string,
+	transfer Transfer,
+) (
+	err error,
+) {
+
+	fileNum, err := getFileNum(finalCsvLocation)
+	if err != nil {
+		return fmt.Errorf("error getting file num :: %v", err)
+	}
+
+	cmd := exec.CommandContext(
+		ctx,
+		"bcp",
+		fmt.Sprintf("%s.%s.%s",
+			transfer.TargetDatabase, transfer.TargetSchema, transfer.TargetTable,
+		),
+		"in",
+		finalCsvLocation,
+		"-c",
+		"-S", transfer.TargetHostname,
+		"-U", transfer.TargetUsername,
+		"-P", transfer.TargetPassword,
+		"-t", transfer.Delimiter,
+		"-r", transfer.NewLine,
+		"-e", filepath.Join(transfer.FinalCsvDir, fmt.Sprintf("%d.err", fileNum)),
+	)
+	result, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf(
+			"failed to upload csv to mssql :: stderr %v :: stdout %s", err, string(result),
+		)
+	}
+
+	return nil
 }

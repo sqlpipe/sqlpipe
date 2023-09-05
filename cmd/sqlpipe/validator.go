@@ -53,10 +53,16 @@ func validateTransferInput(v validator, transfer Transfer) {
 	switch transfer.TargetType {
 	case TypeOracle, TypeMSSQL:
 		v.check(transfer.TargetHostname != "", "target-hostname", fmt.Sprintf("must be provided for target type %v", transfer.TargetType))
-		v.check(transfer.TargetPort != 0, "target-port", fmt.Sprintf("must be provided for target type %v", transfer.TargetType))
 		v.check(transfer.TargetUsername != "", "target-username", fmt.Sprintf("must be provided for target type %v", transfer.TargetType))
 		v.check(transfer.TargetPassword != "", "target-password", fmt.Sprintf("must be provided for target type %v", transfer.TargetType))
 		v.check(transfer.TargetDatabase != "", "target-database", fmt.Sprintf("must be provided for target type %v", transfer.TargetType))
+
+		if transfer.TargetType == TypeMSSQL {
+			v.check(transfer.TargetPort == 0, "target-port", "to change the target port for mssql, enter it after a comma in the -target-hostname flag like 127.0.0.1,1433")
+		}
+		if transfer.TargetType == TypeOracle {
+			v.check(transfer.TargetPort != 0, "target-port", "must be provided for target type oracle")
+		}
 	}
 	if schemaRequired[transfer.TargetType] {
 		v.check(transfer.TargetSchema != "", "target-schema", fmt.Sprintf("must be provided for target type %v", transfer.TargetType))
@@ -96,7 +102,7 @@ func validateTransferGeneratedFields(transfer Transfer) {
 		panic("stopped at is unexpectedly set")
 	}
 
-	if transfer.Status != StatusRunning {
+	if transfer.Status != StatusQueued {
 		panic("status not set to running")
 	}
 
@@ -120,8 +126,8 @@ func validateTransferGeneratedFields(transfer Transfer) {
 		panic("delimiter not set")
 	}
 
-	if transfer.Newline == "" {
-		panic("newline not set")
+	if transfer.NewLine == "" {
+		panic("new line not set")
 	}
 
 	if transfer.Null == "" {

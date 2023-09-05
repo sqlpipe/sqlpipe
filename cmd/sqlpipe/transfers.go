@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -76,7 +76,7 @@ type Transfer struct {
 	KeepFiles   bool   `json:"keep-files"`
 
 	Delimiter string `json:"delimiter"`
-	Newline   string `json:"newline"`
+	NewLine   string `json:"new-line"`
 	Null      string `json:"null"`
 
 	SourceName             string `json:"source-name"`
@@ -92,17 +92,15 @@ type Transfer struct {
 	TargetUsername string `json:"target-username,omitempty"`
 	TargetPassword string `json:"-"`
 	TargetDatabase string `json:"target-database,omitempty"`
-	TargetSchema   string `json:"target-schema,omitempty"`
 
-	Query       string `json:"query"`
-	TargetTable string `json:"target-table"`
+	Query        string `json:"query"`
+	TargetSchema string `json:"target-schema,omitempty"`
+	TargetTable  string `json:"target-table"`
 
 	DropTargetTableIfExists bool `json:"drop-target-table-if-exists"`
 	CreateTargetTable       bool `json:"create-target-table"`
 
-	CancelChannel   chan string `json:"-"`
-	ErrorChannel    chan error  `json:"-"`
-	CompleteChannel chan bool   `json:"-"`
+	CancelChannel chan string `json:"-"`
 }
 
 func createTransferHandler(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +122,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		DropTargetTable        bool   `json:"drop-target-table-if-exists"`
 		CreateTargetTable      bool   `json:"create-target-table"`
 		Delimiter              string `json:"delimiter"`
-		Newline                string `json:"newline"`
+		NewLine                string `json:"new-line"`
 		Null                   string `json:"null"`
 		KeepFiles              bool   `json:"keep-files"`
 	}
@@ -135,83 +133,57 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transfer := Transfer{
-		SourceName:              input.SourceName,
-		SourceType:              input.SourceType,
-		SourceConnectionString:  input.SourceConnectionString,
-		TargetName:              input.TargetName,
-		TargetType:              input.TargetType,
-		TargetConnectionString:  input.TargetConnectionString,
-		TargetSchema:            input.TargetSchema,
-		TargetHostname:          input.TargetHostname,
-		TargetPort:              input.TargetPort,
-		TargetUsername:          input.TargetUsername,
-		TargetPassword:          input.TargetPassword,
-		TargetDatabase:          input.TargetDatabase,
-		Query:                   input.Query,
-		TargetTable:             input.TargetTable,
-		DropTargetTableIfExists: input.DropTargetTable,
-		CreateTargetTable:       input.CreateTargetTable,
-		Delimiter:               input.Delimiter,
-		Newline:                 input.Newline,
-		Null:                    input.Null,
-		KeepFiles:               input.KeepFiles,
-	}
-
-	transfer.TmpDir = filepath.Join(globalTmpDir, transfer.Id)
-	err = os.MkdirAll(transfer.TmpDir, 0600)
-	if err != nil {
-		serverErrorResponse(w, r, http.StatusInternalServerError, fmt.Errorf("error creating temp dir :: %v", err))
-		return
-	}
-
-	infoLog.Printf("temp dir %v created", transfer.TmpDir)
-
-	transfer.PipeFileDir = filepath.Join(transfer.TmpDir, "pipe-files")
-	err = os.MkdirAll(transfer.PipeFileDir, 0600)
-	if err != nil {
-		serverErrorResponse(w, r, http.StatusInternalServerError, fmt.Errorf("error creating pipe file dir :: %v", err))
-		return
-	}
-
-	infoLog.Printf("pipe file dir %v created", transfer.PipeFileDir)
-
-	transfer.FinalCsvDir = filepath.Join(transfer.TmpDir, "final-csv")
-	err = os.MkdirAll(transfer.FinalCsvDir, 0600)
-	if err != nil {
-		serverErrorResponse(w, r, http.StatusInternalServerError, fmt.Errorf("error creating final csv dir :: %v", err))
-		return
-	}
-
-	infoLog.Printf("final csv dir %v created", transfer.FinalCsvDir)
+	transferId := uuid.New().String()
+	tmpDir := filepath.Join(globalTmpDir, transferId)
 
 	if input.Delimiter == "" {
 		input.Delimiter = "{dlm}"
 	}
-	transfer.Delimiter = input.Delimiter
-
-	if input.Newline == "" {
-		input.Newline = "{nwln}"
+	if input.NewLine == "" {
+		input.NewLine = "{nwln}"
 	}
-	transfer.Newline = input.Newline
-
 	if input.Null == "" {
 		input.Null = "{nll}"
 		if input.TargetType == TypeMySQL {
 			input.Null = `NULL`
 		}
 	}
-	transfer.Null = input.Null
-
 	if input.SourceName == "" {
 		input.SourceName = input.SourceType
 	}
-	transfer.SourceName = input.SourceName
-
 	if input.TargetName == "" {
 		input.TargetName = input.TargetType
 	}
-	transfer.TargetName = input.TargetName
+
+	transfer := Transfer{
+		Id:                      transferId,
+		CreatedAt:               time.Now(),
+		Status:                  StatusQueued,
+		TmpDir:                  tmpDir,
+		PipeFileDir:             filepath.Join(tmpDir, "pipe-files"),
+		FinalCsvDir:             filepath.Join(tmpDir, "final-csvs"),
+		KeepFiles:               input.KeepFiles,
+		Delimiter:               input.Delimiter,
+		NewLine:                 input.NewLine,
+		Null:                    input.Null,
+		SourceName:              input.SourceName,
+		SourceType:              input.SourceType,
+		SourceConnectionString:  input.SourceConnectionString,
+		TargetName:              input.TargetName,
+		TargetType:              input.TargetType,
+		TargetConnectionString:  input.TargetConnectionString,
+		TargetHostname:          input.TargetHostname,
+		TargetPort:              input.TargetPort,
+		TargetUsername:          input.TargetUsername,
+		TargetPassword:          input.TargetPassword,
+		TargetDatabase:          input.TargetDatabase,
+		Query:                   input.Query,
+		TargetSchema:            input.TargetSchema,
+		TargetTable:             input.TargetTable,
+		DropTargetTableIfExists: input.DropTargetTable,
+		CreateTargetTable:       input.CreateTargetTable,
+		CancelChannel:           make(chan string),
+	}
 
 	v := newValidator()
 	if validateTransferInput(v, transfer); !v.valid() {
@@ -219,15 +191,13 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transfer.CancelChannel = make(chan string)
-	transfer.ErrorChannel = make(chan error)
-	transfer.CompleteChannel = make(chan bool)
-
 	transferMap.Set(transfer.Id, transfer)
 
-	go runTransfer(transfer)
+	infoLog.Printf(`ip %v created transfer %v to transfer from %v to %v`, r.RemoteAddr,
+		transfer.Id, input.SourceName, input.TargetName)
+	infoLog.Printf("transfer %v is now queued", transfer.Id)
 
-	infoLog.Printf(`ip %v created transfer %v to transfer from %v to %v`, r.RemoteAddr, transfer.Id, input.SourceName, input.TargetName)
+	go runTransfer(transfer)
 
 	headers := make(http.Header)
 	headers.Set("Location", fmt.Sprintf("/transfers/%s", transfer.Id))
@@ -286,13 +256,17 @@ func cancelTransferHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if transfer.Status != StatusRunning {
-		clientErrorResponse(w, r, http.StatusBadRequest, fmt.Errorf("cannot cancel transfer with status of %v", transfer.Status))
+		clientErrorResponse(w, r, http.StatusBadRequest,
+			fmt.Errorf("cannot cancel transfer with status of %v", transfer.Status),
+		)
 		return
 	}
 
 	closed := safeCancel(transfer.CancelChannel, r.RemoteAddr)
 	if closed {
-		serverErrorResponse(w, r, http.StatusInternalServerError, fmt.Errorf("cancel channel was closed, cannot cancel transfer"))
+		serverErrorResponse(w, r, http.StatusInternalServerError,
+			fmt.Errorf("cancel channel was closed, cannot cancel transfer"),
+		)
 		return
 	}
 
