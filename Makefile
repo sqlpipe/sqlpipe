@@ -32,6 +32,14 @@ compose: build/sqlpipe
 	docker-compose up --build -d
 	docker-compose logs -f
 
+## postgresql: run postgresql
+.PHONY: postgresql
+postgresql:
+	docker compose down postgresql
+	docker compose up -d postgresql
+	clear
+	docker compose logs -f postgresql
+
 # ==================================================================================== #
 # QUALITY CONTROL
 # ==================================================================================== #
