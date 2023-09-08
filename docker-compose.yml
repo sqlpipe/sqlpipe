@@ -47,7 +47,8 @@ services:
       POSTGRES_PASSWORD: Mypass123
       TZ: America/Los_Angeles
     volumes:
-      - ./setup-sql/postgresql.sql:/docker-entrypoint-initdb.d/setup.sql
+      - ./setup-sql/postgresql-simple.sql:/docker-entrypoint-initdb.d/setup-1.sql
+      - ./setup-sql/postgresql-complex.sql:/docker-entrypoint-initdb.d/setup-2.sql
     deploy:
       resources:
         limits:

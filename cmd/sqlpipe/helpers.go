@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
@@ -147,4 +149,33 @@ func recoverPanic(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func maxColumnByteLength(filename, null string, columnIndex int) (int, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	r := csv.NewReader(file)
+	maxLength := 0
+
+	for {
+		record, err := r.Read()
+		if err != nil {
+			break
+		}
+
+		if columnIndex < 0 || columnIndex >= len(record) {
+			return 0, fmt.Errorf("invalid column index %d", columnIndex)
+		}
+
+		length := len(record[columnIndex])
+		if length > maxLength {
+			maxLength = length
+		}
+	}
+
+	return maxLength + len(null), nil
 }

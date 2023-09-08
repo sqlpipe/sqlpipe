@@ -1,5 +1,3 @@
-create database mydb;
-
 \c mydb;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -267,7 +265,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE TABLE my_table (
+CREATE TABLE complex_table (
     random_ascii_char char(32),
     random_unicode_char char(32),
     empty_char char(32),
@@ -358,8 +356,8 @@ DO $$
 DECLARE 
     counter INTEGER := 0;
 BEGIN 
-    WHILE counter < 1000 LOOP
-        INSERT INTO my_table (
+    WHILE counter < 100 LOOP
+        INSERT INTO complex_table (
             random_ascii_char,
             random_unicode_char,
             empty_char,

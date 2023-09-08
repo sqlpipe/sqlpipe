@@ -1,7 +1,7 @@
 FROM debian:12.1
 
 RUN apt-get update
-RUN apt-get install -y curl postgresql-client libaio1 unixodbc unixodbc-dev unzip
+RUN apt-get install -y curl postgresql-client libaio1 unixodbc unixodbc-dev unzip vim
 
 # install bcp
 RUN curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc

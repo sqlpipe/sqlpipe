@@ -514,7 +514,7 @@ func (system Mysql) runInsertCmd(
 	defer mysql.DeregisterLocalFile(finalCsvLocation)
 
 	copyQuery := fmt.Sprintf(
-		`load data local infile '%v' into table %v fields terminated by ','
+		`load data local infile '%v' into table %v fields escaped by '' terminated by ','
 		optionally enclosed by '"' lines terminated by '\n';`, finalCsvLocation,
 		transfer.TargetTable)
 

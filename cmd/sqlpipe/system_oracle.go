@@ -131,7 +131,7 @@ func (system Oracle) dbTypeToPipeType(
 
 func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error) {
 	switch columnInfo.pipeType {
-	case "nvarchar":
+	case "nvarchar", "varchar":
 		if columnInfo.lengthOk {
 			if columnInfo.length <= 0 {
 				createType = "varchar2(4000)"
@@ -143,21 +143,7 @@ func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType str
 		} else {
 			createType = "varchar2(4000)"
 		}
-	case "varchar":
-		if columnInfo.lengthOk {
-			if columnInfo.length <= 0 {
-				createType = "varchar2(4000)"
-			} else if columnInfo.length <= 4000 {
-				createType = fmt.Sprintf("varchar2(%v)", columnInfo.length)
-			} else {
-				createType = "clob"
-			}
-		} else {
-			createType = "varchar2(4000)"
-		}
-	case "ntext":
-		createType = "clob"
-	case "text":
+	case "ntext", "text":
 		createType = "clob"
 	case "int64":
 		createType = "number(19)"
@@ -379,31 +365,29 @@ func (system Oracle) convertPipeFiles(
 	transfer Transfer,
 ) <-chan string {
 
-	pipeFileChannelOut := make(chan string)
+	convertedFinalCsvChannel := convertPipeFilesCommon(ctx, pipeFileChannelIn, errorChannel, columnInfo, transfer, system)
 
+	finalCsvChannelOut := make(chan string)
 	go func() {
-		defer close(pipeFileChannelOut)
+		defer close(finalCsvChannelOut)
 
-		for pipeFileName := range pipeFileChannelIn {
-			pipeFile, err := os.Open(pipeFileName)
-			if err != nil {
-				errorChannel <- fmt.Errorf("error opening pipeFile :: %v", err)
-				return
-			}
-
-			defer func() {
-				pipeFile.Close()
-				if !transfer.KeepFiles {
-					os.Remove(pipeFileName)
-				}
-			}()
-
+		for finalCsvFileName := range convertedFinalCsvChannel {
 			// strip path from pipeFile name, get number
-			fileNum, err := getFileNum(pipeFileName)
+			fileNum, err := getFileNum(finalCsvFileName)
 			if err != nil {
 				errorChannel <- fmt.Errorf("error getting file number :: %v", err)
 				return
 			}
+
+			finalCsvFile, err := os.Open(finalCsvFileName)
+			if err != nil {
+				errorChannel <- fmt.Errorf("error opening final csv :: %v", err)
+				return
+			}
+
+			defer func() {
+				finalCsvFile.Close()
+			}()
 
 			oracleCtlFile, err := os.Create(filepath.Join(transfer.FinalCsvDir,
 				fmt.Sprintf("%v.ctl", fileNum)))
@@ -415,7 +399,7 @@ func (system Oracle) convertPipeFiles(
 
 			controlFileBuilder := strings.Builder{}
 
-			controlFileBuilder.WriteString("LOAD DATA infile '")
+			controlFileBuilder.WriteString(`LOAD DATA CHARACTERSET 'AL32UTF8' infile '`)
 			controlFileBuilder.WriteString(filepath.Join(transfer.FinalCsvDir,
 				fmt.Sprintf("%v.csv", fileNum)))
 			controlFileBuilder.WriteString(`' append into table `)
@@ -423,15 +407,14 @@ func (system Oracle) convertPipeFiles(
 			controlFileBuilder.WriteString(".")
 			controlFileBuilder.WriteString(transfer.TargetTable)
 			controlFileBuilder.WriteString(
-				` fields csv with embedded terminated by ',' optionally enclosed by '"' 
-					trailing nullcols (`)
+				` fields csv with embedded terminated by ',' optionally enclosed by '"' (`)
 
 			firstCol := true
 
-			for _, column := range columnInfo {
+			for i, column := range columnInfo {
 
 				if !firstCol {
-					controlFileBuilder.WriteString(",")
+					controlFileBuilder.WriteString(" ,")
 				}
 
 				controlFileBuilder.WriteString(column.name)
@@ -444,6 +427,15 @@ func (system Oracle) convertPipeFiles(
 				case "datetimetz":
 					controlFileBuilder.WriteString(
 						" timestamp with time zone 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM'")
+				default:
+					maxLen, err := maxColumnByteLength(finalCsvFileName, transfer.Null, i)
+					if err != nil {
+						errorChannel <- fmt.Errorf("error getting max column length :: %v", err)
+						return
+					}
+					controlFileBuilder.WriteString(" char(")
+					controlFileBuilder.WriteString(fmt.Sprint(maxLen))
+					controlFileBuilder.WriteString(") PRESERVE BLANKS")
 				}
 
 				controlFileBuilder.WriteString(" nullif ")
@@ -470,13 +462,13 @@ func (system Oracle) convertPipeFiles(
 				return
 			}
 
-			pipeFileChannelOut <- pipeFileName
+			finalCsvChannelOut <- finalCsvFileName
 		}
 
 		infoLog.Printf("transfer %v finished creating sqllder ctl files", transfer.Id)
 	}()
 
-	return convertPipeFilesCommon(ctx, pipeFileChannelOut, errorChannel, columnInfo, transfer, system)
+	return finalCsvChannelOut
 }
 
 func (system Oracle) insertFinalCsvs(
