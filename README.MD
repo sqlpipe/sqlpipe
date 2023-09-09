@@ -14,7 +14,7 @@ SQLpipe supports moving data interchangably between the following DB types:
 
 ## Installation
 There are three ways to install SQLpipe. In order of ease, they are:
-- Pull official Docker image.
+- Run official Docker image.
 - Download official SQLpipe executable.
 - Build SQLpipe from source.
 
