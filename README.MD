@@ -19,7 +19,7 @@ There are three ways to install SQLpipe. In order of ease, they are:
 - Build SQLpipe from source.
 
 ### Docker image
-Our official Docker image comes pre-installed with the SQLpipe executable and all needed drivers.
+Our official Docker image comes pre-installed with the SQLpipe executable and all dependencies.
 
 Github stars really help us - we require one to download the image. Visit the [SQLpipe downloads page](https://downloads.sqlpipe.com) to verify your star, then run the following command:
 
