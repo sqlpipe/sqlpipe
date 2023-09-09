@@ -27,9 +27,7 @@ Github stars really help us - we require one to download the image. Visit the [S
 docker run --publish 9000:9000 --name sqlpipe sqlpipe/sqlpipe:latest
 ```
 
-That's it! SQLpipe is now ready to start transferring data.
-
-You can un-star the repo at any time - there are no usage restrictions.
+That's it! SQLpipe is now ready to start transferring data. You can un-star the repo at any time - there are no usage restrictions... But we hope you won't 🙂​
 
 ### Download executable
 If you prefer to use SQLpipe without Docker, you can download the program itself on the [SQLpipe downloads page](https://downloads.sqlpipe.com).
