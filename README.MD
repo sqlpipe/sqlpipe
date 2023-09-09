@@ -2,19 +2,10 @@
 
 SQLpipe is a free, open-source program that can move the result of SQL queries between different RDBMS systems.
 
-SQLpipe is also a company! We make money from database migration and data integration services, as well as paid data engineering products. Please check out the [SQLpipe website](https://sqlpipe.com) if you'd like to learn more about us.
+SQLpipe is also a company! We offer database migration and data integration services, as well as paid data engineering products. Please check out the [SQLpipe website](https://sqlpipe.com) if you'd like to learn more about us.
 
 ## Supported DB types
-SQLpipe supports moving data between the following DB types.
-
-### Sources
-- PostgreSQL `postgresql`
-- SQL Server `mssql`
-- MySQL `mysql`
-- Oracle `oracle`
-- Snowflake `snowflake`
-
-### Targets
+SQLpipe supports moving data interchangably between the following DB types:
 - PostgreSQL `postgresql`
 - SQL Server `mssql`
 - MySQL `mysql`
@@ -28,9 +19,9 @@ There are three ways to install SQLpipe. In order of ease, they are:
 - Build SQLpipe from source.
 
 ### Docker image
-Github stars really help us and we require one to access our container registry. You can un-star SQLpipe afterwards, if you want. There are no usage restrictions.
+Our official Docker image comes pre-installed with the SQLpipe executable and all needed drivers.
 
-Visit the [SQLpipe downloads page](https://downloads.sqlpipe.com) to verify your star, then run the following command:
+Github stars really help us - we require one to download the image. Visit the [SQLpipe downloads page](https://downloads.sqlpipe.com) to verify your star, then run the following command:
 
 ```
 docker run --publish 9000:9000 --name sqlpipe sqlpipe/sqlpipe:latest
@@ -61,10 +52,12 @@ Those dependencies are:
 - psql to insert into PostgreSQL
 - bcp to insert into SQL Server
 - SQL*Loader  to insert into Oracle.
+- MySQL inserts do not require any dependencies
+- Snowflake inserts do not require any dependencies
 
 Each of these clients should have readily accesible installation instructions, just search on the web or ask an LLM for help.
 
-You do not need to install dependencies that you won't use - for example, if you're only inserting into Snowflake, you do not need to install anything.
+You do not need to install dependencies that you won't use - for example, if your only insertion target is Snowflake, you do not need to install anything.
 
 #### Build SQLpipe
 Assuming you have Go installed (you can check by running `go version`), you just need to clone this repository and run:
@@ -73,7 +66,7 @@ Assuming you have Go installed (you can check by running `go version`), you just
 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
 ```
 
-Go will be built and put in the `/bin` directory of this repo. You can then run SQLpipe by navigating to the directory containing the file and executing it.
+SQLpipe will be built and put in the `/bin` directory of this repo. You can then run SQLpipe by navigating to the directory containing the file and executing it.
 
 ```
 cd bin
@@ -85,7 +78,7 @@ SQLpipe exposes its functionality through a JSON API. It has the following route
 
 -  `POST /transfers/create` - Creates a transfer
 -  `GET /transfers/show/:id` - Shows an individual transfer
--  `GET /transfers/list` - Lists all transfers
+-  `GET /transfers/list` - Lists transfers
 -  `PATCH /transfers/cancel/:id` - Cancels a transfer
 -  `GET /healthcheck` - A healtcheck
 -  `GET /debug/vars` - Shows system statistics
@@ -153,8 +146,15 @@ target-database
 target-schema
 ```
 
+#### A note on using MySQL as a source:
+You must supply "parseTime=true" and a url-encoded IANA time zone name to the "loc" query parameter in the source connection string when using MySQL as a source. If your database was in the US/Pacific IANA time zone, for example:
+```
+my_username:my_password@tcp(my_hostname.com:3306)/my_db_name?parseTime=true&loc=US%2FPacific
+```
+You can see [IANA time zone names on Wikipedia](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) and can learn about [URL encoding on W3 Schools](https://www.w3schools.com/html/html_urlencode.asp).
+
 #### Optional fields
-The following are optional on all transfers.
+The following are optional on all transfers:
 ```
 source-name
 target-name
@@ -176,16 +176,16 @@ keep-files
 - `target-schema`: For systems that support schemas, you must specify which schema to put the data in.
 - `target-table`: The table that SQLpipe will move the data to.
 - `target-hostname`: For some systems, in addition to specifying a connection string, you must also specify the hostname.
-- `target-port`: For some systems... You must also specify the port.
-- `target-username`: For some systems... You must also specify the username.
-- `target-password`: For some systems... You must also specify the password.
-- `target-database`:  For some systems... You must also specify the database.
+- `target-port`: For some systems, in addition to specifying a connection string, you must also specify the port.
+- `target-username`: For some systems, in addition to specifying a connection string, you must also specify the username.
+- `target-password`: For some systems, in addition to specifying a connection string, you must also specify the password.
+- `target-database`:  For some systems, in addition to specifying a connection string, you must also specify the database name.
 - `query`: The query which you want to move.
 - `drop-target-table-if-exists`: Drops the target table (if it exists) before moving the data.
-- `create-target-table`: Creates the target table before moving the data. SQLpipe does a pretty good job mapping from one DB's types to another.
+- `create-target-table`: Creates the target table before moving the data. SQLpipe intelligently maps from one DB's types to another.
 - `delimiter`: Some DB clients do not support [RFC 4180 CSVs](https://datatracker.ietf.org/doc/html/rfc4180) (shame on them!). This optional flag lets you set a custom multi-character delimiter - you should pick one that will not appear on your data. The default is `{dlm}`.
-- `new-line`: Some DB clients... The default is `{nwln}`.
-- `null`: Some DB clients... The default is `{nll}`
+- `new-line`: Some DB clients do not support [RFC 4180 CSVs](https://datatracker.ietf.org/doc/html/rfc4180). This optional flag lets you set a custom multi-character newline. The default is `{nwln}`.
+- `null`: Some DB clients do not support [RFC 4180 CSVs](https://datatracker.ietf.org/doc/html/rfc4180). This optional flag lets you set a custom multi-character null value. The default is `{nll}`
 - `keep-files`: SQLpipe uses your OS's default temp directory to create working directories for each transfer. It deletes these files after the transfer is done unless you mark this flag as `true`. This can be helpful for troubleshooting or therapeutically watching your data move in real time.
 
 #### Create transfer response
@@ -220,7 +220,7 @@ If you send a valid transfer creation request, you'll get a response that looks 
 }
 ```
 
-If you send an invalid request, SQLpipe will do its best to tell you what's wrong. For example, if you forgot to specify a target table, and Oracle's target port (a required extra field for Oracle targets), the response would look like this:
+If you send an invalid request, SQLpipe will do its best to tell you what's wrong. For example, if you were trying to transfer from PostgreSQL to Oracle and forgot to specify a target table and Oracle's target port, the response would look like this:
 
 ```
 {
@@ -291,7 +291,7 @@ curl localhost:9000/transfers/list?status=error
 ```
 
 ### Cancelling a transfer
-You can cancel a running transfer by sending a PATCH reqest to the `/transfers/cancel/:id` route - here is an example:
+You can cancel a running transfer by sending a PATCH request to the `/transfers/cancel/:id` route - here is an example:
 
 ```
 curl -X PATCH localhost:9000/transfers/cancel/0a896d4c-edfc-4f60-bff5-2d03581707c3
