@@ -2,7 +2,7 @@
 
 SQLpipe is a free, open-source program that can move the result of SQL queries between different RDBMS systems.
 
-SQLpipe is also a company! We offer database migration and data integration services, as well as paid data engineering products. Please check out the [SQLpipe website](https://sqlpipe.com) if you'd like to learn more about us.
+SQLpipe is also a company! We offer database migration and data integration services as well as paid data engineering products. Please check out the [SQLpipe website](https://sqlpipe.com) if you'd like to learn more about us.
 
 ## Supported DB types
 SQLpipe supports moving data interchangably between the following DB types:
