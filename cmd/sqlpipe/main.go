@@ -54,7 +54,7 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	infoLog.Printf("starting sqlpipe on port %d", port)
+	infoLog.Printf("now listening on port %d", port)
 
 	err = srv.ListenAndServe()
 	if err != nil {

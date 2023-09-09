@@ -48,11 +48,11 @@ type Transfer struct {
 
 	SourceName             string `json:"source-name"`
 	SourceType             string `json:"source-type"`
-	SourceConnectionString string `json:"source-connection-string"`
+	SourceConnectionString string `json:"-"`
 
 	TargetName             string `json:"target-name"`
 	TargetType             string `json:"target-type"`
-	TargetConnectionString string `json:"target-connection-string"`
+	TargetConnectionString string `json:"-"`
 
 	TargetHostname string `json:"target-hostname,omitempty"`
 	TargetPort     int    `json:"target-port,omitempty"`
