@@ -78,15 +78,10 @@ services:
       - "1521:1521"
     environment:
       - ORACLE_PWD=Mypass123
+      - NLS_CHARACTERSET=AL32UTF8
     volumes:
       - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
     deploy:
       resources:
         limits:
           memory: 8G
-
-# volumes:
-#   mssql-data:
-#   oracle-data:
-#   postgresql-data:
-#   mysql-data:

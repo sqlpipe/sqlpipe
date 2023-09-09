@@ -26,6 +26,9 @@ func handleUpdates(
 			transfer.StoppedAt = fmt.Sprint(time.Now())
 			infoLog.Printf("transfer %v cancelled by ip %v", transfer.Id, ip)
 			exit = true
+			defer func() {
+				transfer.CancelledChannel <- true
+			}()
 		case err := <-errorChannel:
 			cancel()
 			transfer.Status = StatusError

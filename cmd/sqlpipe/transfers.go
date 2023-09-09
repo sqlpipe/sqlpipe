@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,38 +29,6 @@ var (
 	DriverOracle     = "oracle"
 	DriverSnowflake  = "snowflake"
 )
-
-type SafeMap struct {
-	mu sync.RWMutex
-	m  map[string]Transfer
-}
-
-func NewSafeMap() *SafeMap {
-	return &SafeMap{
-		m: make(map[string]Transfer),
-	}
-}
-
-func (sm *SafeMap) Set(key string, value Transfer) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	sm.m[key] = value
-}
-
-func (sm *SafeMap) Get(key string) (Transfer, bool) {
-	sm.mu.RLock()
-	defer sm.mu.Unlock()
-	val, ok := sm.m[key]
-	return val, ok
-}
-
-func (sm *SafeMap) Delete(key string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	delete(sm.m, key)
-}
-
-var transferMap = NewSafeMap()
 
 type Transfer struct {
 	Id        string    `json:"id"`
@@ -100,7 +67,8 @@ type Transfer struct {
 	DropTargetTableIfExists bool `json:"drop-target-table-if-exists"`
 	CreateTargetTable       bool `json:"create-target-table"`
 
-	CancelChannel chan string `json:"-"`
+	CancelChannel    chan string `json:"-"`
+	CancelledChannel chan bool   `json:"-"`
 }
 
 func createTransferHandler(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +151,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		DropTargetTableIfExists: input.DropTargetTable,
 		CreateTargetTable:       input.CreateTargetTable,
 		CancelChannel:           make(chan string),
+		CancelledChannel:        make(chan bool),
 	}
 
 	v := newValidator()
@@ -227,7 +196,49 @@ func showTransferHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func listTransfersHandler(w http.ResponseWriter, r *http.Request) {
-	err := writeJSON(w, http.StatusOK, envelope{"transfers": transferMap}, nil)
+
+	// get query params
+	q := r.URL.Query()
+	status := q.Get("status")
+
+	transfers := transferMap.GetEntireMap()
+
+	v := newValidator()
+	v.check(
+		permittedValue(status,
+			StatusQueued,
+			StatusRunning,
+			StatusComplete,
+			StatusCancelled,
+			StatusError,
+			"",
+		),
+		"status",
+		fmt.Sprintf("must be empty or one of: %s, %s, %s, %s, %s",
+			StatusQueued,
+			StatusRunning,
+			StatusComplete,
+			StatusCancelled,
+			StatusError,
+		),
+	)
+
+	if !v.valid() {
+		failedValidationResponse(w, r, v.errors)
+		return
+	}
+
+	if status != "" {
+		filteredTransfers := make(map[string]Transfer)
+		for id, transfer := range transfers {
+			if transfer.Status == status {
+				filteredTransfers[id] = transfer
+			}
+		}
+		transfers = filteredTransfers
+	}
+
+	err := writeJSON(w, http.StatusOK, envelope{"transfers": transfers}, nil)
 	if err != nil {
 		serverErrorResponse(w, r, http.StatusInternalServerError, err)
 		return
@@ -267,6 +278,15 @@ func cancelTransferHandler(w http.ResponseWriter, r *http.Request) {
 		serverErrorResponse(w, r, http.StatusInternalServerError,
 			fmt.Errorf("cancel channel was closed, cannot cancel transfer"),
 		)
+		return
+	}
+
+	<-transfer.CancelledChannel
+
+	transfer, ok = transferMap.Get(id)
+	if !ok {
+		err := fmt.Errorf("transfer %v not found when trying to write response", id)
+		serverErrorResponse(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
