@@ -49,11 +49,9 @@ func handleUpdates(
 	}
 }
 
-func runTransfer(transfer Transfer) {
+func runTransfer(ctx context.Context, cancel context.CancelFunc, transfer Transfer) {
 	statusChannel := make(chan string)
 	errorChannel := make(chan error)
-
-	ctx, cancel := context.WithCancel(context.Background())
 
 	go handleUpdates(cancel, statusChannel, errorChannel, transfer)
 

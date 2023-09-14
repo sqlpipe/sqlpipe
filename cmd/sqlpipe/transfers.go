@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -166,7 +167,9 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		transfer.Id, input.SourceName, input.TargetName)
 	infoLog.Printf("transfer %v is now queued", transfer.Id)
 
-	go runTransfer(transfer)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go runTransfer(ctx, cancel, transfer)
 
 	headers := make(http.Header)
 	headers.Set("Location", fmt.Sprintf("/transfers/%s", transfer.Id))

@@ -49,6 +49,7 @@ services:
     volumes:
       - ./setup-sql/postgresql-simple.sql:/docker-entrypoint-initdb.d/setup-1.sql
       - ./setup-sql/postgresql-complex.sql:/docker-entrypoint-initdb.d/setup-2.sql
+      - ./setup-sql/postgresql-long.sql:/docker-entrypoint-initdb.d/setup-3.sql
     deploy:
       resources:
         limits:
