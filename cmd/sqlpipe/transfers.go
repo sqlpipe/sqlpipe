@@ -67,6 +67,7 @@ type Transfer struct {
 
 	DropTargetTableIfExists bool `json:"drop-target-table-if-exists"`
 	CreateTargetTable       bool `json:"create-target-table"`
+	CastBadDecimalToVarchar bool `json:"cast-bad-decimal-to-varchar"`
 
 	CancelChannel    chan string `json:"-"`
 	CancelledChannel chan bool   `json:"-"`
@@ -74,26 +75,27 @@ type Transfer struct {
 
 func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		SourceName             string `json:"source-name"`
-		SourceType             string `json:"source-type"`
-		SourceConnectionString string `json:"source-connection-string"`
-		TargetName             string `json:"target-name"`
-		TargetType             string `json:"target-type"`
-		TargetConnectionString string `json:"target-connection-string"`
-		TargetSchema           string `json:"target-schema"`
-		TargetHostname         string `json:"target-hostname"`
-		TargetPort             int    `json:"target-port"`
-		TargetUsername         string `json:"target-username"`
-		TargetPassword         string `json:"target-password"`
-		TargetDatabase         string `json:"target-database"`
-		Query                  string `json:"query"`
-		TargetTable            string `json:"target-table"`
-		DropTargetTable        bool   `json:"drop-target-table-if-exists"`
-		CreateTargetTable      bool   `json:"create-target-table"`
-		Delimiter              string `json:"delimiter"`
-		NewLine                string `json:"new-line"`
-		Null                   string `json:"null"`
-		KeepFiles              bool   `json:"keep-files"`
+		SourceName              string `json:"source-name"`
+		SourceType              string `json:"source-type"`
+		SourceConnectionString  string `json:"source-connection-string"`
+		TargetName              string `json:"target-name"`
+		TargetType              string `json:"target-type"`
+		TargetConnectionString  string `json:"target-connection-string"`
+		TargetSchema            string `json:"target-schema"`
+		TargetHostname          string `json:"target-hostname"`
+		TargetPort              int    `json:"target-port"`
+		TargetUsername          string `json:"target-username"`
+		TargetPassword          string `json:"target-password"`
+		TargetDatabase          string `json:"target-database"`
+		Query                   string `json:"query"`
+		TargetTable             string `json:"target-table"`
+		DropTargetTable         bool   `json:"drop-target-table-if-exists"`
+		CreateTargetTable       bool   `json:"create-target-table"`
+		Delimiter               string `json:"delimiter"`
+		NewLine                 string `json:"new-line"`
+		Null                    string `json:"null"`
+		KeepFiles               bool   `json:"keep-files"`
+		CastBadDecimalToVarchar bool   `json:"cast-bad-decimal-to-varchar"`
 	}
 
 	err := readJSON(w, r, &input)
@@ -151,6 +153,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		TargetTable:             input.TargetTable,
 		DropTargetTableIfExists: input.DropTargetTable,
 		CreateTargetTable:       input.CreateTargetTable,
+		CastBadDecimalToVarchar: input.CastBadDecimalToVarchar,
 		CancelChannel:           make(chan string),
 		CancelledChannel:        make(chan bool),
 	}

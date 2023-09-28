@@ -139,7 +139,7 @@ func (system Mysql) dbTypeToPipeType(
 	}
 }
 
-func (system Mysql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error) {
+func (system Mysql) pipeTypeToCreateType(columnInfo ColumnInfo, transfer Transfer) (createType string, err error) {
 	switch columnInfo.pipeType {
 	case "nvarchar":
 		return "longtext", nil
@@ -179,7 +179,21 @@ func (system Mysql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 		if scaleOk && precisionOk {
 			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
 		} else {
-			return "varchar(128)", nil
+			if transfer.CastBadDecimalToVarchar {
+				warningLog.Printf(
+					"transfer %v: invalid decimal scale or precision, using varchar for column %v",
+					transfer.Id,
+					columnInfo.name,
+				)
+				return "longtext", nil
+			} else {
+				warningLog.Printf(
+					"transfer %v: invalid decimal scale or precision, using double float for column %v",
+					transfer.Id,
+					columnInfo.name,
+				)
+				return "double", nil
+			}
 		}
 
 	case "money":

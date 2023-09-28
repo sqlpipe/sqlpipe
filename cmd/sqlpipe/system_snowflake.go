@@ -107,6 +107,7 @@ func (system Snowflake) dbTypeToPipeType(
 
 func (system Snowflake) pipeTypeToCreateType(
 	columnInfo ColumnInfo,
+	transfer Transfer,
 ) (
 	createType string,
 	err error,

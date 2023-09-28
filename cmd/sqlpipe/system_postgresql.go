@@ -156,6 +156,7 @@ func (system Postgresql) dbTypeToPipeType(
 
 func (system Postgresql) pipeTypeToCreateType(
 	columnInfo ColumnInfo,
+	transfer Transfer,
 ) (
 	createType string,
 	err error,
@@ -301,9 +302,9 @@ func (system Postgresql) getPipeFileFormatters() (
 				return "", errors.New("unable to cast value to string in postgresqlPipeFileFormatters")
 			}
 
-			timeVal, err := time.Parse("15:04:05.000000", timeString)
+			timeVal, err := time.Parse("15:04:05.999999", timeString)
 			if err != nil {
-				return "", errors.New("error parsing time value in postgresqlPipeFileFormatters")
+				return "", fmt.Errorf("error parsing time value %v in postgresqlPipeFileFormatters", timeString)
 			}
 
 			return timeVal.Format(time.RFC3339Nano), nil

@@ -49,7 +49,7 @@ type System interface {
 	)
 
 	// called within createTable to convert pipe types into db specific create table types
-	pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error)
+	pipeTypeToCreateType(columnInfo ColumnInfo, transfer Transfer) (createType string, err error)
 
 	// *******************
 	// ** data movement **
@@ -301,7 +301,7 @@ func createTableCommon(
 		}
 		queryBuilder.WriteString(columnInfo[i].name)
 		queryBuilder.WriteString(" ")
-		createType, err := target.pipeTypeToCreateType(columnInfo[i])
+		createType, err := target.pipeTypeToCreateType(columnInfo[i], transfer)
 		if err != nil {
 			err = fmt.Errorf("error getting create type for column %v :: %v",
 				columnInfo[i].name, err)

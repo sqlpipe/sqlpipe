@@ -129,7 +129,7 @@ func (system Oracle) dbTypeToPipeType(
 	return pipeType, nil
 }
 
-func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error) {
+func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo, transfer Transfer) (createType string, err error) {
 	switch columnInfo.pipeType {
 	case "nvarchar", "varchar":
 		if columnInfo.lengthOk {
@@ -172,7 +172,21 @@ func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType str
 		if precisionOk && scaleOk {
 			createType = fmt.Sprintf("decimal(%v, %v)", columnInfo.precision, columnInfo.scale)
 		} else {
-			createType = "varchar2(64)"
+			if transfer.CastBadDecimalToVarchar {
+				warningLog.Printf(
+					"transfer %v: invalid decimal scale or precision, using varchar for column %v",
+					transfer.Id,
+					columnInfo.name,
+				)
+				return "varchar2(64)", nil
+			} else {
+				warningLog.Printf(
+					"transfer %v: invalid decimal scale or precision, using double float for column %v",
+					transfer.Id,
+					columnInfo.name,
+				)
+				createType = "BINARY_DOUBLE"
+			}
 		}
 
 	case "money":
@@ -284,7 +298,7 @@ func (system Oracle) getPipeFileFormatters() (
 			return fmt.Sprintf("%f", v), nil
 		},
 		"decimal": func(v interface{}) (pipeFileValue string, err error) {
-			return fmt.Sprintf("%s", v), nil
+			return fmt.Sprintf("%v", v), nil
 		},
 		"money": func(v interface{}) (pipeFileValue string, err error) {
 			return fmt.Sprintf("%s", v), nil

@@ -136,7 +136,7 @@ func (system Mssql) dbTypeToPipeType(
 	}
 }
 
-func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error) {
+func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo, transfer Transfer) (createType string, err error) {
 	switch columnInfo.pipeType {
 	case "nvarchar":
 		if columnInfo.lengthOk {
@@ -195,7 +195,21 @@ func (system Mssql) pipeTypeToCreateType(columnInfo ColumnInfo) (createType stri
 		if scaleOk && precisionOk {
 			return fmt.Sprintf("decimal(%v,%v)", columnInfo.precision, columnInfo.scale), nil
 		} else {
-			return "varchar(64)", nil
+			if transfer.CastBadDecimalToVarchar {
+				warningLog.Printf(
+					"transfer %v: invalid decimal scale or precision, using varchar for column %v",
+					transfer.Id,
+					columnInfo.name,
+				)
+				return "varchar(64)", nil
+			} else {
+				warningLog.Printf(
+					"transfer %v: invalid decimal scale or precision, using double float for column %v",
+					transfer.Id,
+					columnInfo.name,
+				)
+				return "float", nil
+			}
 		}
 	case "money":
 		return "money", nil
