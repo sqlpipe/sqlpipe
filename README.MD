@@ -98,22 +98,31 @@ SQLpipe exposes its functionality through a JSON API. It has the following route
 Before we get into the details, here are a few example curl commands to create SQLpipe transfers:
 
 ```
+
+**********************************
+** FULL TABLE TRANSFER EXAMPLES **
+**********************************
+
 -- mssql to snowflake full table transfer. drop and recreate target table in snowflake.
 -- note on mssql sources: to supply additional arguments to a target connection string, you must put the in the target-hostname field
-curl -d '{"keep-files": true, "source-name": "<enter a name>", "source-type": "mssql", "source-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "target-name": "<enter a name>", "target-type": "snowflake", "target-connection-string": "<username:<password>@<snowflake_account_identifier>/<db_name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists-if-not-exists": true, "source-schema": "dbo", "source-table": "<table to move>", "target-schema": "public", "target-table": "<name of new table>", "target-database": "<target db>"}' localhost:9000/transfers/create
-
--- postgresql to mssql query transfer. do not drop target table, but create it if it doesn't exist.
-curl -d '{"source-type": "postgresql", "source-connection-string": "postgresql://<username>:<password>@<hostname>:<port>/<db_name>", "target-type": "mssql", "target-connection-string": "Server=<hostname>,<port>;Database=<db_name>;User Id=<username>;Password=<password>;", "query": "select * from my_table", "target-table": "<new_table_name>", "drop-target-table-if-exists": false, "create-target-table-if-not-exists": true, "target-schema": "<schema_name>", "target-database": "<db_name>", "target-password": "<password>", "target-hostname": "<hostname>;<additional args, such as TrustServerCertificate=yes>", "target-username": "<username>"}' localhost:9000/transfers/create
-
--- mysql to oracle query transfer. do not drop target table, and do not attempt to create it.
--- note on mysql sources: you must supply a "parseTime" and url-encoded "loc" query parameter in the source connection string
-curl -d '{"source-type": "mysql", "source-connection-string": "<username>:<password@tcp(<hostname>:<port>)/<db_name>?parseTime=true&loc=<url_encoded_iana_time_zone>", "target-type": "oracle", "target-connection-string": "oracle://<username>:<password>@<hostname>:<port>/<db_name>", "query": "select * from my_table", "target-table": "<new_table_name>", "drop-target-table-if-exists": false, "create-target-table-if-not-exists": false, "target-schema": "<schema_name>", "target-hostname": "<hostname>", "target-username": "<username>", "target-password": "<password>", "target-database": "<db_name>", "target-port": <port>}' localhost:9000/transfers/create
+curl -d '{"source-name": "<any name you want>", "source-type": "mssql", "source-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "source-schema": "<schema name... such as dbo>", "source-table": "<table name>", "target-name": "<any name you want>", "target-type": "snowflake", "target-connection-string": "<snowflake username>:<snowflake password>@<account identifier>.snowflakecomputing.com/<db name>", "target-schema": "<schema name... such as public>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "target-database": "<db name>"}' localhost:9000/transfers/create
 
 -- oracle to postgresql full table transfer. drop and recreate.
 curl -d '{"source-type": "oracle", "source-connection-string": "oracle://<username>:<password>@<hostname>:<port>/<db_name>", "target-type": "postgresql", "target-connection-string": "postgresql://<username>:<password>@<hostname>:<port>/<db_name>", "source-schema": "<schema name>, "source-table": "<table to move>, "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "target-schema": "<schema_name>", "target-table": "<new_table_name>"}' localhost:9000/transfers/create
 
+*********************
+** QUERY TRANSFERS **
+*********************
+
+-- postgresql to mssql query transfer
+curl -d '{"source-name": "<any name you want>", "source-type": "postgresql", "source-connection-string": "postgresql://<username>:<password>@<hostname>:<port>/<db name>", "query": "<query to move>", "target-name": "<any name you want>", "target-type": "mssql", "target-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "target-schema": "<schema name... such as dbo>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "target-hostname": "<hostname>;<additional flags, such as TrustServerCertificate=yes>", "target-database": "<db name>", "target-username": "<username>", "target-password": "<password>"}' localhost:9000/transfers/create
+
+-- mysql to oracle query transfer. do not drop target table, and do not attempt to create it.
+-- note on mysql sources: you must supply a "parseTime" and url-encoded "loc" query parameter in the source connection string
+curl -d '{"source-name": "<any name you want>", "source-type": "mysql", "source-connection-string": "<username>:<password@tcp(<hostname>:<port>)/<db name>?parseTime=true&loc=US%2FPacific", "query": "<query to move>", "target-name": "<any name you want>", "target-type": "oracle", "target-connection-string": "oracle://<username>:<password>@<hostname>:<port>/<db name>?dba privilege=sysdba", "target-schema": "<schema name>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "target-hostname": "<hostname>", "target-port": <port number>, "target-database": "<db name>", "target-username": "<username>", "target-password": "<password>"}' localhost:9000/transfers/create
+
 -- snowflake to mysql query transfer. do not drop, but do create target table if it doens't exist.
-curl -d '{"source-type": "snowflake", "source-connection-string": "<username:<password>@<snowflake_account_identifier>/<db_name>", "target-type": "mysql", "target-connection-string": "<username>:<password@tcp(<hostname>:<port>)/<db_name>", "query": "select * from my_table", "target-table": "<new_table_name>", "drop-target-table-if-exists": false, "create-target-table-if-not-exists": true}' localhost:9000/transfers/create
+curl -d '{"source-name": "<any name you want>", "source-type": "snowflake", "source-connection-string": "<snowflake username>:<snowflake password>@<account identifier>.snowflakecomputing.com/<db name>", "query": "<query to move>", "target-name": "<any name you want>", "target-type": "mysql", "target-connection-string": "<username>:<password>@tcp(<hostname>:<port number>)/<db name>?parseTime=true&loc=US%2FPacific", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true}' localhost:9000/transfers/create
 ```
 
 As you can see from the examples, transfers are triggered by sending a POST request to the `/transfers/create` route with a specific JSON payload. The fields of that payload are listed and discussed below.

@@ -36,7 +36,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 16G
 
   postgresql:
     image: postgres
@@ -52,36 +52,36 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 16G
 
-  # mysql:
-  #   image: mysql:8.0
-  #   platform: linux/amd64
-  #   container_name: mysql
-  #   environment:
-  #     - MYSQL_ROOT_PASSWORD=Mypass123
-  #   ports:
-  #     - "3306:3306"
-  #   volumes:
-  #     - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 8G
-  #   command: --local-infile=1
+  mysql:
+    image: mysql:8.0
+    platform: linux/amd64
+    container_name: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=Mypass123
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    command: --local-infile=1
 
 
-  # oracle:
-  #   image: oracle:21.3.0
-  #   container_name: oracle
-  #   ports:
-  #     - "1521:1521"
-  #   environment:
-  #     - ORACLE_PWD=Mypass123
-  #     - NLS_CHARACTERSET=AL32UTF8
-  #   volumes:
-  #     - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 16G
+  oracle:
+    image: oracle:21.3.0
+    container_name: oracle
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=Mypass123
+      - NLS_CHARACTERSET=AL32UTF8
+    volumes:
+      - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 16G
