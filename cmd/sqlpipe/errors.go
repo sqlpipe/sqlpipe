@@ -6,56 +6,44 @@ import (
 	"net/http"
 )
 
-func (app *application) logError(r *http.Request, err error) {
-	app.logger.PrintError(err, map[string]string{
-		"request_method": r.Method,
-		"request_url":    r.URL.String(),
-	})
-}
+func clientErrorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
+	env := envelope{"error": err.Error()}
 
-func (app *application) errorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
-	app.logError(r, err)
-	env := map[string]any{"error": err.Error()}
-
-	err = app.respondWithJSON(w, status, env, nil)
+	err = writeJSON(w, status, env, nil)
 	if err != nil {
-		app.logError(r, err)
-		w.WriteHeader(500)
+		errorLog.Printf("error writing json :: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
 	}
 }
 
-func (app *application) notFoundResponse(w http.ResponseWriter, r *http.Request) {
-	message := errors.New("the requested resource could not be found")
-	app.errorResponse(w, r, http.StatusNotFound, message)
-}
+func serverErrorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
+	errorLog.Printf("error handling %v request to %v :: %v", r.Method, r.URL.String(), err)
 
-func (app *application) methodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
-	message := fmt.Errorf("the %s method is not supported for this resource", r.Method)
-	app.errorResponse(w, r, http.StatusMethodNotAllowed, message)
-}
+	env := envelope{"error": err.Error()}
 
-func (app *application) badRequestResponse(w http.ResponseWriter, r *http.Request, err error) {
-	app.errorResponse(w, r, http.StatusBadRequest, err)
-}
-
-func (app *application) failedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
-	env := map[string]any{"error": errors}
-
-	err := app.respondWithJSON(w, http.StatusUnprocessableEntity, env, nil)
+	err = writeJSON(w, status, env, nil)
 	if err != nil {
-		app.logError(r, err)
-		w.WriteHeader(500)
+		errorLog.Printf("error writing json :: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
-func (app *application) rateLimitExceededResponse(w http.ResponseWriter, r *http.Request) {
-	message := errors.New("rate limit exceeded")
-	app.errorResponse(w, r, http.StatusTooManyRequests, message)
+func notFoundResponse(w http.ResponseWriter, r *http.Request) {
+	err := errors.New("the requested resource could not be found")
+	clientErrorResponse(w, r, http.StatusNotFound, err)
 }
 
-func (app *application) invalidAuthenticationTokenResponse(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("WWW-Authenticate", "Bearer")
+func methodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
+	err := fmt.Errorf("the %v method is not supported for this resource", r.Method)
+	clientErrorResponse(w, r, http.StatusMethodNotAllowed, err)
+}
 
-	message := errors.New("invalid or missing authentication token")
-	app.errorResponse(w, r, http.StatusUnauthorized, message)
+func failedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
+	env := envelope{"error": errors}
+
+	err := writeJSON(w, http.StatusUnprocessableEntity, env, nil)
+	if err != nil {
+		errorLog.Printf("error writing json :: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }

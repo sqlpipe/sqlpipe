@@ -1,3 +1,52 @@
+# v1.14.4 (2023-07-13)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.14.3 (2023-06-13)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.14.2 (2023-04-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.14.1 (2023-04-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.14.0 (2023-03-21)
+
+* **Feature**: port v1 sdk 100-continue http header customization for s3 PutObject/UploadPart request and enable user config
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.24 (2023-03-10)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.23 (2023-02-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.22 (2023-02-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.21 (2022-12-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.20 (2022-12-02)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.19 (2022-10-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.18 (2022-10-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.13.17 (2022-09-20)
 
 * **Dependency Update**: Updated to the latest SDK module versions

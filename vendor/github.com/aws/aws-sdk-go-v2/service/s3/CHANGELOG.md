@@ -1,3 +1,118 @@
+# v1.37.0 (2023-07-13)
+
+* **Feature**: S3 Inventory now supports Object Access Control List and Object Owner as available object metadata fields in inventory reports.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.36.0 (2023-06-28)
+
+* **Feature**: The S3 LISTObjects, ListObjectsV2 and ListObjectVersions API now supports a new optional header x-amz-optional-object-attributes. If header contains RestoreStatus as the value, then S3 will include Glacier restore status i.e. isRestoreInProgress and RestoreExpiryDate in List response.
+
+# v1.35.0 (2023-06-16)
+
+* **Feature**: This release adds SDK support for request-payer request header and request-charged response header in the "GetBucketAccelerateConfiguration", "ListMultipartUploads", "ListObjects", "ListObjectsV2" and "ListObjectVersions" S3 APIs.
+
+# v1.34.1 (2023-06-15)
+
+* No change notes available for this release.
+
+# v1.34.0 (2023-06-13)
+
+* **Feature**: Integrate double encryption feature to SDKs.
+* **Bug Fix**: Fix HeadObject to return types.Nound when an object does not exist. Fixes [2084](https://github.com/aws/aws-sdk-go-v2/issues/2084)
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.33.1 (2023-05-04)
+
+* **Documentation**: Documentation updates for Amazon S3
+
+# v1.33.0 (2023-04-24)
+
+* **Feature**: added custom paginators for listMultipartUploads and ListObjectVersions
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.32.0 (2023-04-19)
+
+* **Feature**: Provides support for "Snow" Storage class.
+
+# v1.31.3 (2023-04-10)
+
+* No change notes available for this release.
+
+# v1.31.2 (2023-04-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.31.1 (2023-03-31)
+
+* **Documentation**: Documentation updates for Amazon S3
+
+# v1.31.0 (2023-03-21)
+
+* **Feature**: port v1 sdk 100-continue http header customization for s3 PutObject/UploadPart request and enable user config
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.30.6 (2023-03-10)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.30.5 (2023-02-22)
+
+* **Bug Fix**: Prevent nil pointer dereference when retrieving error codes.
+
+# v1.30.4 (2023-02-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.30.3 (2023-02-14)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.30.2 (2023-02-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.30.1 (2023-01-23)
+
+* No change notes available for this release.
+
+# v1.30.0 (2023-01-05)
+
+* **Feature**: Add `ErrorCodeOverride` field to all error structs (aws/smithy-go#401).
+
+# v1.29.6 (2022-12-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.29.5 (2022-12-02)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.29.4 (2022-11-22)
+
+* No change notes available for this release.
+
+# v1.29.3 (2022-11-16)
+
+* No change notes available for this release.
+
+# v1.29.2 (2022-11-10)
+
+* No change notes available for this release.
+
+# v1.29.1 (2022-10-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.29.0 (2022-10-21)
+
+* **Feature**: S3 on Outposts launches support for automatic bucket-style alias. You can use the automatic access point alias instead of an access point ARN for any object-level operation in an Outposts bucket.
+* **Bug Fix**: The SDK client has been updated to utilize the `aws.IsCredentialsProvider` function for determining if `aws.AnonymousCredentials` has been configured for the `CredentialProvider`.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.28.0 (2022-10-19)
+
+* **Feature**: Updates internal logic for constructing API endpoints. We have added rule-based endpoints and internal model parameters.
+
 # v1.27.11 (2022-09-20)
 
 * **Dependency Update**: Updated to the latest SDK module versions

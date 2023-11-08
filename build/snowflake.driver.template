@@ -1,3 +1,0 @@
-[Snowflake] 
-Description     = Snowflake driver
-Driver          =/home/ubuntu/snowflake_odbc/lib/libSnowflake.so
