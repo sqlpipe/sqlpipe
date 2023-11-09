@@ -107,17 +107,17 @@ Before we get into the details, here are a few example curl commands to create S
 
 -- mssql to snowflake full table transfer. drop and recreate target table in snowflake.
 -- note on mssql sources: to supply additional arguments to a target connection string, you must put the in the target-hostname field
-curl -d '{"source-name": "<any name you want>", "source-type": "mssql", "source-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "source-schema": "<schema name... such as dbo>", "source-table": "<table name>", "target-name": "<any name you want>", "target-type": "snowflake", "target-connection-string": "<snowflake username>:<snowflake password>@<account identifier>.snowflakecomputing.com/<db name>", "target-schema": "<schema name... such as public>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "target-database": "<db name>"}' localhost:9000/transfers/create
+curl -d '{"source-name": "<any name you want>", "source-type": "mssql", "source-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "source-schema": "<schema name... such as dbo>", "source-table": "<table name>", "target-name": "<any name you want>", "target-type": "snowflake", "target-connection-string": "<snowflake username>:<snowflake password>@<account identifier>.snowflakecomputing.com/<db name>", "target-schema": "<schema name... such as public>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "create-target-schema-if-not-exists": true, "target-database": "<db name>"}' localhost:9000/transfers/create
 
 -- oracle to postgresql full table transfer. drop and recreate.
-curl -d '{"source-type": "oracle", "source-connection-string": "oracle://<username>:<password>@<hostname>:<port>/<db_name>", "target-type": "postgresql", "target-connection-string": "postgresql://<username>:<password>@<hostname>:<port>/<db_name>", "source-schema": "<schema name>, "source-table": "<table to move>, "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "target-schema": "<schema_name>", "target-table": "<new_table_name>"}' localhost:9000/transfers/create
+curl -d '{"source-type": "oracle", "source-connection-string": "oracle://<username>:<password>@<hostname>:<port>/<db_name>", "target-type": "postgresql", "target-connection-string": "postgresql://<username>:<password>@<hostname>:<port>/<db_name>", "source-schema": "<schema name>, "source-table": "<table to move>, "drop-target-table-if-exists": true, "create-target-schema-if-not-exists": true, "create-target-table-if-not-exists": true, "target-schema": "<schema_name>", "target-table": "<new_table_name>"}' localhost:9000/transfers/create
 
 *********************
 ** QUERY TRANSFERS **
 *********************
 
 -- postgresql to mssql query transfer
-curl -d '{"source-name": "<any name you want>", "source-type": "postgresql", "source-connection-string": "postgresql://<username>:<password>@<hostname>:<port>/<db name>", "query": "<query to move>", "target-name": "<any name you want>", "target-type": "mssql", "target-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "target-schema": "<schema name... such as dbo>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "target-hostname": "<hostname>;<additional flags, such as TrustServerCertificate=yes>", "target-database": "<db name>", "target-username": "<username>", "target-password": "<password>"}' localhost:9000/transfers/create
+curl -d '{"source-name": "<any name you want>", "source-type": "postgresql", "source-connection-string": "postgresql://<username>:<password>@<hostname>:<port>/<db name>", "query": "<query to move>", "target-name": "<any name you want>", "target-type": "mssql", "target-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "target-schema": "<schema name... such as dbo>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-schema-if-not-exists": true, "create-target-table-if-not-exists": true, "target-hostname": "<hostname>;<additional flags, such as TrustServerCertificate=yes>", "target-database": "<db name>", "target-username": "<username>", "target-password": "<password>"}' localhost:9000/transfers/create
 
 -- mysql to oracle query transfer. do not drop target table, and do not attempt to create it.
 -- note on mysql sources: you must supply a "parseTime" and url-encoded "loc" query parameter in the source connection string
@@ -178,6 +178,7 @@ source-name
 target-name
 drop-target-table-if-exists
 create-target-table-if-not-exists
+create-target-schema-if-not-exists
 delimiter
 newline
 null
@@ -208,6 +209,7 @@ keep-files
 - `source-table`: The table that SQLpipe will move the data to.
 - `drop-target-table-if-exists`: Drops the target table (if it exists) before moving the data.
 - `create-target-table-if-not-exists`: Creates the target table before moving the data. SQLpipe intelligently maps from one DB's types to another.
+- `create-target-schema-if-not-exists`: Creates the target schema before moving the data. Only works in databases where schemas are supported. You will need sysdba privs to do this in Oracle.
 - `delimiter`: Some DB clients do not support [RFC 4180 CSVs](https://datatracker.ietf.org/doc/html/rfc4180) (shame on them!). This optional flag lets you set a custom multi-character delimiter - you should pick one that will not appear on your data. The default is `{dlm}`.
 - `newline`: Some DB clients do not support [RFC 4180 CSVs](https://datatracker.ietf.org/doc/html/rfc4180). This optional flag lets you set a custom multi-character newline. The default is `{nwln}`.
 - `null`: Some DB clients do not support [RFC 4180 CSVs](https://datatracker.ietf.org/doc/html/rfc4180). This optional flag lets you set a custom multi-character null value. The default is `{nll}`

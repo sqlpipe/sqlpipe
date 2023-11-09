@@ -26,29 +26,30 @@ type ConnectionInfo struct {
 }
 
 type Transfer struct {
-	Id                           string             `json:"id"`
-	CreatedAt                    time.Time          `json:"created-at"`
-	StoppedAt                    string             `json:"stopped-at,omitempty"`
-	Status                       string             `json:"status"`
-	Error                        string             `json:"error,omitempty"`
-	KeepFiles                    bool               `json:"keep-files"`
-	TmpDir                       string             `json:"tmp-dir"`
-	PipeFileDir                  string             `json:"pipe-file-dir"`
-	FinalCsvDir                  string             `json:"final-csv-dir"`
-	Context                      context.Context    `json:"-"`
-	Cancel                       context.CancelFunc `json:"-"`
-	SourceConnectionInfo         ConnectionInfo     `json:"source-connection-info"`
-	TargetConnectionInfo         ConnectionInfo     `json:"target-connection-info"`
-	DropTargetTableIfExists      bool               `json:"drop-target-table-if-exists"`
-	CreateTargetTableIfNotExists bool               `json:"create-target-table-if-not-exists"`
-	SourceSchema                 string             `json:"source-schema,omitempty"`
-	SourceTable                  string             `json:"source-table,omitempty"`
-	TargetSchema                 string             `json:"target-schema,omitempty"`
-	TargetTable                  string             `json:"target-name"`
-	Query                        string             `json:"query,omitempty"`
-	Delimiter                    string             `json:"delimiter"`
-	Newline                      string             `json:"newline"`
-	Null                         string             `json:"null"`
+	Id                            string             `json:"id"`
+	CreatedAt                     time.Time          `json:"created-at"`
+	StoppedAt                     string             `json:"stopped-at,omitempty"`
+	Status                        string             `json:"status"`
+	Error                         string             `json:"error,omitempty"`
+	KeepFiles                     bool               `json:"keep-files"`
+	TmpDir                        string             `json:"tmp-dir"`
+	PipeFileDir                   string             `json:"pipe-file-dir"`
+	FinalCsvDir                   string             `json:"final-csv-dir"`
+	Context                       context.Context    `json:"-"`
+	Cancel                        context.CancelFunc `json:"-"`
+	SourceConnectionInfo          ConnectionInfo     `json:"source-connection-info"`
+	TargetConnectionInfo          ConnectionInfo     `json:"target-connection-info"`
+	DropTargetTableIfExists       bool               `json:"drop-target-table-if-exists"`
+	CreateTargetSchemaIfNotExists bool               `json:"create-target-schema-if-not-exists"`
+	CreateTargetTableIfNotExists  bool               `json:"create-target-table-if-not-exists"`
+	SourceSchema                  string             `json:"source-schema,omitempty"`
+	SourceTable                   string             `json:"source-table,omitempty"`
+	TargetSchema                  string             `json:"target-schema,omitempty"`
+	TargetTable                   string             `json:"target-name"`
+	Query                         string             `json:"query,omitempty"`
+	Delimiter                     string             `json:"delimiter"`
+	Newline                       string             `json:"newline"`
+	Null                          string             `json:"null"`
 }
 
 var transferMap = NewSafeTransferMap()
@@ -107,28 +108,29 @@ func (sm *SafeTransferMap) Delete(key string) {
 
 func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		KeepFiles                    bool   `json:"keep-files"`
-		SourceName                   string `json:"source-name"`
-		SourceType                   string `json:"source-type"`
-		SourceConnectionString       string `json:"source-connection-string"`
-		TargetName                   string `json:"target-name"`
-		TargetType                   string `json:"target-type"`
-		TargetConnectionString       string `json:"target-connection-string"`
-		TargetHostname               string `json:"target-hostname"`
-		TargetPort                   int    `json:"target-port"`
-		TargetDatabase               string `json:"target-database"`
-		TargetUsername               string `json:"target-username"`
-		TargetPassword               string `json:"target-password"`
-		DropTargetTableIfExists      bool   `json:"drop-target-table-if-exists"`
-		CreateTargetTableIfNotExists bool   `json:"create-target-table-if-not-exists"`
-		SourceSchema                 string `json:"source-schema"`
-		SourceTable                  string `json:"source-table"`
-		TargetSchema                 string `json:"target-schema"`
-		TargetTable                  string `json:"target-table"`
-		Query                        string `json:"query"`
-		Delimiter                    string `json:"delimiter"`
-		Newline                      string `json:"newline"`
-		Null                         string `json:"null"`
+		KeepFiles                     bool   `json:"keep-files"`
+		SourceName                    string `json:"source-name"`
+		SourceType                    string `json:"source-type"`
+		SourceConnectionString        string `json:"source-connection-string"`
+		TargetName                    string `json:"target-name"`
+		TargetType                    string `json:"target-type"`
+		TargetConnectionString        string `json:"target-connection-string"`
+		TargetHostname                string `json:"target-hostname"`
+		TargetPort                    int    `json:"target-port"`
+		TargetDatabase                string `json:"target-database"`
+		TargetUsername                string `json:"target-username"`
+		TargetPassword                string `json:"target-password"`
+		DropTargetTableIfExists       bool   `json:"drop-target-table-if-exists"`
+		CreateTargetSchemaIfNotExists bool   `json:"create-target-schema-if-not-exists"`
+		CreateTargetTableIfNotExists  bool   `json:"create-target-table-if-not-exists"`
+		SourceSchema                  string `json:"source-schema"`
+		SourceTable                   string `json:"source-table"`
+		TargetSchema                  string `json:"target-schema"`
+		TargetTable                   string `json:"target-table"`
+		Query                         string `json:"query"`
+		Delimiter                     string `json:"delimiter"`
+		Newline                       string `json:"newline"`
+		Null                          string `json:"null"`
 	}
 
 	err := readJSON(w, r, &input)
@@ -178,27 +180,28 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	transfer := Transfer{
-		Id:                           id,
-		CreatedAt:                    time.Now(),
-		Status:                       StatusQueued,
-		KeepFiles:                    input.KeepFiles,
-		TmpDir:                       tmpDir,
-		PipeFileDir:                  pipeFileDir,
-		FinalCsvDir:                  finalCsvDir,
-		Delimiter:                    input.Delimiter,
-		Newline:                      input.Newline,
-		Null:                         input.Null,
-		Context:                      ctx,
-		Cancel:                       cancel,
-		SourceConnectionInfo:         sourceConnectionInfo,
-		TargetConnectionInfo:         targetConnectionInfo,
-		DropTargetTableIfExists:      input.DropTargetTableIfExists,
-		CreateTargetTableIfNotExists: input.CreateTargetTableIfNotExists,
-		SourceSchema:                 input.SourceSchema,
-		SourceTable:                  input.SourceTable,
-		TargetSchema:                 input.TargetSchema,
-		TargetTable:                  input.TargetTable,
-		Query:                        input.Query,
+		Id:                            id,
+		CreatedAt:                     time.Now(),
+		Status:                        StatusQueued,
+		KeepFiles:                     input.KeepFiles,
+		TmpDir:                        tmpDir,
+		PipeFileDir:                   pipeFileDir,
+		FinalCsvDir:                   finalCsvDir,
+		Delimiter:                     input.Delimiter,
+		Newline:                       input.Newline,
+		Null:                          input.Null,
+		Context:                       ctx,
+		Cancel:                        cancel,
+		SourceConnectionInfo:          sourceConnectionInfo,
+		TargetConnectionInfo:          targetConnectionInfo,
+		DropTargetTableIfExists:       input.DropTargetTableIfExists,
+		CreateTargetSchemaIfNotExists: input.CreateTargetSchemaIfNotExists,
+		CreateTargetTableIfNotExists:  input.CreateTargetTableIfNotExists,
+		SourceSchema:                  input.SourceSchema,
+		SourceTable:                   input.SourceTable,
+		TargetSchema:                  input.TargetSchema,
+		TargetTable:                   input.TargetTable,
+		Query:                         input.Query,
 	}
 
 	v := newValidator()
@@ -405,7 +408,7 @@ func runTransfer(transfer Transfer) (err error) {
 	}
 	defer target.closeConnectionPool(true)
 
-	if target.schemaRequired() {
+	if target.schemaRequired() && transfer.CreateTargetSchemaIfNotExists {
 		err = createSchemaIfNotExists(transfer.TargetSchema, target)
 		if err != nil {
 			return fmt.Errorf("error creating target schema :: %v", err)
