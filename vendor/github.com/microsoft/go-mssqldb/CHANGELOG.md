@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.6.0
+
+### Changed
+
+* Go.mod updated to Go 1.17
+* Azure SDK for Go dependencies updated
+
+### Features
+
+* Added `ActiveDirectoryAzCli` and `ActiveDirectoryDeviceCode` authentication types to `azuread` package
+* Always Encrypted encryption and decryption with 2 hour key cache (#116)
+* 'pfx', 'MSSQL_CERTIFICATE_STORE', and 'AZURE_KEY_VAULT' encryption key providers
+* TDS8 can now be used for connections by setting encrypt="strict"
+
+## 1.5.0
+
+### Features
+
+### Bug fixes
+
+* Handle extended character in SQL instance names for browser lookup (#122)
+
+## 1.4.0
+
+### Features
+
+* Adds UnmarshalJSON interface for UniqueIdentifier (#126)
+
+### Bug fixes
+
+* Fixes MarshalText prototype for UniqueIdentifier
+
+## 1.2.0
+
+### Features
+
+* A connector's dialer can now be used to resolve DNS if the dialer implements the `HostDialer` interface
+
 ## 1.0.0
 
 ### Features

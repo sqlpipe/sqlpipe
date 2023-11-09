@@ -353,61 +353,44 @@ func NewStmt(text string, conn *Connection) *Stmt {
 }
 
 func (stmt *Stmt) writePars() error {
-	if len(stmt.Pars) > 0 {
-		session := stmt.connection.session
-		session.PutBytes(7)
-		for _, par := range stmt.Pars {
-			if par.Flag == 0x80 {
-				continue
-			}
-			if !stmt.parse && par.Direction == Output && stmt.stmtType != PLSQL {
-				continue
-			}
-			if par.DataType == REFCURSOR {
-				session.PutBytes(1, 0)
-			} else if par.Direction == Input &&
-				(par.DataType == OCIClobLocator || par.DataType == OCIBlobLocator || par.DataType == OCIFileLocator) {
-				session.PutUint(len(par.BValue), 2, true, true)
-				session.PutClr(par.BValue)
+	session := stmt.connection.session
+	buffer := bytes.Buffer{}
+	for _, par := range stmt.Pars {
+		if par.Flag == 0x80 {
+			continue
+		}
+		if !stmt.parse && par.Direction == Output && stmt.stmtType != PLSQL {
+			continue
+		}
+		if par.DataType == REFCURSOR {
+			session.WriteBytes(&buffer, 1, 0)
+		} else if par.Direction == Input &&
+			(par.DataType == OCIClobLocator || par.DataType == OCIBlobLocator || par.DataType == OCIFileLocator) {
+			session.WriteUint(&buffer, len(par.BValue), 2, true, true)
+			session.WriteClr(&buffer, par.BValue)
+		} else {
+			if par.cusType != nil {
+				session.WriteBytes(&buffer, 0, 0, 0, 0)
+				size := len(par.BValue)
+				session.WriteUint(&buffer, size, 4, true, true)
+				session.WriteBytes(&buffer, 1, 1)
+				session.WriteClr(&buffer, par.BValue)
 			} else {
-				if par.cusType != nil {
-					//size := len(par.BValue) + 7
-					session.PutBytes(0, 0, 0, 0)
-					size := len(par.BValue)
-					session.PutUint(size, 4, true, true)
-					session.PutBytes(1, 1)
-					session.PutClr(par.BValue)
-					//tempBuffer := bytes.Buffer{}
-					//if par.MaxNoOfArrayElements > 0 {
-					//	tempBuffer.Write([]byte{0x84, 0x1, 0xfe})
-					//} else {
-					//	tempBuffer.Write([]byte{0x84, 0x1, 0xfe})
-					//}
-					//session.WriteUint(&tempBuffer, size, 4, true, false)
-					//tempBuffer.Write(par.BValue)
-					//session.PutClr(tempBuffer.Bytes())
-					//session.PutBytes(par.BValue...)
-				} else {
-					if par.MaxNoOfArrayElements > 0 {
-						if par.BValue == nil {
-							session.PutBytes(0)
-						} else {
-							session.PutBytes(par.BValue...)
-						}
+				if par.MaxNoOfArrayElements > 0 {
+					if par.BValue == nil {
+						session.WriteBytes(&buffer, 0)
 					} else {
-						session.PutClr(par.BValue)
+						session.WriteBytes(&buffer, par.BValue...)
 					}
+				} else {
+					session.WriteClr(&buffer, par.BValue)
 				}
 			}
-			//if par.DataType != RAW {
-			//
-			//}
 		}
-		//for _, par := range stmt.Pars {
-		//	if par.DataType == RAW {
-		//		session.PutClr(par.BValue)
-		//	}
-		//}
+	}
+	if buffer.Len() > 0 {
+		session.PutBytes(7)
+		session.PutBytes(buffer.Bytes()...)
 	}
 	return nil
 }
@@ -429,13 +412,13 @@ func (stmt *Stmt) write() error {
 			if stmt._hasReturnClause || stmt.stmtType == PLSQL || stmt.disableCompression {
 				exeOf |= 0x40000
 			}
-
 		} else {
 			session.PutBytes(3, 4, 0)
 		}
 		if stmt.connection.autoCommit {
 			execFlag = 1
 		}
+
 		session.PutUint(stmt.cursorID, 2, true, true)
 		session.PutUint(count, 2, true, true)
 		session.PutUint(exeOf, 2, true, true)
@@ -643,9 +626,10 @@ func (stmt *defaultStmt) _fetch(dataSet *DataSet) error {
 	if err != nil {
 		return err
 	}
-	if stmt.connection.connOption.Lob > 0 {
-		return stmt.decodePrim(dataSet)
-	}
+	//if stmt.connection.connOption.Lob > 0 {
+	//
+	//}
+	return stmt.decodePrim(dataSet)
 	return nil
 }
 func (stmt *defaultStmt) queryLobPrefetch(exeOp int, dataSet *DataSet) error {
@@ -973,6 +957,37 @@ func (stmt *defaultStmt) read(dataSet *DataSet) error {
 				}
 			}
 			dataSet.setBitVector(bitVector)
+		case 27:
+			count, err := session.GetInt(4, true, true)
+			if err != nil {
+				return err
+			}
+			for x := 0; x < count; x++ {
+				//refCursorAccessor.UnmarshalOneRow();
+				// this function is equal to load cursor so each item is a cursor
+				cursor := RefCursor{}
+				cursor.connection = stmt.connection
+				cursor.parent = stmt
+				cursor.autoClose = true
+				err = cursor.load()
+				if err != nil {
+					return err
+				}
+				// what we will do with cursor?
+			}
+			//internal List<TTCResultSet> ProcessImplicitResultSet(
+			//ref List<TTCResultSet> implicitRSList)
+			//{
+			//int num = (int) this.m_marshallingEngine.UnmarshalUB4();
+			//TTCRefCursorAccessor refCursorAccessor = new TTCRefCursorAccessor((ColumnDescribeInfo) null, this.m_marshallingEngine);
+			//for (int index = 0; index < num; ++index)
+			//refCursorAccessor.UnmarshalOneRow();
+			//if (implicitRSList != null)
+			//implicitRSList.AddRange((IEnumerable<TTCResultSet>) refCursorAccessor.m_TTCResultSetList);
+			//else
+			//implicitRSList = refCursorAccessor.m_TTCResultSetList;
+			//return implicitRSList;
+			//}
 		default:
 			err = stmt.connection.readResponse(msg)
 			if err != nil {
@@ -1933,6 +1948,7 @@ func (stmt *Stmt) _exec(args []driver.NamedValue) (*QueryResult, error) {
 		var par *ParameterInfo
 		switch tempOut := args[x].Value.(type) {
 		case sql.Out:
+			stmt.bulkExec = false
 			direction := Output
 			if tempOut.In {
 				direction = InOut
@@ -1942,6 +1958,7 @@ func (stmt *Stmt) _exec(args []driver.NamedValue) (*QueryResult, error) {
 				return nil, err
 			}
 		case *sql.Out:
+			stmt.bulkExec = false
 			direction := Output
 			if tempOut.In {
 				direction = InOut
@@ -1951,6 +1968,7 @@ func (stmt *Stmt) _exec(args []driver.NamedValue) (*QueryResult, error) {
 				return nil, err
 			}
 		case Out:
+			stmt.bulkExec = false
 			direction := Output
 			if tempOut.In {
 				direction = InOut
@@ -1960,6 +1978,7 @@ func (stmt *Stmt) _exec(args []driver.NamedValue) (*QueryResult, error) {
 				return nil, err
 			}
 		case *Out:
+			stmt.bulkExec = false
 			direction := Output
 			if tempOut.In {
 				direction = InOut
@@ -2141,10 +2160,21 @@ func (stmt *Stmt) useNamedParameters() error {
 	}
 	var parCollection = make([]ParameterInfo, 0, len(names))
 	for x := 0; x < len(names); x++ {
+		// search if name is repeated
+		repeated := false
+		for y := x - 1; y >= 0; y-- {
+			if names[y] == names[x] {
+				repeated = true
+				//parCollection[x].Flag = 0x80
+				break
+			}
+		}
 		found := false
 		for _, par := range stmt.Pars {
 			if par.Name == names[x] {
-				parCollection = append(parCollection, par)
+				if !repeated {
+					parCollection = append(parCollection, par)
+				}
 				found = true
 				break
 			}
@@ -2152,12 +2182,7 @@ func (stmt *Stmt) useNamedParameters() error {
 		if !found {
 			return fmt.Errorf("parameter %s is not defined in parameter list", names[x])
 		}
-		for y := x - 1; y >= 0; y-- {
-			if names[y] == names[x] {
-				parCollection[x].Flag = 0x80
-				break
-			}
-		}
+
 	}
 	stmt.Pars = parCollection
 	return nil
@@ -2242,7 +2267,7 @@ func (stmt *Stmt) setParam(pos int, par ParameterInfo) {
 	}
 }
 
-// addParam create new parameter and append it to stmt.Pars
+// addParam
 func (stmt *Stmt) addParam(name string, val driver.Value, size int, direction ParameterDirection) error {
 	par, err := stmt.NewParam(name, val, size, direction)
 	if err != nil {

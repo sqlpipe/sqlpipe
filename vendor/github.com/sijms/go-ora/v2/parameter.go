@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -91,6 +92,7 @@ const (
 	UROWID           TNSType = 208
 	TimeStampLTZ_DTY TNSType = 231
 	TimeStampeLTZ    TNSType = 232
+	Boolean          TNSType = 0xFC
 )
 
 type ParameterType int
@@ -196,13 +198,13 @@ func (par *ParameterInfo) load(conn *Connection) error {
 	case ROWID:
 		par.MaxLen = 128
 	case DATE:
-		par.MaxLen = 7
+		par.MaxLen = converters.MAX_LEN_DATE
 	case IBFloat:
 		par.MaxLen = 4
 	case IBDouble:
 		par.MaxLen = 8
 	case TimeStampTZ_DTY:
-		par.MaxLen = 13
+		par.MaxLen = converters.MAX_LEN_TIMESTAMP
 	case IntervalYM_DTY:
 		fallthrough
 	case IntervalDS_DTY:
@@ -866,6 +868,7 @@ func (par *ParameterInfo) clone() ParameterInfo {
 	tempPar.Precision = par.Precision
 	return tempPar
 }
+
 func (par *ParameterInfo) decodePrimValue(conn *Connection, udt bool) error {
 	session := conn.session
 	var err error
@@ -967,10 +970,26 @@ func (par *ParameterInfo) decodePrimValue(conn *Connection, udt bool) error {
 			return err
 		}
 		par.oPrimValue = strConv.Decode(par.BValue)
+	case Boolean:
+		par.oPrimValue = converters.DecodeBool(par.BValue)
 	case RAW:
 		par.oPrimValue = par.BValue
 	case NUMBER:
-		if par.Scale == 0 && par.Precision <= 18 {
+		if par.Scale == 0 && par.Precision == 0 {
+			var tempFloat string
+			tempFloat, err = converters.NumberToString(par.BValue)
+			if err != nil {
+				return err
+			}
+			if err != nil {
+				return err
+			}
+			if strings.Contains(tempFloat, ".") {
+				par.oPrimValue, err = strconv.ParseFloat(tempFloat, 64)
+			} else {
+				par.oPrimValue, err = strconv.ParseInt(tempFloat, 10, 64)
+			}
+		} else if par.Scale == 0 && par.Precision <= 18 {
 			par.oPrimValue, err = converters.NumberToInt64(par.BValue)
 			if err != nil {
 				return err
@@ -982,9 +1001,19 @@ func (par *ParameterInfo) decodePrimValue(conn *Connection, udt bool) error {
 				return err
 			}
 		} else if par.Scale > 0 {
-			par.oPrimValue, err = converters.NumberToString(par.BValue)
+			//par.oPrimValue, err = converters.NumberToString(par.BValue)
+			var tempFloat string
+			tempFloat, err = converters.NumberToString(par.BValue)
 			if err != nil {
 				return err
+			}
+			if err != nil {
+				return err
+			}
+			if strings.Contains(tempFloat, ".") {
+				par.oPrimValue, err = strconv.ParseFloat(tempFloat, 64)
+			} else {
+				par.oPrimValue, err = strconv.ParseInt(tempFloat, 10, 64)
 			}
 		} else {
 			par.oPrimValue = converters.DecodeNumber(par.BValue)
@@ -992,9 +1021,15 @@ func (par *ParameterInfo) decodePrimValue(conn *Connection, udt bool) error {
 	case TimeStampDTY, TimeStampeLTZ, TimeStampLTZ_DTY, TIMESTAMPTZ, TimeStampTZ_DTY:
 		fallthrough
 	case TIMESTAMP, DATE:
-		par.oPrimValue, err = converters.DecodeDate(par.BValue)
+		tempTime, err := converters.DecodeDate(par.BValue)
 		if err != nil {
 			return err
+		}
+		if par.DataType == DATE && conn.dbTimeLoc != time.UTC {
+			par.oPrimValue = time.Date(tempTime.Year(), tempTime.Month(), tempTime.Day(),
+				tempTime.Hour(), tempTime.Minute(), tempTime.Second(), tempTime.Nanosecond(), conn.dbTimeLoc)
+		} else {
+			par.oPrimValue = tempTime
 		}
 	case OCIClobLocator, OCIBlobLocator:
 		var locator []byte

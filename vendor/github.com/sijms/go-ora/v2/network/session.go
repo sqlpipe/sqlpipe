@@ -171,7 +171,10 @@ func (session *Session) EndContext() {
 
 func (session *Session) initRead() error {
 	var err error
-	timeout := time.Now().Add(session.Context.ConnOption.Timeout)
+	var timeout = time.Time{}
+	if session.Context.ConnOption.Timeout > 0 {
+		timeout = time.Now().Add(session.Context.ConnOption.Timeout)
+	}
 	if deadline, ok := session.ctx.Deadline(); ok {
 		timeout = deadline
 	}
@@ -192,7 +195,10 @@ func (session *Session) initRead() error {
 
 func (session *Session) initWrite() error {
 	var err error
-	timeout := time.Now().Add(session.Context.ConnOption.Timeout)
+	var timeout = time.Time{}
+	if session.Context.ConnOption.Timeout > 0 {
+		timeout = time.Now().Add(session.Context.ConnOption.Timeout)
+	}
 	if deadline, ok := session.ctx.Deadline(); ok {
 		timeout = deadline
 	}
@@ -398,8 +404,13 @@ func (session *Session) Connect(ctx context.Context) error {
 	var loop = true
 	dialer := connOption.Dialer
 	if dialer == nil {
-		dialer = &net.Dialer{
-			Timeout: session.Context.ConnOption.Timeout,
+		dialer = &net.Dialer{}
+		if session.Context.ConnOption.Timeout > 0 {
+			dialer = &net.Dialer{
+				Timeout: session.Context.ConnOption.Timeout,
+			}
+		} else {
+			dialer = &net.Dialer{}
 		}
 	}
 	//connOption.serverIndex = 0
@@ -512,7 +523,7 @@ func (session *Session) Disconnect() {
 
 // Write send data store in output buffer through network
 //
-// if data bigger than SessionDataUnit it should be divided into
+// if data bigger than fSessionDataUnit it should be divided into
 // segment and each segment sent in data packet
 func (session *Session) Write() error {
 	outputBytes := session.outBuffer.Bytes()
@@ -527,7 +538,7 @@ func (session *Session) Write() error {
 		//return errors.New("the output buffer is empty")
 	}
 
-	segmentLen := int(session.Context.SessionDataUnit - 20)
+	segmentLen := int(session.Context.SessionDataUnit - 64)
 	offset := 0
 	if size > segmentLen {
 		segment := make([]byte, segmentLen)

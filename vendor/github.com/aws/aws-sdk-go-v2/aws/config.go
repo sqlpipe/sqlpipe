@@ -68,6 +68,12 @@ type Config struct {
 	//
 	// See the `aws.EndpointResolverWithOptions` documentation for additional
 	// usage information.
+	//
+	// Deprecated: with the release of endpoint resolution v2 in API clients,
+	// EndpointResolver and EndpointResolverWithOptions are deprecated.
+	// Providing a value for this field will likely prevent you from using
+	// newer endpoint-related service features. See API client options
+	// EndpointResolverV2 and BaseEndpoint.
 	EndpointResolverWithOptions EndpointResolverWithOptions
 
 	// RetryMaxAttempts specifies the maximum number attempts an API client
@@ -140,6 +146,10 @@ type Config struct {
 	// See https://docs.aws.amazon.com/sdkref/latest/guide/settings-reference.html for
 	// more information on environment variables and shared config settings.
 	AppID string
+
+	// BaseEndpoint is an intermediary transfer location to a service specific
+	// BaseEndpoint on a service's Options.
+	BaseEndpoint *string
 }
 
 // NewConfig returns a new Config pointer that can be chained with builder

@@ -18,6 +18,7 @@ import (
 )
 
 var (
+	tyBool            = reflect.TypeOf((*bool)(nil)).Elem()
 	tyBytes           = reflect.TypeOf((*[]byte)(nil)).Elem()
 	tyString          = reflect.TypeOf((*string)(nil)).Elem()
 	tyNVarChar        = reflect.TypeOf((*NVarChar)(nil)).Elem()
@@ -40,6 +41,7 @@ var (
 	tyNullTimeStamp   = reflect.TypeOf((*NullTimeStamp)(nil)).Elem()
 	tyNullTimeStampTZ = reflect.TypeOf((*NullTimeStampTZ)(nil)).Elem()
 	tyRefCursor       = reflect.TypeOf((*RefCursor)(nil)).Elem()
+	tyPLBool          = reflect.TypeOf((*PLBool)(nil)).Elem()
 )
 
 func parseSqlText(text string) ([]string, error) {
@@ -184,7 +186,7 @@ func tFloat(input reflect.Type) bool {
 	return input.Kind() == reflect.Float32 || input.Kind() == reflect.Float64
 }
 func tNumber(input reflect.Type) bool {
-	return tInteger(input) || tFloat(input) || input.Kind() == reflect.Bool
+	return tInteger(input) || tFloat(input) || input == tyBool
 }
 func tNullNumber(input reflect.Type) bool {
 	switch input {
@@ -233,6 +235,17 @@ func getString(col interface{}) string {
 	}
 }
 
+func getBool(col interface{}) (bool, error) {
+	col, err := getValue(col)
+	if err != nil {
+		return false, err
+	}
+	if col == nil {
+		return false, nil
+	}
+	rValue := reflect.ValueOf(col)
+	return rValue.Bool(), nil
+}
 func getNumber(col interface{}) (interface{}, error) {
 	var err error
 	col, err = getValue(col)
@@ -519,6 +532,12 @@ func setFieldValue(fieldValue reflect.Value, cust *customType, input interface{}
 	//input should be one of primitive values
 	if input == nil {
 		return setNull(fieldValue)
+	}
+	if fieldValue.Kind() == reflect.Ptr && fieldValue.Elem().Kind() == reflect.Interface {
+		fieldValue.Elem().Set(reflect.ValueOf(input))
+	}
+	if fieldValue.Kind() == reflect.Interface {
+		fieldValue.Set(reflect.ValueOf(input))
 	}
 	switch val := input.(type) {
 	case int64:
@@ -1030,7 +1049,20 @@ func decodeObject(conn *Connection, parent *ParameterInfo) error {
 		for x := 0; x < itemsLen; x++ {
 			tempPar := parent.clone()
 			tempPar.Direction = parent.Direction
-			tempPar.BValue, err = session.GetClr()
+			ctlByte, err := session.GetByte()
+			if err != nil {
+				return err
+			}
+			var objectBufferSize int
+			if ctlByte == 0xFE {
+				objectBufferSize, err = session.GetInt(4, false, true)
+				if err != nil {
+					return err
+				}
+			} else {
+				objectBufferSize = int(ctlByte)
+			}
+			tempPar.BValue, err = session.GetBytes(objectBufferSize)
 			if err != nil {
 				return err
 			}

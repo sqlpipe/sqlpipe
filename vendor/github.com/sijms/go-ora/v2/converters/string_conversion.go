@@ -10,6 +10,7 @@ type IStringConverter interface {
 	Encode(string) []byte
 	Decode([]byte) string
 	GetLangID() int
+	Clone() IStringConverter
 	//SetLangID(langID int) int
 }
 
@@ -53,6 +54,18 @@ func MaxBytePerChar(charsetID int) int {
 		return 2
 	default:
 		return 1
+	}
+}
+
+func (conv *StringConverter) Clone() IStringConverter {
+	return &StringConverter{
+		LangID:    conv.LangID,
+		CharWidth: conv.CharWidth,
+		eReplace:  conv.eReplace,
+		dReplace:  conv.dReplace,
+		dBuffer:   conv.dBuffer,
+		dBuffer2:  conv.dBuffer2,
+		eBuffer:   conv.eBuffer,
 	}
 }
 func (conv *StringConverter) GetLangID() int {
@@ -171,7 +184,7 @@ func (conv *StringConverter) Decode(input []byte) string {
 		output := make([]uint16, 0, len(input))
 		for index < len(input) {
 			if input[index] > 127 {
-				if index+1 > len(input) {
+				if index+1 >= len(input) {
 					return string(input)
 				}
 				result = int(binary.BigEndian.Uint16(input[index:]))
@@ -180,8 +193,7 @@ func (conv *StringConverter) Decode(input []byte) string {
 				result = int(input[index])
 			}
 			index++
-			index1 := (result >> 8) & 0xFF
-			index2 := result & 0xFF
+			index1, index2 := (result>>8)&0xFF, result&0xFF
 			char1 := conv.dBuffer[index1]
 			if char1 == 0xFFFF {
 				output = append(output, uint16(conv.dReplace))
@@ -204,7 +216,7 @@ func (conv *StringConverter) Decode(input []byte) string {
 		output := make([]uint16, 0, len(input))
 		for index < len(input) {
 			if input[index] > 128 {
-				if index+1 > len(input) {
+				if index+1 >= len(input) {
 					return string(input)
 				}
 				result = int(binary.BigEndian.Uint16(input[index:]))
@@ -213,8 +225,7 @@ func (conv *StringConverter) Decode(input []byte) string {
 				result = int(input[index])
 			}
 			index++
-			index1 := (result >> 8) & 0xFF
-			index2 := result & 0xFF
+			index1, index2 := (result>>8)&0xFF, result&0xFF
 			char1 := conv.dBuffer[index1]
 			if char1 == 0xFFFF {
 				output = append(output, uint16(conv.dReplace))
@@ -281,7 +292,7 @@ func (conv *StringConverter) Decode(input []byte) string {
 		output := make([]uint16, 0, len(input))
 		for index < len(input) {
 			if input[index] > 223 || input[index] > 127 && input[index] < 161 {
-				if index+1 > len(input) {
+				if index+1 >= len(input) {
 					return string(input)
 				}
 				result = int(binary.BigEndian.Uint16(input[index:]))

@@ -148,6 +148,8 @@ func (par *ParameterInfo) encodePrimValue(conn *Connection) error {
 		par.BValue = converters.EncodeInt64(value)
 	case uint64:
 		par.BValue = converters.EncodeUint64(value)
+	case bool:
+		par.BValue = converters.EncodeBool(value)
 	case string:
 		conv, err := conn.getStrConv(par.CharsetID)
 		if err != nil {
@@ -227,7 +229,7 @@ func (par *ParameterInfo) encodePrimValue(conn *Connection) error {
 			// for array set maxsize of nchar and raw
 			if par.DataType == NCHAR {
 				par.MaxLen = conn.maxLen.nvarchar
-				par.MaxCharLen = par.MaxLen / converters.MaxBytePerChar(par.CharsetID)
+				par.MaxCharLen = par.MaxLen // / converters.MaxBytePerChar(par.CharsetID)
 			}
 			if par.DataType == RAW {
 				par.MaxLen = conn.maxLen.raw
@@ -247,7 +249,7 @@ func (par *ParameterInfo) encodePrimValue(conn *Connection) error {
 	return nil
 }
 
-func (par *ParameterInfo) setDataType(goType reflect.Type, conn *Connection) error {
+func (par *ParameterInfo) setDataType(goType reflect.Type, value driver.Value, conn *Connection) error {
 	if goType == nil {
 		par.DataType = NCHAR
 		return nil
@@ -256,7 +258,19 @@ func (par *ParameterInfo) setDataType(goType reflect.Type, conn *Connection) err
 		goType = goType.Elem()
 	}
 	if goType != tyBytes && (goType.Kind() == reflect.Array || goType.Kind() == reflect.Slice) {
-		err := par.setDataType(goType.Elem(), conn)
+		val, err := getValue(value)
+		if err != nil {
+			return err
+		}
+		var inVal driver.Value = nil
+		if val != nil {
+			rValue := reflect.ValueOf(val)
+			size := rValue.Len()
+			if size > 0 && rValue.Index(0).CanInterface() {
+				inVal = rValue.Index(0).Interface()
+			}
+		}
+		err = par.setDataType(goType.Elem(), inVal, conn)
 		par.Flag = 0x43
 		par.MaxNoOfArrayElements = 1
 		return err
@@ -268,6 +282,9 @@ func (par *ParameterInfo) setDataType(goType reflect.Type, conn *Connection) err
 	}
 
 	switch goType {
+	case tyPLBool:
+		par.DataType = Boolean
+		par.MaxLen = converters.MAX_LEN_BOOL
 	case tyString, tyNullString:
 		par.DataType = NCHAR
 		par.CharsetForm = 1
@@ -304,7 +321,35 @@ func (par *ParameterInfo) setDataType(goType reflect.Type, conn *Connection) err
 	case tyRefCursor:
 		par.DataType = REFCURSOR
 	default:
+		rOriginal := reflect.ValueOf(value)
+		if value != nil && !(rOriginal.Kind() == reflect.Ptr && rOriginal.IsNil()) {
+			proVal := reflect.Indirect(rOriginal)
+			if valuer, ok := proVal.Interface().(driver.Valuer); ok {
+				val, err := valuer.Value()
+				if err != nil {
+					return err
+				}
+				if val == nil {
+					par.DataType = NCHAR
+					return nil
+				}
+			}
+		}
+
+		//val, err := getValue(value)
+		//if err != nil {
+		//	return err
+		//}
+		//if val == nil {
+		//	par.DataType = NCHAR
+		//	return nil
+		//}
+		//if val != value {
+		//	return par.setDataType(reflect.TypeOf(val), val, conn)
+		//}
 		if goType.Kind() == reflect.Struct {
+			// see if the struct is support valuer interface
+
 			for _, cusTyp := range conn.cusTyp {
 				if goType == cusTyp.typ {
 					par.cusType = new(customType)
@@ -322,76 +367,6 @@ func (par *ParameterInfo) setDataType(goType reflect.Type, conn *Connection) err
 			return fmt.Errorf("unsupported go type: %v", goType.Name())
 		}
 	}
-	//switch val.Interface().(type) {
-	//case bool:
-	//case sql.NullBool:
-	//	par.DataType = NUMBER
-	//	par.MaxLen = converters.MAX_LEN_NUMBER
-	//case sql.NullInt16:
-	//	par.DataType = NUMBER
-	//	par.MaxLen = converters.MAX_LEN_NUMBER
-	//case sql.NullInt32:
-	//	par.DataType = NUMBER
-	//	par.MaxLen = converters.MAX_LEN_NUMBER
-	//case sql.NullInt64:
-	//	par.DataType = NUMBER
-	//	par.MaxLen = converters.MAX_LEN_NUMBER
-	//case sql.NullFloat64:
-	//	par.DataType = NUMBER
-	//	par.MaxLen = converters.MAX_LEN_NUMBER
-	//case sql.NullByte:
-	//	par.DataType = NUMBER
-	//	par.MaxLen = converters.MAX_LEN_NUMBER
-	//case string:
-	//
-	//case sql.NullString:
-	//	par.DataType = NCHAR
-	//	par.CharsetForm = 1
-	//	par.ContFlag = 16
-	//	par.CharsetID = conn.tcpNego.ServerCharset
-	//case NVarChar:
-	//case NullNVarChar:
-	//	par.DataType = NCHAR
-	//	par.CharsetForm = 2
-	//	par.ContFlag = 16
-	//	par.CharsetID = conn.tcpNego.ServernCharset
-	//case time.Time:
-	//case sql.NullTime:
-	//	par.DataType = DATE
-	//	par.MaxLen = converters.MAX_LEN_DATE
-	//case TimeStamp:
-	//case NullTimeStamp:
-	//	par.DataType = TIMESTAMP
-	//	par.MaxLen = converters.MAX_LEN_DATE
-	//case TimeStampTZ:
-	//case NullTimeStampTZ:
-	//	par.DataType = TimeStampTZ_DTY
-	//	par.MaxLen = converters.MAX_LEN_TIMESTAMP
-	//case []byte:
-	//	par.DataType = RAW
-	//case Clob:
-	//	// if data length < max length of varchar
-	//	// use datatype varchar2
-	//	par.DataType = OCIClobLocator
-	//	par.CharsetForm = 1
-	//	par.CharsetID = conn.tcpNego.ServerCharset
-	//	// if data length > max length of varchar
-	//	// use clob
-	//case NClob:
-	//	par.DataType = OCIClobLocator
-	//	par.CharsetForm = 2
-	//	par.CharsetID = conn.tcpNego.ServernCharset
-	//case Blob:
-	//	par.DataType = OCIBlobLocator
-	//case BFile:
-	//	par.DataType = OCIFileLocator
-	//case RefCursor:
-	//	par.DataType = REFCURSOR
-	//default:
-	//	par.Version = 1
-	//	par.DataType = XMLType
-	//	par.MaxLen = 2000
-	//}
 	return nil
 }
 
@@ -431,6 +406,11 @@ func (par *ParameterInfo) encodeWithType(connection *Connection) error {
 		return nil
 	}
 	switch par.DataType {
+	case Boolean:
+		par.iPrimValue, err = getBool(val)
+		if err != nil {
+			return err
+		}
 	case NUMBER:
 		par.iPrimValue, err = getNumber(val)
 		if err != nil {
@@ -438,7 +418,7 @@ func (par *ParameterInfo) encodeWithType(connection *Connection) error {
 		}
 	case NCHAR:
 		tempString := getString(val)
-		par.MaxCharLen = len([]rune(tempString))
+		par.MaxCharLen = len(tempString)
 		par.iPrimValue = tempString
 	case DATE:
 		fallthrough
@@ -542,7 +522,7 @@ func (par *ParameterInfo) encodeValue(val driver.Value, size int, connection *Co
 	par.init()
 	par.Value = val
 
-	err := par.setDataType(reflect.TypeOf(val), connection)
+	err := par.setDataType(reflect.TypeOf(val), val, connection)
 	if err != nil {
 		return err
 	}

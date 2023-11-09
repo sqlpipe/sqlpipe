@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type ConnectionState int
@@ -34,6 +35,21 @@ const (
 	//WithNewPass LogonMode = 0x2
 	//PROXY       LogonMode = 0x400
 )
+
+var oracleDriver = &OracleDriver{cusTyp: map[string]customType{}}
+
+// from GODROR
+const wrapResultset = "--WRAP_RESULTSET--"
+
+// Querier is the QueryContext of sql.Conn.
+type Querier interface {
+	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
+}
+type GetDriverInterface interface {
+	Driver() driver.Driver
+}
+
+/////
 
 type NLSData struct {
 	Calender        string `db:"p_nls_calendar,,40,out"`
@@ -86,7 +102,8 @@ type Connection struct {
 		date      int
 		timestamp int
 	}
-	bad bool
+	bad       bool
+	dbTimeLoc *time.Location
 }
 
 type OracleConnector struct {
@@ -95,11 +112,13 @@ type OracleConnector struct {
 	dialer        network.DialerContext
 }
 type OracleDriver struct {
-	dataCollected  bool
-	cusTyp         map[string]customType
-	mu             sync.Mutex
-	serverCharset  int
-	serverNCharset int
+	dataCollected bool
+	cusTyp        map[string]customType
+	mu            sync.Mutex
+	sStrConv      converters.IStringConverter
+	nStrConv      converters.IStringConverter
+	//serverCharset  int
+	//serverNCharset int
 	//Conn      *Connection
 	//Server    string
 	//Port      int
@@ -112,12 +131,22 @@ type OracleDriver struct {
 }
 
 func init() {
-	sql.Register("oracle", &OracleDriver{cusTyp: map[string]customType{}})
+	sql.Register("oracle", oracleDriver)
 }
 
-func (drv *OracleDriver) OpenConnector(name string) (driver.Connector, error) {
+func GetDefaultDriver() *OracleDriver {
+	return oracleDriver
+}
 
-	return &OracleConnector{drv: drv, connectString: name}, nil
+func NewDriver() *OracleDriver {
+	return &OracleDriver{cusTyp: map[string]customType{}}
+}
+func NewConnector(connString string) driver.Connector {
+	return &OracleConnector{connectString: connString, drv: NewDriver()}
+}
+func (drv *OracleDriver) OpenConnector(connString string) (driver.Connector, error) {
+	// create hash from connection string
+	return &OracleConnector{drv: drv, connectString: connString}, nil
 }
 
 func (connector *OracleConnector) Connect(ctx context.Context) (driver.Conn, error) {
@@ -127,7 +156,12 @@ func (connector *OracleConnector) Connect(ctx context.Context) (driver.Conn, err
 		return nil, err
 	}
 	conn.cusTyp = connector.drv.cusTyp
-
+	if connector.drv.sStrConv != nil {
+		conn.sStrConv = connector.drv.sStrConv.Clone()
+	}
+	if connector.drv.nStrConv != nil {
+		conn.nStrConv = connector.drv.nStrConv.Clone()
+	}
 	conn.connOption.Dialer = connector.dialer
 	err = conn.OpenWithContext(ctx)
 	if err != nil {
@@ -142,11 +176,16 @@ func (driver *OracleDriver) collectData(conn *Connection) {
 		driver.mu.Lock()
 		defer driver.mu.Unlock()
 		driver.UserId = conn.connOption.UserID
-		driver.serverCharset = conn.tcpNego.ServerCharset
-		driver.serverNCharset = conn.tcpNego.ServernCharset
+		if driver.sStrConv == nil {
+			driver.sStrConv = conn.sStrConv.Clone()
+		}
+		if driver.nStrConv == nil {
+			driver.nStrConv = conn.nStrConv.Clone()
+		}
 		driver.dataCollected = true
 	}
 }
+
 func (connector *OracleConnector) Driver() driver.Driver {
 	return connector.drv
 }
@@ -173,9 +212,12 @@ func (drv *OracleDriver) Open(name string) (driver.Conn, error) {
 
 // SetStringConverter this function is used to set a custom string converter interface
 // that will be used to encode and decode strings and bytearrays
-func (conn *Connection) SetStringConverter(converter converters.IStringConverter) {
-	conn.sStrConv = converter
-	conn.session.StrConv = converter
+// passing nil will use driver string converter for supported langs
+func SetStringConverter(db GetDriverInterface, charset, nCharset converters.IStringConverter) {
+	if driver, ok := db.Driver().(*OracleDriver); ok {
+		driver.sStrConv = charset
+		driver.nStrConv = nCharset
+	}
 }
 
 // GetNLS return NLS properties of the connection.
@@ -452,52 +494,14 @@ func (conn *Connection) OpenWithContext(ctx context.Context) error {
 		}
 	}
 
-	tracer.Print("TCP Negotiation")
-	conn.tcpNego, err = newTCPNego(conn.session)
+	err = conn.protocolNegotiation()
 	if err != nil {
 		return err
 	}
-	tracer.Print("Server Charset: ", conn.tcpNego.ServerCharset)
-	tracer.Print("Server National Charset: ", conn.tcpNego.ServernCharset)
-	// create string converter object
-	conn.sStrConv = converters.NewStringConverter(conn.tcpNego.ServerCharset)
-	if conn.sStrConv == nil {
-		return fmt.Errorf("the server use charset with id: %d which is not supported by the driver", conn.tcpNego.ServerCharset)
-	}
-	conn.session.StrConv = conn.sStrConv
-	conn.nStrConv = converters.NewStringConverter(conn.tcpNego.ServernCharset)
-	if conn.nStrConv == nil {
-		return fmt.Errorf("the server use ncharset with id: %d which is not supported by the driver", conn.tcpNego.ServernCharset)
-	}
-	conn.tcpNego.ServerFlags |= 2
-	tracer.Print("Data Type Negotiation")
-	conn.dataNego = buildTypeNego(conn.tcpNego, conn.session)
-	err = conn.dataNego.write(conn.session)
+	err = conn.dataTypeNegotiation()
 	if err != nil {
 		return err
 	}
-	err = conn.dataNego.read(conn.session)
-	if err != nil {
-		return err
-	}
-	conn.session.TTCVersion = conn.dataNego.CompileTimeCaps[7]
-	conn.session.UseBigScn = conn.tcpNego.ServerCompileTimeCaps[7] >= 8
-	if conn.tcpNego.ServerCompileTimeCaps[7] < conn.session.TTCVersion {
-		conn.session.TTCVersion = conn.tcpNego.ServerCompileTimeCaps[7]
-	}
-	tracer.Print("TTC Version: ", conn.session.TTCVersion)
-	if len(conn.tcpNego.ServerRuntimeCaps) > 6 && conn.tcpNego.ServerRuntimeCaps[6]&4 == 4 {
-		conn.maxLen.varchar = 0x7FFF
-		conn.maxLen.nvarchar = 0x7FFF
-		conn.maxLen.raw = 0x7FFF
-	} else {
-		conn.maxLen.varchar = 0xFA0
-		conn.maxLen.nvarchar = 0xFA0
-		conn.maxLen.raw = 0xFA0
-	}
-	//this.m_b32kTypeSupported = this.m_dtyNeg.m_b32kTypeSupported;
-	//this.m_bSupportSessionStateOps = this.m_dtyNeg.m_bSupportSessionStateOps;
-	//this.m_marshallingEngine.m_bServerUsingBigSCN = this.m_serverCompileTimeCapabilities[7] >= (byte) 8;
 	//if len(conn.connOption.UserID) > 0 && len(conn.conStr.password) > 0 {
 	//
 	//} else {
@@ -535,7 +539,17 @@ func (conn *Connection) OpenWithContext(ctx context.Context) error {
 			return err
 		}
 	}
+	conn.getDBTimeZone()
 	return nil
+}
+
+func (conn *Connection) getDBTimeZone() {
+	var current time.Time
+	err := conn.QueryRowContext(context.Background(), "SELECT SYSTIMESTAMP FROM DUAL", nil).Scan(&current)
+	if err != nil {
+		conn.dbTimeLoc = time.UTC
+	}
+	conn.dbTimeLoc = current.Location()
 }
 
 // Begin a transaction
@@ -691,6 +705,9 @@ func (conn *Connection) doAuth() error {
 					return err
 				}
 			}
+		//case 27:
+		//	this.ProcessImplicitResultSet(ref implicitRSList);
+		//	continue;
 		default:
 			return errors.New(fmt.Sprintf("message code error: received code %d", msg))
 		}
@@ -1096,7 +1113,30 @@ func (conn *Connection) CheckNamedValue(_ *driver.NamedValue) error {
 	return nil
 }
 
+func (conn *Connection) QueryRowContext(ctx context.Context, query string, args []driver.NamedValue) *DataSet {
+	stmt := NewStmt(query, conn)
+	stmt.autoClose = true
+	rows, err := stmt.QueryContext(ctx, args)
+	dataSet := rows.(*DataSet)
+	if err != nil {
+		dataSet.lasterr = err
+		return dataSet
+	}
+	dataSet.Next_()
+	return dataSet
+}
+
+func WrapRefCursor(ctx context.Context, q Querier, cursor *RefCursor) (*sql.Rows, error) {
+	rows, err := cursor.Query()
+	if err != nil {
+		return nil, err
+	}
+	return q.QueryContext(ctx, wrapResultset, rows)
+}
 func (conn *Connection) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if query == wrapResultset {
+		return args[0].Value.(driver.Rows), nil
+	}
 	stmt := NewStmt(query, conn)
 	stmt.autoClose = true
 	rows, err := stmt.QueryContext(ctx, args)
@@ -1231,6 +1271,16 @@ func (conn *Connection) readResponse(msgCode uint8) error {
 		if err != nil {
 			return err
 		}
+	case 28:
+		err = conn.protocolNegotiation()
+		if err != nil {
+			return err
+		}
+		err = conn.dataTypeNegotiation()
+		if err != nil {
+
+			return err
+		}
 	default:
 		return errors.New(fmt.Sprintf("TTC error: received code %d during response reading", msgCode))
 	}
@@ -1255,6 +1305,7 @@ func RegisterType(conn *sql.DB, typeName, arrayTypeName string, typeObj interfac
 	if err != nil {
 		return err
 	}
+
 	if driver, ok := conn.Driver().(*OracleDriver); ok {
 		return RegisterTypeWithOwner(conn, driver.UserId, typeName, arrayTypeName, typeObj)
 	}
@@ -1340,14 +1391,14 @@ func RegisterTypeWithOwner(conn *sql.DB, owner, typeName, arrayTypeName string, 
 				param.CharsetForm = 1
 				param.ContFlag = 16
 				param.MaxCharLen = int(length.Int64)
-				param.CharsetID = driver.serverCharset
+				param.CharsetID = driver.sStrConv.GetLangID()
 				param.MaxLen = int(length.Int64) * converters.MaxBytePerChar(param.CharsetID)
 			case "NVARCHAR2":
 				param.DataType = NCHAR
 				param.CharsetForm = 2
 				param.ContFlag = 16
 				param.MaxCharLen = int(length.Int64)
-				param.CharsetID = driver.serverNCharset
+				param.CharsetID = driver.nStrConv.GetLangID()
 				param.MaxLen = int(length.Int64) * converters.MaxBytePerChar(param.CharsetID)
 			case "TIMESTAMP":
 				fallthrough
@@ -1364,18 +1415,37 @@ func RegisterTypeWithOwner(conn *sql.DB, owner, typeName, arrayTypeName string, 
 				param.DataType = OCIClobLocator
 				param.CharsetForm = 1
 				param.ContFlag = 16
-				param.CharsetID = driver.serverCharset
+				param.CharsetID = driver.sStrConv.GetLangID()
 				param.MaxCharLen = int(length.Int64)
 				param.MaxLen = int(length.Int64) * converters.MaxBytePerChar(param.CharsetID)
 			case "NCLOB":
 				param.DataType = OCIClobLocator
 				param.CharsetForm = 2
 				param.ContFlag = 16
-				param.CharsetID = driver.serverNCharset
+				param.CharsetID = driver.nStrConv.GetLangID()
 				param.MaxCharLen = int(length.Int64)
 				param.MaxLen = int(length.Int64) * converters.MaxBytePerChar(param.CharsetID)
 			default:
-				return fmt.Errorf("unsupported attribute type: %s", attTypeName.String)
+				found := false
+				for name, value := range driver.cusTyp {
+					if name == strings.ToUpper(attTypeName.String) {
+						found = true
+						param.cusType = new(customType)
+						*param.cusType = value
+						param.ToID = value.toid
+						break
+					}
+					if value.arrayTypeName == strings.ToUpper(attTypeName.String) {
+						found = true
+						param.cusType = new(customType)
+						*param.cusType = value
+						param.ToID = value.toid
+						break
+					}
+				}
+				if !found {
+					return fmt.Errorf("unsupported attribute type: %s", attTypeName.String)
+				}
 			}
 		}
 		if len(cust.attribs) == 0 {
@@ -1388,4 +1458,65 @@ func RegisterTypeWithOwner(conn *sql.DB, owner, typeName, arrayTypeName string, 
 		return nil
 	}
 	return errors.New("the driver used is not a go-ora driver type")
+}
+
+func (conn *Connection) dataTypeNegotiation() error {
+	tracer := conn.connOption.Tracer
+	var err error
+	tracer.Print("Data Type Negotiation")
+	conn.dataNego = buildTypeNego(conn.tcpNego, conn.session)
+	err = conn.dataNego.write(conn.session)
+	if err != nil {
+		return err
+	}
+	err = conn.dataNego.read(conn.session)
+	if err != nil {
+		return err
+	}
+	conn.session.TTCVersion = conn.dataNego.CompileTimeCaps[7]
+	conn.session.UseBigScn = conn.tcpNego.ServerCompileTimeCaps[7] >= 8
+	if conn.tcpNego.ServerCompileTimeCaps[7] < conn.session.TTCVersion {
+		conn.session.TTCVersion = conn.tcpNego.ServerCompileTimeCaps[7]
+	}
+	tracer.Print("TTC Version: ", conn.session.TTCVersion)
+	if len(conn.tcpNego.ServerRuntimeCaps) > 6 && conn.tcpNego.ServerRuntimeCaps[6]&4 == 4 {
+		conn.maxLen.varchar = 0x7FFF
+		conn.maxLen.nvarchar = 0x7FFF
+		conn.maxLen.raw = 0x7FFF
+	} else {
+		conn.maxLen.varchar = 0xFA0
+		conn.maxLen.nvarchar = 0xFA0
+		conn.maxLen.raw = 0xFA0
+	}
+	return nil
+	//this.m_b32kTypeSupported = this.m_dtyNeg.m_b32kTypeSupported;
+	//this.m_bSupportSessionStateOps = this.m_dtyNeg.m_bSupportSessionStateOps;
+	//this.m_marshallingEngine.m_bServerUsingBigSCN = this.m_serverCompileTimeCapabilities[7] >= (byte) 8;
+}
+func (conn *Connection) protocolNegotiation() error {
+	tracer := conn.connOption.Tracer
+	var err error
+	tracer.Print("TCP Negotiation")
+	conn.tcpNego, err = newTCPNego(conn.session)
+	if err != nil {
+		return err
+	}
+	tracer.Print("Server Charset: ", conn.tcpNego.ServerCharset)
+	tracer.Print("Server National Charset: ", conn.tcpNego.ServernCharset)
+	// create string converter object
+	if conn.sStrConv == nil {
+		conn.sStrConv = converters.NewStringConverter(conn.tcpNego.ServerCharset)
+		if conn.sStrConv == nil {
+			return fmt.Errorf("the server use charset with id: %d which is not supported by the driver", conn.tcpNego.ServerCharset)
+		}
+	}
+	conn.session.StrConv = conn.sStrConv
+	if conn.nStrConv == nil {
+		conn.nStrConv = converters.NewStringConverter(conn.tcpNego.ServernCharset)
+		if conn.nStrConv == nil {
+			return fmt.Errorf("the server use ncharset with id: %d which is not supported by the driver", conn.tcpNego.ServernCharset)
+		}
+	}
+	conn.tcpNego.ServerFlags |= 2
+	return nil
 }
