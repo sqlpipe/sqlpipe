@@ -1,30 +1,87 @@
+version: '3.3'
+
 services:
-  postgresql:
-    image: postgres:14
+
+  sqlpipe:
+    build:
+      context: .
+      dockerfile: sqlpipe.dockerfile
+    container_name: sqlpipe
+    ports:
+      - "9000:9000"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server
+    container_name: mssql
     environment:
-      - POSTGRES_PASSWORD=${PASSWORD}
+      ACCEPT_EULA: Y
+      SA_PASSWORD: Mypass123
+    platform: linux/amd64
+    volumes:
+      - ./setup-sql/mssql.sql:/setup.sql
+    command: >
+      /bin/bash -c "
+        export TZ=US/Pacific
+        /opt/mssql/bin/sqlservr &
+        sleep 25;
+        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
+        tail -f /dev/null
+      "
+    ports:
+      - "1433:1433"
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+
+  postgresql:
+    image: postgres
+    platform: linux/amd64
     container_name: postgresql
     ports:
       - 5432:5432
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2019-latest
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${PASSWORD}
-    container_name: mssql
-    ports:
-      - 1433:1433
+      POSTGRES_PASSWORD: Mypass123
+    volumes:
+      - ./setup-sql/postgresql-simple.sql:/docker-entrypoint-initdb.d/setup-1.sql
+      - ./setup-sql/postgresql-complex.sql:/docker-entrypoint-initdb.d/setup-2.sql
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+
   mysql:
-    image: mysql:8.0.30-debian
-    environment:
-      - MYSQL_ROOT_PASSWORD=${PASSWORD}
+    image: mysql:8.0
+    platform: linux/amd64
     container_name: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=Mypass123
     ports:
-      - 3306:3306
-  # sqlpipe:
-  #   build:
-  #     context: ./
-  #     dockerfile: oracle.dockerfile
-  #   container_name: sqlpipe
-  #   ports:
-  #     - 9000:9000
+      - "3306:3306"
+    volumes:
+      - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    command: --local-infile=1
+
+
+  oracle:
+    image: sqlpipe/oracle:21.3.0
+    container_name: oracle
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=Mypass123
+      - NLS_CHARACTERSET=AL32UTF8
+    volumes:
+      - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
+    deploy:
+      resources:
+        limits:
+          memory: 16G

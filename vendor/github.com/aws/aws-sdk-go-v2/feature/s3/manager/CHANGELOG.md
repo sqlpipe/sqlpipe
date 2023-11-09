@@ -1,3 +1,261 @@
+# v1.13.4 (2023-11-09)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.3 (2023-11-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.2 (2023-11-06)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.1 (2023-11-02)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.13.0 (2023-11-01)
+
+* **Feature**: Adds support for configured endpoints via environment variables and the AWS shared configuration file.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.12.0 (2023-10-31)
+
+* **Feature**: **BREAKING CHANGE**: Bump minimum go version to 1.19 per the revised [go version support policy](https://aws.amazon.com/blogs/developer/aws-sdk-for-go-aligns-with-go-release-policy-on-supported-runtimes/).
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.92 (2023-10-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.91 (2023-10-16)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.90 (2023-10-12)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.89 (2023-10-06)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.88 (2023-10-02)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.87 (2023-09-26)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.86 (2023-09-22)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.85 (2023-09-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.84 (2023-09-18)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.83 (2023-09-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.82 (2023-08-31)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.81 (2023-08-23)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.80 (2023-08-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.79 (2023-08-18)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.78 (2023-08-17)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.77 (2023-08-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.76 (2023-08-01)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.75 (2023-07-31)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.74 (2023-07-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.73 (2023-07-25)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.72 (2023-07-13)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.71 (2023-06-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.70 (2023-06-16)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.69 (2023-06-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.68 (2023-06-13)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.67 (2023-05-09)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.66 (2023-05-08)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.65 (2023-05-04)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.64 (2023-04-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.63 (2023-04-19)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.62 (2023-04-10)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.61 (2023-04-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.60 (2023-03-31)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.59 (2023-03-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.58 (2023-03-16)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.57 (2023-03-14)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.56 (2023-03-10)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.55 (2023-02-22)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.54 (2023-02-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.53 (2023-02-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.52 (2023-02-14)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.51 (2023-02-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.50 (2023-02-01)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.49 (2023-01-25)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.48 (2023-01-23)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.47 (2023-01-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.46 (2022-12-20)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.45 (2022-12-19)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.44 (2022-12-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.43 (2022-12-02)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.42 (2022-11-22)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.41 (2022-11-17)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.40 (2022-11-16)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.39 (2022-11-11)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.38 (2022-11-10)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.37 (2022-10-24)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.36 (2022-10-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.11.35 (2022-10-19)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.11.34 (2022-09-30)
 
 * **Dependency Update**: Updated to the latest SDK module versions

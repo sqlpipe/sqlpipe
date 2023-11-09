@@ -1,97 +1,75 @@
 include .envrc
 
 # ==================================================================================== #
-# RUN
+# HELPERS
 # ==================================================================================== #
 
-## run/compose: Run the test env using docker compose
-.PHONY: run/compose
-run/compose: build/docker
-	docker-compose down -v \
-	&& docker-compose up --build -d \
-	&& docker-compose logs -f
+## help: print this help message
+.PHONY: help
+help:
+	@echo 'Usage:'
+	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
-## run/sqlpipe: Run SQLpipe locally
-.PHONY: run/sqlpipe
-run/sqlpipe:
-	go run ./cmd/sqlpipe
+.PHONY: confirm
+confirm:
+	@echo -n 'Are you sure? [y/N] ' && read ans && [ $${ans:-N} = y ]
 
-## run/oracle: Run SQLpipe locally
-.PHONY: run/oracle
-run/oracle: build/oracle
+# ==================================================================================== #
+# DEVELOPMENT
+# ==================================================================================== #
+
+## sqlpipe: run the cmd/sqlpipe application
+.PHONY: sqlpipe
+sqlpipe: build/sqlpipe
 	docker rm -f sqlpipe
-	docker run -it --name sqlpipe sqlpipe/sqlpipe bash
+	docker-compose up --build -d sqlpipe
+	docker-compose logs -f sqlpipe
 
-## restart/compose:
-.PHONY: restart/compose
-restart/compose: build/docker
-	docker rm -f sqlpipe \
-	&& docker-compose up --build -d sqlpipe \
-	&& docker-compose logs -f
+.PHONY: run
+run: build/sqlpipe
+	./bin/sqlpipe
 
-## prod: run the cmd/prod application
-.PHONY: run/delve
-run/delve: build/delve
-	/home/ubuntu/go/bin/dlv exec ./bin/sqlpipe --
+## compose-reset: run docker-compose
+.PHONY: compose
+compose: build/sqlpipe
+	docker-compose down -v
+	docker-compose up --build -d
+	docker-compose logs -f
 
-# ==================================================================================== #
-# BUILD
-# ==================================================================================== #
+## postgresql: run postgresql
+.PHONY: postgresql
+postgresql:
+	docker compose down postgresql
+	docker compose up -d postgresql
+	clear
+	docker compose logs -f postgresql
 
-## build/sqlpipe: Build SQLpipe locally
-.PHONY: build/sqlpipe
-build/sqlpipe:
-	go build -ldflags="-s" -o=./bin/sqlpipe ./cmd/sqlpipe
+## mssql: run mssql
+.PHONY: mssql
+mssql:
+	docker compose down mssql
+	docker compose up -d mssql
+	clear
+	docker compose logs -f mssql
 
-## build/docker: Build SQLpipe in Docker
-.PHONY: build/docker
-build/docker: build/sqlpipe
-	docker build -t sqlpipe/sqlpipe:v2 -f Dockerfile .
+## mysql: run mysql
+.PHONY: mysql
+mysql:
+	docker compose down mysql
+	docker compose up -d mysql
+	clear
+	docker compose logs -f mysql
 
-## build/oracle: Build SQLpipe in Docker
-.PHONY: build/oracle
-build/oracle: build/sqlpipe
-	docker build -t sqlpipe/sqlpipe -f oracle.Dockerfile .
-
-## build/delve: Build locally with delve friendly flags
-.PHONY: build/delve
-build/delve:
-	go build -o=./bin/sqlpipe ./cmd/sqlpipe
-
-# ==================================================================================== #
-# PUSH
-# ==================================================================================== #
-## push/docker: Push docker image
-.PHONY: push/docker
-push/docker: build/sqlpipe
-	docker build -t sqlpipe/sqlpipe:2.0.0 -f Dockerfile .
-	docker push sqlpipe/sqlpipe
-
-# ==================================================================================== #
-# TEST
-# ==================================================================================== #
-
-# test/engine: Test the engine
-.PHONY: test/engine
-test/engine: build/sqlpipe
-	export SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT}
-	export SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD}
-	export SNOWFLAKE_USER=${SNOWFLAKE_USER}
-	go test -v -count=1 -run Connection ./...
-	go test -v -count=1 -run Drop ./...
-	go test -v -count=1 -run Create ./...
-	go test -v -count=1 -run Insert ./...
-	go test -v -count=1 -run Transfers ./...
-
-## test/delve: run tests with delve
-.PHONY: test/delve
-test/delve: build/delve
-	docker-compose down -v \
-	&& docker-compose up --build -d \
-	&& /home/ubuntu/go/bin/dlv test ./internal/engine --
+## oracle: run oracle
+.PHONY: oracle
+oracle:
+	docker compose down oracle
+	docker compose up -d oracle
+	clear
+	docker compose logs -f oracle
 
 # ==================================================================================== #
-# OTHER
+# QUALITY CONTROL
 # ==================================================================================== #
 
 ## audit: tidy and vendor dependencies and format, vet and test all code
@@ -113,3 +91,14 @@ vendor:
 	go mod verify
 	@echo 'Vendoring dependencies...'
 	go mod vendor
+
+# ==================================================================================== #
+# BUILD
+# ==================================================================================== #
+
+## build/sqlpipe: build the cmd/sqlpipe application
+.PHONY: build/sqlpipe
+build/sqlpipe:
+	@echo 'Building cmd/sqlpipe...'
+	GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
+
