@@ -3,3 +3,4 @@ bin/*
 .idea
 /hidden
 .hidden
+*/.DS_Store

@@ -27,7 +27,7 @@ SQLpipe runs on Linux, and there are three ways to install it. In order of ease,
 Assuming you already have Docker installed, you can run SQLpipe like so:
 
 ```
-docker run --publish 9000:9000 --name sqlpipe sqlpipe/sqlpipe:3.0
+docker run --publish 9000:9000 --name sqlpipe sqlpipe/sqlpipe
 ```
 
 That's it! SQLpipe is now ready to start transferring data.
