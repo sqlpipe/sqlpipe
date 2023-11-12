@@ -97,7 +97,29 @@ SQLpipe exposes its functionality through a JSON API. It has the following route
 -  `GET /debug/vars` - Shows system statistics
 
 ### Creating a transfer
-Before we get into the details, here are a few example curl commands to create SQLpipe transfers:
+
+To transfer data, you must submit a POST request with a JSON payload. We will discuss the required fields and their meanings further on in the docs, but here is a rough outline:
+
+```
+{
+  "source-name": "<any name you want>",
+  "source-type": "<one of SQLpipe's supported types>",
+  "source-connection-string": "<connection string>",
+  "source-schema": "<schema name>",
+  "source-table": "<table name>",
+  "target-name": "<any name you want>",
+  "target-type": "<one of SQLpipe's supported types>",
+  "target-connection-string": "<connection string>",
+  "target-schema": "<schema name>",
+  "target-table": "<table name>",
+  "drop-target-table-if-exists": <true or false>,
+  "create-target-table-if-not-exists": <true or false>,
+  ... additional required fields, as needed by specific system types
+}
+
+```
+
+Here are a few example curl commands to create SQLpipe transfers from various systems:
 
 ```
 
