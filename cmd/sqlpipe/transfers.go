@@ -302,9 +302,9 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	headers := make(http.Header)
-	headers.Set("Location", fmt.Sprintf("/query-transfers/%s", transfer.Id))
+	headers.Set("Location", fmt.Sprintf("/transfers/%s", transfer.Id))
 
-	err = writeJSON(w, http.StatusCreated, envelope{"query-transfer": transfer}, headers)
+	err = writeJSON(w, http.StatusCreated, envelope{"transfer": transfer}, headers)
 	if err != nil {
 		serverErrorResponse(w, r, http.StatusInternalServerError, err)
 		return

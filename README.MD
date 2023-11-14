@@ -242,7 +242,7 @@ If you send a valid transfer creation request, you'll get a response that looks 
 
 ```
 {
-        "query-transfer": {
+        "transfer": {
                 "id": "3e2b2e20-d35e-4ce2-ba06-6ba55aadcf5e",
                 "created-at": "2023-11-08T09:34:24.750550334Z",
                 "status": "queued",

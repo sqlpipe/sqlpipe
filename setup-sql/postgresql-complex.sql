@@ -370,7 +370,7 @@ DO $$
 DECLARE 
     counter INTEGER := 0;
 BEGIN 
-    WHILE counter < 1000 LOOP
+    WHILE counter < 100 LOOP
         INSERT INTO complex_table (
             random_ascii_char,
             random_unicode_char,
