@@ -213,7 +213,7 @@ func (system Oracle) pipeTypeToCreateType(columnInfo ColumnInfo) (createType str
 
 	case "money":
 		if columnInfo.DecimalOk {
-			createType = fmt.Sprintf("decimal(%v, %v)", columnInfo.Scale, columnInfo.Precision)
+			createType = fmt.Sprintf("decimal(%v, %v)", columnInfo.Precision, columnInfo.Scale)
 		} else {
 			createType = fmt.Sprintf("decimal(%v, %v)", 38, 4)
 		}
