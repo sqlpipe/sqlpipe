@@ -313,10 +313,10 @@ func (system Oracle) getPipeFileFormatters() (
 			return fmt.Sprintf("%v", v), nil
 		},
 		"decimal": func(v interface{}) (pipeFileValue string, err error) {
-			return fmt.Sprintf("%s", v), nil
+			return fmt.Sprintf("%v", v), nil
 		},
 		"money": func(v interface{}) (pipeFileValue string, err error) {
-			return fmt.Sprintf("%s", v), nil
+			return fmt.Sprintf("%v", v), nil
 		},
 		"datetime": func(v interface{}) (pipeFileValue string, err error) {
 			valTime, ok := v.(time.Time)
