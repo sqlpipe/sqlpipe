@@ -128,7 +128,6 @@ Here are a few example curl commands to create SQLpipe transfers from various sy
 **********************************
 
 -- mssql to snowflake full table transfer. drop and recreate target table in snowflake.
--- note on mssql sources: to supply additional arguments to a target connection string, you must put the in the target-hostname field
 curl -d '{"source-name": "<any name you want>", "source-type": "mssql", "source-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "source-schema": "<schema name... such as dbo>", "source-table": "<table name>", "target-name": "<any name you want>", "target-type": "snowflake", "target-connection-string": "<snowflake username>:<snowflake password>@<account identifier>.snowflakecomputing.com/<db name>", "target-schema": "<schema name... such as public>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-table-if-not-exists": true, "create-target-schema-if-not-exists": true, "target-database": "<db name>"}' localhost:9000/transfers/create
 
 -- oracle to postgresql full table transfer. drop and recreate.
@@ -139,6 +138,7 @@ curl -d '{"source-type": "oracle", "source-connection-string": "oracle://<userna
 *********************
 
 -- postgresql to mssql query transfer
+-- note: to supply additional arguments to a mssql target, you must put them in the target-hostname field
 curl -d '{"source-name": "<any name you want>", "source-type": "postgresql", "source-connection-string": "postgresql://<username>:<password>@<hostname>:<port>/<db name>", "query": "<query to move>", "target-name": "<any name you want>", "target-type": "mssql", "target-connection-string": "Server=<hostname>,<port>;Database=<db name>;User Id=<username>;Password=<password>;", "target-schema": "<schema name... such as dbo>", "target-table": "<table name>", "drop-target-table-if-exists": true, "create-target-schema-if-not-exists": true, "create-target-table-if-not-exists": true, "target-hostname": "<hostname>;<additional flags, such as TrustServerCertificate=yes>", "target-database": "<db name>", "target-username": "<username>", "target-password": "<password>"}' localhost:9000/transfers/create
 
 -- mysql to oracle query transfer. do not drop target table, and do not attempt to create it.
