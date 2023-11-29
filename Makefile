@@ -102,3 +102,12 @@ build/sqlpipe:
 	@echo 'Building cmd/sqlpipe...'
 	GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
 
+## build/docker: build the cmd/sqlpipe docker image and push
+.PHONY: build/docker
+build/docker:
+	@echo 'Building cmd/sqlpipe...'
+	GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
+	@echo 'Building docker image...'
+	docker build -t sqlpipe/sqlpipe:latest -f sqlpipe.Dockerfile .
+	@echo 'Pushing docker image...'
+	docker push sqlpipe/sqlpipe:latest
