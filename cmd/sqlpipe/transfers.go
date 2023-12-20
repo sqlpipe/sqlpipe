@@ -516,3 +516,190 @@ func createTransferTmpDirs(transferId string) (tmpDir, pipeFileDir, finalCsvDir 
 
 	return tmpDir, pipeFileDir, finalCsvDir, nil
 }
+
+type CliTransferInput struct {
+	KeepFiles                     bool
+	SourceName                    string
+	SourceType                    string
+	SourceConnectionString        string
+	TargetName                    string
+	TargetType                    string
+	TargetConnectionString        string
+	TargetHostname                string
+	TargetPort                    int
+	TargetDatabase                string
+	TargetUsername                string
+	TargetPassword                string
+	DropTargetTableIfExists       bool
+	CreateTargetSchemaIfNotExists bool
+	CreateTargetTableIfNotExists  bool
+	SourceSchema                  string
+	SourceTable                   string
+	TargetSchema                  string
+	TargetTable                   string
+	Query                         string
+	Delimiter                     string
+	Newline                       string
+	Null                          string
+}
+
+func handleCliTransfer(cliTransferInput CliTransferInput) {
+
+	id := uuid.New().String()
+
+	tmpDir, pipeFileDir, finalCsvDir, err := createTransferTmpDirs(id)
+	if err != nil {
+		errorLog.Fatalf("error creating transfer tmp dirs :: %v", err)
+	}
+
+	if cliTransferInput.Delimiter == "" {
+		cliTransferInput.Delimiter = "{dlm}"
+	}
+	if cliTransferInput.Newline == "" {
+		cliTransferInput.Newline = "{nwln}"
+	}
+	if cliTransferInput.Null == "" {
+		cliTransferInput.Null = "{nll}"
+		if cliTransferInput.TargetType == TypeMySQL {
+			cliTransferInput.Null = `NULL`
+		}
+	}
+
+	sourceConnectionInfo := ConnectionInfo{
+		Name:             cliTransferInput.SourceName,
+		Type:             cliTransferInput.SourceType,
+		ConnectionString: cliTransferInput.SourceConnectionString,
+	}
+
+	targetConnectionInfo := ConnectionInfo{
+		Name:             cliTransferInput.TargetName,
+		Type:             cliTransferInput.TargetType,
+		ConnectionString: cliTransferInput.TargetConnectionString,
+		Hostname:         cliTransferInput.TargetHostname,
+		Port:             cliTransferInput.TargetPort,
+		Database:         cliTransferInput.TargetDatabase,
+		Username:         cliTransferInput.TargetUsername,
+		Password:         cliTransferInput.TargetPassword,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	transfer := Transfer{
+		Id:                            id,
+		CreatedAt:                     time.Now(),
+		Status:                        StatusQueued,
+		KeepFiles:                     cliTransferInput.KeepFiles,
+		TmpDir:                        tmpDir,
+		PipeFileDir:                   pipeFileDir,
+		FinalCsvDir:                   finalCsvDir,
+		Delimiter:                     cliTransferInput.Delimiter,
+		Newline:                       cliTransferInput.Newline,
+		Null:                          cliTransferInput.Null,
+		Context:                       ctx,
+		Cancel:                        cancel,
+		SourceConnectionInfo:          sourceConnectionInfo,
+		TargetConnectionInfo:          targetConnectionInfo,
+		DropTargetTableIfExists:       cliTransferInput.DropTargetTableIfExists,
+		CreateTargetSchemaIfNotExists: cliTransferInput.CreateTargetSchemaIfNotExists,
+		CreateTargetTableIfNotExists:  cliTransferInput.CreateTargetTableIfNotExists,
+		SourceSchema:                  cliTransferInput.SourceSchema,
+		SourceTable:                   cliTransferInput.SourceTable,
+		TargetSchema:                  cliTransferInput.TargetSchema,
+		TargetTable:                   cliTransferInput.TargetTable,
+		Query:                         cliTransferInput.Query,
+	}
+
+	v := newValidator()
+
+	v.check(transfer.SourceConnectionInfo.Name != "", "source-name", "must be provided")
+	v.check(transfer.SourceConnectionInfo.Type != "", "source-type", "must be provided")
+	v.check(transfer.SourceConnectionInfo.ConnectionString != "", "source-connection-string", "must be provided")
+	v.check(permittedValue(transfer.SourceConnectionInfo.Type, permittedTransferSources...),
+		"source-type", fmt.Sprintf("must be one of %v", permittedTransferSources))
+
+	v.check(transfer.TargetConnectionInfo.Name != "", "target-name", "must be provided")
+	v.check(transfer.TargetConnectionInfo.Type != "", "target-type", "must be provided")
+	v.check(transfer.TargetConnectionInfo.ConnectionString != "", "target-connection-string", "must be provided")
+	v.check(permittedValue(transfer.TargetConnectionInfo.Type, permittedTransferTargets...),
+		"target-type", fmt.Sprintf("must be one of %v", permittedTransferTargets))
+
+	if transfer.Query == "" {
+		if schemaRequired[transfer.SourceConnectionInfo.Type] {
+			v.check(transfer.SourceSchema != "", "source-schema", fmt.Sprintf("if query is not provided, must be provided for source type %v", transfer.TargetConnectionInfo.Type))
+		}
+		v.check(transfer.SourceTable != "", "source-table", "must be provided if query is not provided")
+	} else {
+		v.check(transfer.SourceSchema == "", "source-schema", "must not be provided if query is provided")
+		v.check(transfer.SourceTable == "", "source-table", "must not be provided if query is provided")
+	}
+
+	if transfer.SourceSchema == "" && transfer.SourceTable == "" {
+		v.check(transfer.Query != "", "query", "must be provided if source-schema and source-table are not provided")
+	}
+
+	if transfer.SourceSchema != "" || transfer.SourceTable != "" {
+		v.check(transfer.Query == "", "query", "must not be provided if source-schema or source-table are provided")
+	}
+
+	v.check(transfer.TargetTable != "", "target-table", "must be provided")
+	if schemaRequired[transfer.TargetConnectionInfo.Type] {
+		v.check(transfer.TargetSchema != "", "target-schema", fmt.Sprintf("must be provided for target type %v", transfer.TargetConnectionInfo.Type))
+	}
+
+	v.check(transfer.TmpDir != "", "tmp-dir", "was not set - this is a bug")
+	v.check(transfer.PipeFileDir != "", "pipe-file-dir", "was not set - this is a bug")
+	v.check(transfer.FinalCsvDir != "", "final-csv-dir", "was not set - this is a bug")
+
+	switch transfer.SourceConnectionInfo.Type {
+	case TypeMySQL:
+		v.check(strings.Contains(transfer.SourceConnectionInfo.ConnectionString, "parseTime=true"), "source-connection-string", "must contain parseTime=true to move timestamp with time zone data from mysql")
+		v.check(strings.Contains(transfer.SourceConnectionInfo.ConnectionString, "loc="), "source-connection-string", `must contain loc=<URL_ENCODED_IANA_TIME_ZONE> to move timestamp with time zone data from mysql - example: loc=US%2FPacific`)
+	}
+
+	switch transfer.TargetConnectionInfo.Type {
+	case TypePostgreSQL:
+		v.check(psqlAvailable, "target-type", "you must install psql to transfer data to postgresql")
+	case TypeMSSQL:
+		v.check(bcpAvailable, "target-type", "you must install bcp to transfer data to mssql")
+		v.check(transfer.TargetConnectionInfo.Port == 0, "target-port", "to change the target port for mssql, enter it after a comma in the -target-hostname flag like 127.0.0.1,1433")
+		v.check(transfer.TargetConnectionInfo.Hostname != "", "target-hostname", "must be provided for target type mssql")
+		v.check(transfer.TargetConnectionInfo.Username != "", "target-username", "must be provided for target type mssql")
+		v.check(transfer.TargetConnectionInfo.Password != "", "target-password", "must be provided for target type mssql")
+		v.check(transfer.TargetConnectionInfo.Database != "", "target-database", "must be provided for target type mssql")
+	case TypeMySQL:
+	case TypeOracle:
+		v.check(sqlldrAvailable, "target-type", "you must install SQL*Loader to transfer data to oracle")
+		v.check(transfer.TargetConnectionInfo.Hostname != "", "target-hostname", "must be provided for target type oracle")
+		v.check(transfer.TargetConnectionInfo.Username != "", "target-username", "must be provided for target type oracle")
+		v.check(transfer.TargetConnectionInfo.Password != "", "target-password", "must be provided for target type oracle")
+		v.check(transfer.TargetConnectionInfo.Database != "", "target-database", "must be provided for target type oracle")
+	case TypeSnowflake:
+	}
+
+	if !v.valid() {
+		errorLog.Fatalf("error validating transfer :: %v", v.errors)
+	}
+
+	transferMap.Set(transfer.Id, transfer)
+
+	infoLog.Printf(`created transfer %v from %v to %v`,
+		transfer.Id, cliTransferInput.SourceName, cliTransferInput.TargetName)
+
+	if !transfer.KeepFiles {
+		defer func() {
+			err = os.RemoveAll(transfer.TmpDir)
+			if err != nil {
+				errorLog.Printf("error removing temp dir %v :: %v", transfer.TmpDir, err)
+				return
+			}
+			infoLog.Printf("temp dir %v removed", transfer.TmpDir)
+		}()
+	}
+
+	err = runTransfer(transfer)
+	if err != nil {
+		transfer.Error = fmt.Sprintf("error running transfer %v :: %v", transfer.Id, err)
+		transferMap.CancelAndSetStatus(transfer.Id, transfer, StatusError)
+		errorLog.Fatalf(transfer.Error)
+	}
+}
