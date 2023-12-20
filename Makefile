@@ -100,8 +100,8 @@ vendor:
 .PHONY: build/sqlpipe
 build/sqlpipe:
 	@echo 'Building cmd/sqlpipe...'
-	# GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
-	go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
+	GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
+	# go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
 
 ## build/docker: build the cmd/sqlpipe docker image and push
 .PHONY: build/docker
