@@ -2,17 +2,17 @@ version: '3.3'
 
 services:
 
-  # sqlpipe:
-  #   build:
-  #     context: .
-  #     dockerfile: sqlpipe.dockerfile
-  #   container_name: sqlpipe
-  #   ports:
-  #     - "9000:9000"
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 8G
+  sqlpipe:
+    build:
+      context: .
+      dockerfile: sqlpipe.dockerfile
+    container_name: sqlpipe
+    ports:
+      - "9000:9000"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
 
   mssql:
     image: mcr.microsoft.com/mssql/server

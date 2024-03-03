@@ -579,7 +579,7 @@ func (system Oracle) getFinalCsvFormatters() map[string]func(string) (string, er
 			return strings.Replace(v, "-", "", -1), nil
 		},
 		"bool": func(v string) (string, error) {
-			if v == "1" {
+			if v == "1" || v == "true" {
 				return "1", nil
 			}
 			return "0", nil

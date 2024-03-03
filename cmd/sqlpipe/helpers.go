@@ -46,10 +46,10 @@ var (
 	DriverSnowflake  = "snowflake"
 )
 
-func getFileNum(fileName string) (fileNum int, err error) {
+func getFileNum(fileName string) (fileNum int64, err error) {
 	fileNameClean := filepath.Base(fileName)
 	fileNumString := strings.Split(fileNameClean, ".")[0]
-	fileNum, err = strconv.Atoi(fileNumString)
+	fileNum, err = strconv.ParseInt(fileNumString, 2, 64)
 	if err != nil {
 		return 0, fmt.Errorf("error converting file number to int :: %v", err)
 	}
