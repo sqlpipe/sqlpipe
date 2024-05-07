@@ -158,6 +158,8 @@ func (system Mssql) driverTypeToPipeType(
 		return "float32", nil
 	case "DECIMAL":
 		return "decimal", nil
+	case "NUMERIC":
+		return "decimal", nil
 	case "MONEY":
 		return "money", nil
 	case "SMALLMONEY":
@@ -212,6 +214,8 @@ func (system Mssql) dbTypeToPipeType(
 	case "real":
 		return "float32", nil
 	case "decimal":
+		return "decimal", nil
+	case "numeric":
 		return "decimal", nil
 	case "money":
 		return "money", nil
