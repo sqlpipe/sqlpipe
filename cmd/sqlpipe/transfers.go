@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
@@ -50,6 +51,10 @@ type Transfer struct {
 	Delimiter                     string             `json:"delimiter"`
 	Newline                       string             `json:"newline"`
 	Null                          string             `json:"null"`
+	DeleteSourceData              bool               `json:"delete-source-data"`
+	DeleteUniqueIdentifier        string             `json:"delete-unique-identifier,omitempty"`
+	DeleteSourceSchemaName        string             `json:"delete-source-schema,omitempty"`
+	DeleteSourceTable             string             `json:"delete-source-table,omitempty"`
 }
 
 var transferMap = NewSafeTransferMap()
@@ -131,6 +136,10 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		Delimiter                     string `json:"delimiter"`
 		Newline                       string `json:"newline"`
 		Null                          string `json:"null"`
+		DeleteSourceData              bool   `json:"delete-source-data"`
+		DeleteUniqueIdentifier        string `json:"delete-unique-identifier,omitempty"`
+		DeleteSourceSchemaName        string `json:"delete-source-schema,omitempty"`
+		DeleteSourceSchemaTable       string `json:"delete-source-table,omitempty"`
 	}
 
 	err := readJSON(w, r, &input)
@@ -202,6 +211,10 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		TargetSchema:                  input.TargetSchema,
 		TargetTable:                   input.TargetTable,
 		Query:                         input.Query,
+		DeleteSourceData:              input.DeleteSourceData,
+		DeleteUniqueIdentifier:        input.DeleteUniqueIdentifier,
+		DeleteSourceSchemaName:        input.DeleteSourceSchemaName,
+		DeleteSourceTable:             input.DeleteSourceSchemaTable,
 	}
 
 	v := newValidator()
@@ -226,6 +239,12 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		v.check(transfer.SourceSchema == "", "source-schema", "must not be provided if query is provided")
 		v.check(transfer.SourceTable == "", "source-table", "must not be provided if query is provided")
+	}
+
+	if transfer.DeleteSourceData {
+		v.check(transfer.DeleteUniqueIdentifier != "", "delete-unique-identifier", "must be provided if delete-source-data is true")
+		v.check(transfer.DeleteSourceSchemaName != "", "delete-source-schema", "must be provided if delete-source-data is true")
+		v.check(transfer.DeleteSourceTable != "", "delete-source-table", "must be provided if delete-source-data is true")
 	}
 
 	if transfer.SourceSchema == "" && transfer.SourceTable == "" {
@@ -393,7 +412,6 @@ func cancelTransferHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runTransfer(transfer Transfer) (err error) {
-
 	transferMap.SetStatus(transfer.Id, StatusRunning, transfer)
 
 	source, err := newSystem(transfer.SourceConnectionInfo)
@@ -428,13 +446,11 @@ func runTransfer(transfer Transfer) (err error) {
 	var columnInfos []ColumnInfo
 
 	if transfer.SourceTable != "" {
-
 		columnInfos, err = getTableColumnInfos(transfer.SourceSchema, transfer.SourceTable, source)
 		if err != nil {
 			return fmt.Errorf("error getting source table column infos :: %v", err)
 		}
 		query = fmt.Sprintf(`SELECT * FROM %v`, escapedSourceSchemaPeriodTable)
-
 	}
 
 	rows, err := source.query(query)
@@ -442,6 +458,12 @@ func runTransfer(transfer Transfer) (err error) {
 		return fmt.Errorf("error querying source :: %v", err)
 	}
 	defer rows.Close()
+
+	deleterows, err := source.query(query)
+	if err != nil {
+		return fmt.Errorf("error querying source :: %v", err)
+	}
+	defer deleterows.Close()
 
 	if transfer.Query != "" {
 		columnInfos, err = getQueryColumnInfos(rows, source)
@@ -458,7 +480,6 @@ func runTransfer(transfer Transfer) (err error) {
 	}
 
 	newPipeFiles := createPipeFiles(columnInfos, transfer, rows, source, target, false)
-
 	pksProcessedPipeFiles := deletePks(newPipeFiles, columnInfos, transfer, target, false, initialLoad)
 
 	err = insertPipeFiles(pksProcessedPipeFiles, transfer, columnInfos, target, "")
@@ -466,9 +487,80 @@ func runTransfer(transfer Transfer) (err error) {
 		return fmt.Errorf("error inserting pipe files :: %v", err)
 	}
 
+	if transfer.DeleteSourceData {
+		err := deleteRetrievedRows(columnInfos, deleterows, transfer, source)
+		if err != nil {
+			return fmt.Errorf("error deleting retrieved rows :: %v", err)
+		}
+	}
+
 	transferMap.SetStatus(transfer.Id, StatusComplete, transfer)
 	infoLog.Printf("transfer %v complete", transfer.Id)
 
+	return nil
+}
+
+// Function to execute delete query on source database for retrieved rows
+func deleteRetrievedRows(columnInfos []ColumnInfo, rows *sql.Rows, transfer Transfer, source System) error {
+	var ids []string
+
+	uniqueIdentifierIndex := -1
+	for i, columnInfo := range columnInfos {
+		infoLog.Printf("columnInfo.Name :: %v", columnInfo.Name)
+		if columnInfo.Name == transfer.DeleteUniqueIdentifier {
+			uniqueIdentifierIndex = i
+			break
+		}
+	}
+
+	if uniqueIdentifierIndex == -1 {
+		return fmt.Errorf("unique identifier column %v not found in column infos", transfer.DeleteUniqueIdentifier)
+	}
+
+	numCols := len(columnInfos)
+
+	values := make([]interface{}, numCols)
+	valuePtrs := make([]interface{}, numCols)
+	batchSize := 1000
+	ids = make([]string, 0, batchSize)
+
+	for i := 0; i < numCols; i++ {
+		valuePtrs[i] = &values[i]
+	}
+	for rows.Next() {
+		err := rows.Scan(valuePtrs...)
+		if err != nil {
+			return fmt.Errorf("error scanning row :: %v", err)
+		}
+		ids = append(ids, fmt.Sprintf("'%v'", values[uniqueIdentifierIndex]))
+
+		if len(ids) == batchSize {
+			// Build and execute the delete query
+			escapedSourceSchemaPeriodTable := getSchemaPeriodTable(transfer.DeleteSourceSchemaName, transfer.DeleteSourceTable, source, true)
+			deleteQuery := fmt.Sprintf(`DELETE FROM %s WHERE %s IN (%s)`, escapedSourceSchemaPeriodTable, transfer.DeleteUniqueIdentifier, strings.Join(ids, ","))
+			if err := source.exec(deleteQuery); err != nil {
+				return fmt.Errorf("error executing delete query :: %v", err)
+			}
+			// Reset ids
+			ids = ids[:0]
+		}
+	}
+
+	if len(ids) == 0 {
+		return fmt.Errorf("no rows found to delete")
+	}
+
+	// delete the remaining ids
+	if len(ids) > 0 {
+		// Build and execute the delete query
+		escapedSourceSchemaPeriodTable := getSchemaPeriodTable(transfer.DeleteSourceSchemaName, transfer.DeleteSourceTable, source, true)
+
+		deleteQuery := fmt.Sprintf(`DELETE FROM %s WHERE %s IN (%s)`, escapedSourceSchemaPeriodTable, transfer.DeleteUniqueIdentifier, strings.Join(ids, ","))
+		if err := source.exec(deleteQuery); err != nil {
+			return fmt.Errorf("error executing delete query :: %v", err)
+		}
+		infoLog.Printf("delete query executed")
+	}
 	return nil
 }
 
