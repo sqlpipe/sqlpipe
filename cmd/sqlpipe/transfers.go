@@ -50,6 +50,8 @@ type Transfer struct {
 	Delimiter                     string             `json:"delimiter"`
 	Newline                       string             `json:"newline"`
 	Null                          string             `json:"null"`
+	IncrementalColumn             string             `json:"incremental-column,omitempty"`
+	Vacuum                        bool               `json:"vacuum"`
 }
 
 var transferMap = NewSafeTransferMap()
@@ -121,8 +123,8 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		TargetUsername                string `json:"target-username"`
 		TargetPassword                string `json:"target-password"`
 		DropTargetTableIfExists       bool   `json:"drop-target-table-if-exists"`
-		CreateTargetSchemaIfNotExists bool   `json:"create-target-schema-if-not-exists"`
 		CreateTargetTableIfNotExists  bool   `json:"create-target-table-if-not-exists"`
+		CreateTargetSchemaIfNotExists bool   `json:"create-target-schema-if-not-exists"`
 		SourceSchema                  string `json:"source-schema"`
 		SourceTable                   string `json:"source-table"`
 		TargetSchema                  string `json:"target-schema"`
@@ -131,6 +133,8 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		Delimiter                     string `json:"delimiter"`
 		Newline                       string `json:"newline"`
 		Null                          string `json:"null"`
+		IncrementalColumn             string `json:"incremental-column"`
+		Vacuum                        bool   `json:"vacuum"`
 	}
 
 	err := readJSON(w, r, &input)
@@ -202,6 +206,8 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		TargetSchema:                  input.TargetSchema,
 		TargetTable:                   input.TargetTable,
 		Query:                         input.Query,
+		IncrementalColumn:             input.IncrementalColumn,
+		Vacuum:                        input.Vacuum,
 	}
 
 	v := newValidator()
@@ -226,14 +232,31 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		v.check(transfer.SourceSchema == "", "source-schema", "must not be provided if query is provided")
 		v.check(transfer.SourceTable == "", "source-table", "must not be provided if query is provided")
+		v.check(!transfer.Vacuum, "vacuum", "must not be true if query is provided")
 	}
 
 	if transfer.SourceSchema == "" && transfer.SourceTable == "" {
 		v.check(transfer.Query != "", "query", "must be provided if source-schema and source-table are not provided")
 	}
 
+	if transfer.Vacuum {
+		v.check(transfer.Query == "", "query", "must not be provided if vacuum is true")
+		v.check(transfer.SourceSchema != "", "source-schema", "must be provided if vacuum is true")
+		v.check(transfer.SourceTable != "", "source-table", "must be provided if vacuum is true")
+		v.check(transfer.IncrementalColumn == "", "incremental-column", "must not be provided if vacuum is true")
+		v.check(!transfer.CreateTargetTableIfNotExists, "create-target-table-if-not-exists", "must not be true if vacuum is true")
+		v.check(!transfer.DropTargetTableIfExists, "drop-target-table-if-exists", "must not be true if vacuum is true")
+	}
+
 	if transfer.SourceSchema != "" || transfer.SourceTable != "" {
 		v.check(transfer.Query == "", "query", "must not be provided if source-schema or source-table are provided")
+	}
+
+	if transfer.IncrementalColumn != "" {
+		if schemaRequired[transfer.SourceConnectionInfo.Type] {
+			v.check(transfer.SourceSchema != "", "source-schema", fmt.Sprintf("must be provided for source type %v if incremental-column is provided", transfer.TargetConnectionInfo.Type))
+		}
+		v.check(transfer.SourceTable != "", "source-table", "must be provided if incremental-column is provided")
 	}
 
 	v.check(transfer.TargetTable != "", "target-table", "must be provided")
@@ -268,7 +291,6 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 		v.check(transfer.TargetConnectionInfo.Username != "", "target-username", "must be provided for target type oracle")
 		v.check(transfer.TargetConnectionInfo.Password != "", "target-password", "must be provided for target type oracle")
 		v.check(transfer.TargetConnectionInfo.Database != "", "target-database", "must be provided for target type oracle")
-	case TypeSnowflake:
 	}
 
 	if !v.valid() {
@@ -424,8 +446,11 @@ func runTransfer(transfer Transfer) (err error) {
 
 	escapedSourceSchemaPeriodTable := getSchemaPeriodTable(transfer.SourceSchema, transfer.SourceTable, source, true)
 	query := transfer.Query
+	incremental := false
 	initialLoad := true
+	var incrementalTime time.Time
 	var columnInfos []ColumnInfo
+	var incrementalColumnInfo ColumnInfo
 
 	if transfer.SourceTable != "" {
 
@@ -433,8 +458,108 @@ func runTransfer(transfer Transfer) (err error) {
 		if err != nil {
 			return fmt.Errorf("error getting source table column infos :: %v", err)
 		}
-		query = fmt.Sprintf(`SELECT * FROM %v`, escapedSourceSchemaPeriodTable)
 
+		if transfer.IncrementalColumn != "" {
+			incremental = true
+
+			// check for existence of incremental column in columnInfos
+			var found bool
+			for _, columnInfo := range columnInfos {
+				if strings.EqualFold(columnInfo.Name, transfer.IncrementalColumn) {
+					found = true
+					incrementalColumnInfo = columnInfo
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("incremental column %v not found in source table %v", transfer.IncrementalColumn, transfer.SourceTable)
+			}
+
+			initialLoad, incrementalTime, err = getIncrementalTime(transfer.TargetSchema, transfer.TargetTable, transfer.IncrementalColumn, initialLoad, target)
+			if err != nil {
+				return fmt.Errorf("error getting incremental time :: %v", err)
+			}
+		}
+
+		if initialLoad {
+			query = fmt.Sprintf(`SELECT * FROM %v`, escapedSourceSchemaPeriodTable)
+		} else {
+
+			sqlFormatters := source.getSqlFormatters()
+
+			timeStringVal, err := sqlFormatters[incrementalColumnInfo.PipeType](incrementalTime.Format(time.RFC3339Nano))
+			if err != nil {
+				return fmt.Errorf("error formatting incremental time :: %v", err)
+			}
+
+			query = fmt.Sprintf(`SELECT * FROM %v WHERE %v > %v`, escapedSourceSchemaPeriodTable, transfer.IncrementalColumn, timeStringVal)
+		}
+	}
+
+	vacuumTableName := ""
+	schemaPeriodVacuumTableName := ""
+
+	if transfer.Vacuum {
+
+		randomLetters, err := RandomLetters(16)
+		if err != nil {
+			return fmt.Errorf("error generating random letters :: %v", err)
+		}
+
+		vacuumTableName = fmt.Sprintf("sqlpipe_vacuum_%v_%v", randomLetters, transfer.TargetTable)
+
+		// shorten vacuum table name to 64 chars if necessary
+		if len(vacuumTableName) > 64 {
+			vacuumTableName = vacuumTableName[:64]
+		}
+
+		schemaPeriodVacuumTableName = getSchemaPeriodTable(transfer.TargetSchema, vacuumTableName, target, true)
+
+		columnInfos, err = getTableColumnInfos(transfer.SourceSchema, transfer.SourceTable, source)
+		if err != nil {
+			return fmt.Errorf("error getting source table column infos :: %v", err)
+		}
+
+		pkColumnInfos := []ColumnInfo{}
+
+		for _, columnInfo := range columnInfos {
+			if columnInfo.IsPrimaryKey {
+				pkColumnInfos = append(pkColumnInfos, columnInfo)
+			}
+		}
+
+		columnInfos = pkColumnInfos
+
+		err = createTableIfNotExists(transfer.TargetSchema, vacuumTableName, columnInfos, target, incremental)
+		if err != nil {
+			return fmt.Errorf("error creating target table :: %v", err)
+		}
+
+		if !transfer.KeepFiles {
+			defer func() {
+				err = dropTableIfExists(transfer.TargetSchema, vacuumTableName, target)
+				if err != nil {
+					errorLog.Printf("error dropping vacuum table %v :: %v", vacuumTableName, err)
+					return
+				}
+				infoLog.Printf("vacuum table %v dropped", vacuumTableName)
+			}()
+		}
+
+		queryBuilder := strings.Builder{}
+
+		queryBuilder.WriteString("select ")
+
+		for i, columnInfo := range columnInfos {
+			if i != 0 {
+				queryBuilder.WriteString(", ")
+			}
+			queryBuilder.WriteString(columnInfo.Name)
+		}
+
+		queryBuilder.WriteString(fmt.Sprintf(" from %v", escapedSourceSchemaPeriodTable))
+
+		query = queryBuilder.String()
 	}
 
 	rows, err := source.query(query)
@@ -457,13 +582,51 @@ func runTransfer(transfer Transfer) (err error) {
 		}
 	}
 
-	newPipeFiles := createPipeFiles(columnInfos, transfer, rows, source, target, false)
+	newPipeFiles := createPipeFiles(columnInfos, transfer, rows, source, target, incremental)
 
-	pksProcessedPipeFiles := deletePks(newPipeFiles, columnInfos, transfer, target, false, initialLoad)
+	pksProcessedPipeFiles := deletePks(newPipeFiles, columnInfos, transfer, target, incremental, initialLoad)
 
 	err = insertPipeFiles(pksProcessedPipeFiles, transfer, columnInfos, target, "")
 	if err != nil {
 		return fmt.Errorf("error inserting pipe files :: %v", err)
+	}
+
+	if transfer.Vacuum {
+
+		escapedTargetSchemaPeriodTable := getSchemaPeriodTable(transfer.TargetSchema, transfer.TargetTable, target, true)
+
+		queryBuilder := strings.Builder{}
+
+		queryBuilder.WriteString(`DELETE FROM `)
+		queryBuilder.WriteString(escapedTargetSchemaPeriodTable)
+		queryBuilder.WriteString(` where (`)
+		for i, columnInfo := range columnInfos {
+			escapedColumnName := escapeIfNeeded(columnInfo.Name, target)
+			if i != 0 {
+				queryBuilder.WriteString(", ")
+			}
+
+			queryBuilder.WriteString(escapedColumnName)
+		}
+		queryBuilder.WriteString(`) not in (select `)
+		for i, columnInfo := range columnInfos {
+			escapedColumnName := escapeIfNeeded(columnInfo.Name, target)
+			if i != 0 {
+				queryBuilder.WriteString(", ")
+			}
+
+			queryBuilder.WriteString(escapedColumnName)
+		}
+		queryBuilder.WriteString(` from `)
+		queryBuilder.WriteString(schemaPeriodVacuumTableName)
+		queryBuilder.WriteString(`)`)
+
+		query = queryBuilder.String()
+
+		err = target.exec(query)
+		if err != nil {
+			return fmt.Errorf("error vacuuming target table :: %v", err)
+		}
 	}
 
 	transferMap.SetStatus(transfer.Id, StatusComplete, transfer)

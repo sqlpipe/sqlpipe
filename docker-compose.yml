@@ -12,7 +12,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 1G
 
   mssql:
     image: mcr.microsoft.com/mssql/server
@@ -20,7 +20,7 @@ services:
     environment:
       ACCEPT_EULA: Y
       SA_PASSWORD: Mypass123
-    platform: linux/amd64
+    # platform: linux/amd64
     volumes:
       - ./setup-sql/mssql.sql:/setup.sql
     command: >
@@ -36,11 +36,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 16G
+          memory: 4G
 
   postgresql:
     image: postgres
-    platform: linux/amd64
+    # platform: linux/amd64
     container_name: postgresql
     ports:
       - 5432:5432
@@ -52,11 +52,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 16G
+          memory: 1G
 
   mysql:
     image: mysql:8.0
-    platform: linux/amd64
+    # platform: linux/amd64
     container_name: mysql
     environment:
       - MYSQL_ROOT_PASSWORD=Mypass123
@@ -67,21 +67,35 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 2G
     command: --local-infile=1
 
+    # Oracle service (label used to access the service container)
+  oracle:
+    container_name: oracle
+        # Docker Hub image (feel free to change the tag "latest" to any other available one)
+    image: gvenzl/oracle-free:latest
+    environment:
+        ORACLE_PASSWORD: Mypass123
+        NLS_CHARACTERSET: AL32UTF8
+        APP_USER: admin
+        APP_USER_PASSWORD: Mypass123
+    ports:
+        - 1521:1521
 
-  # oracle:
-  #   image: sqlpipe/oracle:21.3.0
-  #   container_name: oracle
-  #   ports:
-  #     - "1521:1521"
-  #   environment:
-  #     - ORACLE_PWD=Mypass123
-  #     - NLS_CHARACTERSET=AL32UTF8
-  #   volumes:
-  #     - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 16G
+
+#   oracle:
+#     image: sqlpipe/oracle:21.3.0
+#     platform: linux/amd64
+#     container_name: oracle
+#     ports:
+#       - "1521:1521"
+#     environment:
+#       - ORACLE_PWD=Mypass123
+#       - NLS_CHARACTERSET=AL32UTF8
+#     volumes:
+#       - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
+#     deploy:
+#       resources:
+#         limits:
+#           memory: 16G

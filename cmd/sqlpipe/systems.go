@@ -968,6 +968,52 @@ func dropTableIfExists(schema, table string, system System) (err error) {
 	return nil
 }
 
+func getIncrementalTime(schema, table, incrementalColumn string, initialLoad bool, system System) (bool, time.Time, error) {
+
+	incrementalTime, overridden, initialLoad, err := system.getIncrementalTimeOverride(schema, table, incrementalColumn, initialLoad)
+	if overridden {
+		return initialLoad, incrementalTime, err
+	}
+
+	escapedSchemaPeriodTable := getSchemaPeriodTable(schema, table, system, true)
+
+	query := fmt.Sprintf("select max(%v) from %v", escapeIfNeeded(incrementalColumn, system), escapedSchemaPeriodTable)
+
+	rows, err := system.query(query)
+	if err != nil {
+		if !system.IsTableNotFoundError(err) {
+			return initialLoad, incrementalTime, fmt.Errorf("error getting max %v :: %v", incrementalColumn, err)
+		}
+		return initialLoad, incrementalTime, nil
+	}
+	defer rows.Close()
+
+	columnInfos, err := getQueryColumnInfos(rows, system)
+	if err != nil {
+		return initialLoad, incrementalTime, fmt.Errorf("error getting column info :: %v", err)
+	}
+
+	if !permittedValue(columnInfos[0].PipeType, "datetime", "datetimetz", "date") {
+		return initialLoad, incrementalTime, fmt.Errorf("column %v is unsupported pipe type %v", incrementalColumn, columnInfos[0].PipeType)
+	}
+
+	for rows.Next() {
+		err := rows.Scan(&incrementalTime)
+		if err != nil {
+			if !strings.Contains(err.Error(), "storing driver.Value type <nil>") {
+				return initialLoad, incrementalTime, fmt.Errorf("error scanning max %v :: %v", incrementalColumn, err)
+			}
+			return initialLoad, incrementalTime, nil
+		}
+	}
+
+	if !incrementalTime.IsZero() {
+		initialLoad = false
+	}
+
+	return initialLoad, incrementalTime, nil
+}
+
 func deletePks(pipeFilesIn <-chan PipeFileInfo, columnInfos []ColumnInfo, transfer Transfer, target System, incremental, initialLoad bool) <-chan PipeFileInfo {
 	if initialLoad || !incremental {
 		return pipeFilesIn

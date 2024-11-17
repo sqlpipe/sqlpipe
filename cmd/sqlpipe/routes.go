@@ -10,7 +10,6 @@ import (
 func routes() http.Handler {
 	router := httprouter.New()
 
-	// SQLpipe
 	router.NotFound = http.HandlerFunc(notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(methodNotAllowedResponse)
 
