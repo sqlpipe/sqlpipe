@@ -298,7 +298,7 @@ func (system Snowflake) insertPipeFilesOverride(columnInfos []ColumnInfo, transf
 
 	finalCsvChannel := convertPipeFiles(pipeFileInfoChannel, columnInfos, transfer, system)
 
-	putCsvsChannel := system.putCsvs(finalCsvChannel, columnInfos, transfer)
+	putCsvsChannel := system.putCsvs(finalCsvChannel, transfer)
 
 	err = insertFinalCsvs(putCsvsChannel, transfer, system, transfer.TargetSchema, table)
 	if err != nil {
@@ -319,7 +319,6 @@ func (system Snowflake) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInf
 
 func (system Snowflake) putCsvs(
 	finalCsvChannelIn <-chan FinalCsvInfo,
-	columnInfo []ColumnInfo,
 	transfer Transfer,
 ) <-chan FinalCsvInfo {
 

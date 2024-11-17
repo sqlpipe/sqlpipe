@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-func clientErrorResponse(w http.ResponseWriter, r *http.Request, status int, err error) {
+func clientErrorResponse(w http.ResponseWriter, status int, err error) {
 	env := envelope{"error": err.Error()}
 
 	err = writeJSON(w, status, env, nil)
@@ -30,15 +30,15 @@ func serverErrorResponse(w http.ResponseWriter, r *http.Request, status int, err
 
 func notFoundResponse(w http.ResponseWriter, r *http.Request) {
 	err := errors.New("the requested resource could not be found")
-	clientErrorResponse(w, r, http.StatusNotFound, err)
+	clientErrorResponse(w, http.StatusNotFound, err)
 }
 
 func methodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
 	err := fmt.Errorf("the %v method is not supported for this resource", r.Method)
-	clientErrorResponse(w, r, http.StatusMethodNotAllowed, err)
+	clientErrorResponse(w, http.StatusMethodNotAllowed, err)
 }
 
-func failedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
+func failedValidationResponse(w http.ResponseWriter, errors map[string]string) {
 	env := envelope{"error": errors}
 
 	err := writeJSON(w, http.StatusUnprocessableEntity, env, nil)

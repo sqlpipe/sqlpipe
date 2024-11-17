@@ -330,7 +330,6 @@ func createPipeFiles(
 	transfer Transfer,
 	rows *sql.Rows,
 	source System,
-	target System,
 	incremental bool,
 ) <-chan PipeFileInfo {
 

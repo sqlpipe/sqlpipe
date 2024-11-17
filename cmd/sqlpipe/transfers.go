@@ -139,7 +139,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := readJSON(w, r, &input)
 	if err != nil {
-		clientErrorResponse(w, r, http.StatusBadRequest, err)
+		clientErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -294,7 +294,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !v.valid() {
-		failedValidationResponse(w, r, v.errors)
+		failedValidationResponse(w, v.errors)
 		return
 	}
 
@@ -365,7 +365,7 @@ func listTransfersHandler(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if !v.valid() {
-		failedValidationResponse(w, r, v.errors)
+		failedValidationResponse(w, v.errors)
 		return
 	}
 
@@ -399,7 +399,7 @@ func cancelTransferHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if transfer.Status != StatusRunning {
-		clientErrorResponse(w, r, http.StatusBadRequest,
+		clientErrorResponse(w, http.StatusBadRequest,
 			fmt.Errorf("cannot cancel transfer with status of %v", transfer.Status),
 		)
 		return
@@ -582,7 +582,7 @@ func runTransfer(transfer Transfer) (err error) {
 		}
 	}
 
-	newPipeFiles := createPipeFiles(columnInfos, transfer, rows, source, target, incremental)
+	newPipeFiles := createPipeFiles(columnInfos, transfer, rows, source, incremental)
 
 	pksProcessedPipeFiles := deletePks(newPipeFiles, columnInfos, transfer, target, incremental, initialLoad)
 
