@@ -226,7 +226,7 @@ func createTransferHandler(w http.ResponseWriter, r *http.Request) {
 
 	if transfer.Query == "" {
 		if schemaRequired[transfer.SourceConnectionInfo.Type] {
-			v.check(transfer.SourceSchema != "", "source-schema", fmt.Sprintf("if query is not provided, must be provided for source type %v", transfer.TargetConnectionInfo.Type))
+			v.check(transfer.SourceSchema != "", "source-schema", fmt.Sprintf("if query is not provided, must be provided for source type %v", transfer.SourceConnectionInfo.Type))
 		}
 		v.check(transfer.SourceTable != "", "source-table", "must be provided if query is not provided")
 	} else {
@@ -793,7 +793,7 @@ func handleCliTransfer(cliTransferInput CliTransferInput) {
 
 	if transfer.Query == "" {
 		if schemaRequired[transfer.SourceConnectionInfo.Type] {
-			v.check(transfer.SourceSchema != "", "source-schema", fmt.Sprintf("if query is not provided, must be provided for source type %v", transfer.TargetConnectionInfo.Type))
+			v.check(transfer.SourceSchema != "", "source-schema", fmt.Sprintf("if query is not provided, must be provided for source type %v", transfer.SourceConnectionInfo.Type))
 		}
 		v.check(transfer.SourceTable != "", "source-table", "must be provided if query is not provided")
 	} else {

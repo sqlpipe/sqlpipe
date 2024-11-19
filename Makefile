@@ -100,8 +100,8 @@ vendor:
 .PHONY: build/sqlpipe
 build/sqlpipe:
 	@echo 'Building cmd/sqlpipe...'
-	GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
-	# go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
+	# GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
+	go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
 
 ## build/docker: build the cmd/sqlpipe docker image and push
 .PHONY: build/docker
@@ -127,8 +127,9 @@ build/tests:
 
 .PHONY: tests
 tests: build/tests
-	./bin/tests -postgresql-host=${POSTGRESQL_HOST} -postgresql-user=${POSTGRESQL_USER} -postgresql-password=${POSTGRESQL_PASSWORD} -postgresql-db=${POSTGRESQL_DB} -postgresql-port=${POSTGRESQL_PORT} \
-		-mysql-host=${MYSQL_HOST} -mysql-user=${MYSQL_USER} -mysql-password=${MYSQL_PASSWORD} -mysql-db=${MYSQL_DB} -mysql-port=${MYSQL_PORT} \
-		-mssql-host=${MSSQL_HOST} -mssql-user=${MSSQL_USER} -mssql-password=${MSSQL_PASSWORD} -mssql-db=${MSSQL_DB} -mssql-port=${MSSQL_PORT} \
-		-oracle-host=${ORACLE_HOST} -oracle-user=${ORACLE_USER} -oracle-password=${ORACLE_PASSWORD} -oracle-db=${ORACLE_DB} -oracle-port=${ORACLE_PORT} \
-		-snowflake-account=${SNOWFLAKE_ACCOUNT} -snowflake-user=${SNOWFLAKE_USER} -snowflake-password=${SNOWFLAKE_PASSWORD} -snowflake-db=${SNOWFLAKE_DB}
+	./bin/tests -postgresql-host=${POSTGRESQL_HOST} -postgresql-user=${POSTGRESQL_USER} -postgresql-password=${POSTGRESQL_PASSWORD} -postgresql-port=${POSTGRESQL_PORT} \
+		-mysql-host=${MYSQL_HOST} -mysql-user=${MYSQL_USER} -mysql-password=${MYSQL_PASSWORD} -mysql-port=${MYSQL_PORT} \
+		-mssql-host=${MSSQL_HOST} -mssql-user=${MSSQL_USER} -mssql-password=${MSSQL_PASSWORD} -mssql-port=${MSSQL_PORT} \
+		-oracle-host=${ORACLE_HOST} -oracle-user=${ORACLE_USER} -oracle-password=${ORACLE_PASSWORD} -oracle-port=${ORACLE_PORT} \
+		-snowflake-account=${SNOWFLAKE_ACCOUNT} -snowflake-user=${SNOWFLAKE_USER} -snowflake-password=${SNOWFLAKE_PASSWORD} \
+		-server-address=${SERVER_ADDRESS}

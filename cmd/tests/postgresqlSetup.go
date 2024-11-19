@@ -7,12 +7,14 @@ import (
 	"time"
 )
 
-func setupPostgreSQL() error {
+func setupPostgreSQL() (ConnectionInfo, error) {
+
+	connectionInfo := ConnectionInfo{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := postgresqlDB.ExecContext(ctx, "DROP DATABASE mydb with (force)")
+	_, err := postgresqlDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE %v with (force)", postgresqlDBName))
 	if err != nil {
 		logger.Warn(fmt.Sprintf("error dropping mydb in postgresql :: %v", err))
 	}
@@ -22,18 +24,38 @@ func setupPostgreSQL() error {
 
 	_, err = postgresqlDB.ExecContext(ctx, "CREATE DATABASE mydb")
 	if err != nil {
-		return fmt.Errorf("error creating database :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating database :: %v", err)
 	}
 
-	postgresqlDB, err = sql.Open("pgx", fmt.Sprintf("host=%s port=%v user=%s password=%s dbname=mydb sslmode=disable", postgresqlHost, postgresqlPort, postgresqlUser, postgresqlPassword))
+	dsn := fmt.Sprintf("postgresql://%v:%v@%v:5432/%v?sslmode=disable", postgresqlUser, postgresqlPassword, postgresqlHost, postgresqlDBName)
+
+	postgresqlDB, err = sql.Open("pgx", dsn)
 	if err != nil {
-		return fmt.Errorf("error creating PostgreSQL connection pool :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating PostgreSQL connection pool :: %v", err)
 	}
 
-	err = postgresqlDB.Ping()
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = postgresqlDB.PingContext(ctx)
 	if err != nil {
-		return fmt.Errorf("error pinging PostgreSQL :: %v", err)
+		return connectionInfo, fmt.Errorf("error pinging PostgreSQL :: %v", err)
 	}
+
+	connectionInfo = ConnectionInfo{
+		SystemType:       "postgresql",
+		Host:             postgresqlHost,
+		Port:             postgresqlPort,
+		User:             postgresqlUser,
+		Password:         postgresqlPassword,
+		DBName:           postgresqlDBName,
+		ConnectionString: dsn,
+		Schema:           postgresqlSchema,
+		Table:            postgresqlTable,
+	}
+
+	fmt.Println("CONN STIRNG")
+	fmt.Println(connectionInfo.ConnectionString)
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -82,7 +104,7 @@ CREATE TABLE my_table (
 );
 `)
 	if err != nil {
-		return fmt.Errorf("error creating my_table :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating my_table :: %v", err)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -97,7 +119,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;`)
 	if err != nil {
-		return fmt.Errorf("error creating update_last_modified function :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating update_last_modified function :: %v", err)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -109,7 +131,7 @@ BEFORE UPDATE ON my_table
 FOR EACH ROW
 EXECUTE FUNCTION update_last_modified();`)
 	if err != nil {
-		return fmt.Errorf("error creating tr_update_last_modified trigger :: %w", err)
+		return connectionInfo, fmt.Errorf("error creating tr_update_last_modified trigger :: %w", err)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -343,10 +365,10 @@ INSERT INTO my_table
                 null
             );`)
 	if err != nil {
-		return fmt.Errorf("failed to insert data: %w", err)
+		return connectionInfo, fmt.Errorf("failed to insert data: %w", err)
 	}
 
 	logger.Info("PostgreSQL setup successful")
 
-	return nil
+	return connectionInfo, nil
 }
