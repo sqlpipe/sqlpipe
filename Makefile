@@ -22,19 +22,19 @@ confirm:
 .PHONY: sqlpipe
 sqlpipe: build/sqlpipe
 	docker rm -f sqlpipe
-	docker-compose up --build -d sqlpipe
-	docker-compose logs -f sqlpipe
+	docker compose up --build -d sqlpipe
+	docker compose logs -f sqlpipe
 
 .PHONY: run
 run: build/sqlpipe
 	./bin/sqlpipe
 
-## compose-reset: run docker-compose
+## compose-reset: run docker compose
 .PHONY: compose
 compose: build/sqlpipe
-	docker-compose down -v
-	docker-compose up --build -d
-	docker-compose logs -f
+	docker compose down -v
+	docker compose up --build -d
+	docker compose logs -f
 
 ## postgresql: run postgresql
 .PHONY: postgresql
@@ -112,3 +112,23 @@ build/docker:
 	docker buildx build --platform linux/amd64 -t sqlpipe/sqlpipe:latest -f sqlpipe.dockerfile . --load
 	@echo 'Pushing docker image...'
 	docker push sqlpipe/sqlpipe:latest
+
+
+# ==================================================================================== #
+# TESTS
+# ==================================================================================== #
+
+## build/tests: build the cmd/tests application
+.PHONY: build/tests
+build/tests:
+	@echo 'Building cmd/tests...'
+	# GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/tests ./cmd/tests
+	go build -ldflags="-w -s" -o=./bin/tests ./cmd/tests
+
+.PHONY: tests
+tests: build/tests
+	./bin/tests -postgresql-host=${POSTGRESQL_HOST} -postgresql-user=${POSTGRESQL_USER} -postgresql-password=${POSTGRESQL_PASSWORD} -postgresql-db=${POSTGRESQL_DB} -postgresql-port=${POSTGRESQL_PORT} \
+		-mysql-host=${MYSQL_HOST} -mysql-user=${MYSQL_USER} -mysql-password=${MYSQL_PASSWORD} -mysql-db=${MYSQL_DB} -mysql-port=${MYSQL_PORT} \
+		-mssql-host=${MSSQL_HOST} -mssql-user=${MSSQL_USER} -mssql-password=${MSSQL_PASSWORD} -mssql-db=${MSSQL_DB} -mssql-port=${MSSQL_PORT} \
+		-oracle-host=${ORACLE_HOST} -oracle-user=${ORACLE_USER} -oracle-password=${ORACLE_PASSWORD} -oracle-db=${ORACLE_DB} -oracle-port=${ORACLE_PORT} \
+		-snowflake-account=${SNOWFLAKE_ACCOUNT} -snowflake-user=${SNOWFLAKE_USER} -snowflake-password=${SNOWFLAKE_PASSWORD} -snowflake-db=${SNOWFLAKE_DB}

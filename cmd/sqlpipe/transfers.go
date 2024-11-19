@@ -535,6 +535,11 @@ func runTransfer(transfer Transfer) (err error) {
 			return fmt.Errorf("error creating target table :: %v", err)
 		}
 
+		err = source.exec(fmt.Sprintf(`DELETE FROM %v`, schemaPeriodVacuumTableName))
+		if err != nil {
+			return fmt.Errorf("error deleting rows from source table :: %v", err)
+		}
+
 		if !transfer.KeepFiles {
 			defer func() {
 				err = dropTableIfExists(transfer.TargetSchema, vacuumTableName, target)
@@ -576,7 +581,7 @@ func runTransfer(transfer Transfer) (err error) {
 	}
 
 	if transfer.CreateTargetTableIfNotExists {
-		err = createTableIfNotExists(transfer.TargetSchema, transfer.TargetTable, columnInfos, target, false)
+		err = createTableIfNotExists(transfer.TargetSchema, transfer.TargetTable, columnInfos, target, incremental)
 		if err != nil {
 			return fmt.Errorf("error creating target table :: %v", err)
 		}

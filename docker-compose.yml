@@ -1,12 +1,10 @@
-version: '3.3'
-
 services:
-
   sqlpipe:
     build:
       context: .
       dockerfile: sqlpipe.dockerfile
     container_name: sqlpipe
+    platform: linux/amd64
     ports:
       - "9000:9000"
     deploy:
@@ -21,22 +19,22 @@ services:
       ACCEPT_EULA: Y
       SA_PASSWORD: Mypass123
     # platform: linux/amd64
-    volumes:
-      - ./setup-sql/mssql.sql:/setup.sql
-    command: >
-      /bin/bash -c "
-        export TZ=US/Pacific
-        /opt/mssql/bin/sqlservr &
-        sleep 25;
-        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql
-        tail -f /dev/null
-      "
+    # volumes:
+    #   - ./setup-sql/mssql.sql:/setup.sql
+    # command: >
+    #   /bin/bash -c "
+    #     export TZ=US/Pacific
+    #     /opt/mssql/bin/sqlservr &
+    #     sleep 25;
+    #     /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Mypass123' -d master -i /setup.sql -C
+    #     tail -f /dev/null
+    #   "
     ports:
       - "1433:1433"
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 2G
 
   postgresql:
     image: postgres
@@ -46,43 +44,58 @@ services:
       - 5432:5432
     environment:
       POSTGRES_PASSWORD: Mypass123
-    volumes:
-      - ./setup-sql/postgresql-simple.sql:/docker-entrypoint-initdb.d/setup-1.sql
-      - ./setup-sql/postgresql-complex.sql:/docker-entrypoint-initdb.d/setup-2.sql
+    # volumes:
+    #   - ./setup-sql/postgresql-simple.sql:/docker-entrypoint-initdb.d/setup-1.sql
+    #   - ./setup-sql/postgresql-complex.sql:/docker-entrypoint-initdb.d/setup-2.sql
     deploy:
       resources:
         limits:
           memory: 1G
 
   mysql:
-    image: mysql:8.0
+    image: mysql
     # platform: linux/amd64
     container_name: mysql
     environment:
       - MYSQL_ROOT_PASSWORD=Mypass123
     ports:
       - "3306:3306"
-    volumes:
-      - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
+    # volumes:
+    #   - ./setup-sql/mysql.sql:/docker-entrypoint-initdb.d/setup.sql
     deploy:
       resources:
         limits:
           memory: 2G
     command: --local-infile=1
 
-    # Oracle service (label used to access the service container)
   oracle:
     container_name: oracle
-        # Docker Hub image (feel free to change the tag "latest" to any other available one)
-    image: gvenzl/oracle-free:latest
-    environment:
-        ORACLE_PASSWORD: Mypass123
-        NLS_CHARACTERSET: AL32UTF8
-        APP_USER: admin
-        APP_USER_PASSWORD: Mypass123
+    image: oracle/database:23ai-free-arm64
     ports:
-        - 1521:1521
+      - "1521:1521"
+    # volumes:
+    #   - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
+    environment:
+      - ORACLE_PWD=Mypass123
+      - NLS_CHARACTERSET=AL32UTF8
+    deploy:
+      resources:
+        limits:
+          memory: 4G
 
+#     # Oracle service (label used to access the service container)
+#   oracle:
+#     container_name: oracle
+#     platform: linux/amd64
+#         # Docker Hub image (feel free to change the tag "latest" to any other available one)
+#     image: gvenzl/oracle-free:latest
+#     environment:
+#         ORACLE_PASSWORD: Mypass123
+#         NLS_CHARACTERSET: AL32UTF8
+#         APP_USER: admin
+#         APP_USER_PASSWORD: Mypass123
+#     ports:
+#         - 1521:1521
 
 #   oracle:
 #     image: sqlpipe/oracle:21.3.0
@@ -93,9 +106,9 @@ services:
 #     environment:
 #       - ORACLE_PWD=Mypass123
 #       - NLS_CHARACTERSET=AL32UTF8
-#     volumes:
-#       - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
+#     # volumes:
+#     #   - ./setup-sql/oracle.sql:/opt/oracle/scripts/startup/setup.sql
 #     deploy:
 #       resources:
 #         limits:
-#           memory: 16G
+#           memory: 4G
