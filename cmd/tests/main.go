@@ -51,7 +51,7 @@ var oracleHost string
 var oraclePort int
 var oracleUser string
 var oraclePassword string
-var oracleDBName = "FREEPDB1"
+var oracleDBName = "XE"
 var oracleTable = "my_table"
 var oracleSchemaRequired = false
 
@@ -128,33 +128,38 @@ func main() {
 
 	postgresqlDB, err = sql.Open("pgx", fmt.Sprintf("host=%s port=%v user=%s password=%s dbname=postgres sslmode=disable", postgresqlHost, postgresqlPort, postgresqlUser, postgresqlPassword))
 	if err != nil {
-		logger.Info(fmt.Sprintf("error connecting to PostgreSQL :: %v", err))
-
+		logger.Error(fmt.Sprintf("error creating PostgreSQL connection pool :: %v", err))
+		os.Exit(1)
 	}
 
 	err = postgresqlDB.Ping()
 	if err != nil {
-		logger.Info(fmt.Sprintf("Error connecting to PostgreSQL :: %v", err))
+		logger.Error(fmt.Sprintf("Error pinging PostgreSQL :: %v", err))
+		os.Exit(1)
 	}
 
 	mysqlDB, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%v)/mysql", mysqlUser, mysqlPassword, mysqlHost, mysqlPort))
 	if err != nil {
-		logger.Info(fmt.Sprintf("error connecting to MySQL :: %v", err))
+		logger.Error(fmt.Sprintf("error creating MySQL connection pool :: %v", err))
+		os.Exit(1)
 	}
 
 	err = mysqlDB.Ping()
 	if err != nil {
-		logger.Info(fmt.Sprintf("Error connecting to MySQL :: %v", err))
+		logger.Error(fmt.Sprintf("Error pinging MySQL :: %v", err))
+		os.Exit(1)
 	}
 
 	mssqlDB, err = sql.Open("mssql", fmt.Sprintf("server=%s;user id=%s;password=%s;port=%v;database=master", mssqlHost, mssqlUser, mssqlPassword, mssqlPort))
 	if err != nil {
-		logger.Info(fmt.Sprintf("error connecting to SQL Server :: %v", err))
+		logger.Error(fmt.Sprintf("error creating SQL Server connection pool :: %v", err))
+		os.Exit(1)
 	}
 
 	err = mssqlDB.Ping()
 	if err != nil {
-		logger.Info(fmt.Sprintf("Error connecting to SQL Server :: %v", err))
+		logger.Error(fmt.Sprintf("Error pinging SQL Server :: %v", err))
+		os.Exit(1)
 	}
 
 	urlOptions := map[string]string{
@@ -165,24 +170,28 @@ func main() {
 
 	oracleDB, err = sql.Open("oracle", connStr)
 	if err != nil {
-		logger.Info(fmt.Sprintf("error connecting to Oracle :: %v", err))
+		logger.Error(fmt.Sprintf("error creating Oracle connection pool :: %v", err))
+		os.Exit(1)
 	}
 
 	err = oracleDB.Ping()
 	if err != nil {
-		logger.Info(fmt.Sprintf("Error connecting to Oracle :: %v", err))
+		logger.Error(fmt.Sprintf("error pinging Oracle :: %v", err))
+		os.Exit(1)
 	}
 
 	snowflakeDsn := fmt.Sprintf("%s:%s@%s/%s", snowflakeUser, snowflakePassword, snowflakeAccount, snowflakeDBName)
 
 	snowflakeDB, err = sql.Open("snowflake", snowflakeDsn)
 	if err != nil {
-		logger.Info(fmt.Sprintf("error connecting to Snowflake :: %v", err))
+		logger.Error(fmt.Sprintf("error creating Snowflake connection pool :: %v", err))
+		os.Exit(1)
 	}
 
 	err = snowflakeDB.Ping()
 	if err != nil {
-		logger.Info(fmt.Sprintf("Error connecting to Snowflake :: %v", err))
+		logger.Error(fmt.Sprintf("Error pinging Snowflake :: %v", err))
+		os.Exit(1)
 	}
 
 	snowflakeConnectionInfo := ConnectionInfo{
