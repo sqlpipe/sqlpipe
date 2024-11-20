@@ -54,9 +54,6 @@ func setupPostgreSQL() (ConnectionInfo, error) {
 		Table:            postgresqlTable,
 	}
 
-	fmt.Println("CONN STIRNG")
-	fmt.Println(connectionInfo.ConnectionString)
-
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

@@ -29,8 +29,12 @@ func makeSqlpipeTransfer(source, target ConnectionInfo) error {
 		"source-table":                       source.Table,
 		"target-name":                        target.SystemType,
 		"target-type":                        target.SystemType,
+		"target-hostname":                    target.Host,
+		"target-port":                        target.Port,
+		"target-username":                    target.User,
+		"target-password":                    target.Password,
 		"target-connection-string":           target.ConnectionString,
-		"target-table":                       target.Table,
+		"target-table":                       fmt.Sprintf("%v_%v", target.Table, source.SystemType),
 		"drop-target-table-if-exists":        true,
 		"create-target-table-if-not-exists":  true,
 		"create-target-schema-if-not-exists": true,
@@ -71,8 +75,10 @@ func makeSqlpipeTransfer(source, target ConnectionInfo) error {
 		return fmt.Errorf("error reading response body :: %v", err)
 	}
 
-	fmt.Printf("Response status: %s\n", resp.Status)
-	fmt.Printf("Response body: %s\n", body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		fmt.Println(string(body))
+		return fmt.Errorf("error response status :: %v", resp.Status)
+	}
 
 	return nil
 }

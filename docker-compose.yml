@@ -12,6 +12,17 @@ services:
         limits:
           memory: 4G
 
+  tests:
+    build:
+      context: .
+      dockerfile: tests.dockerfile
+    container_name: tests
+    platform: linux/amd64
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
   mssql:
     image: mcr.microsoft.com/mssql/server
     platform: linux/amd64

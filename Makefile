@@ -125,9 +125,15 @@ build/tests:
 	# GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/tests ./cmd/tests
 	go build -ldflags="-w -s" -o=./bin/tests ./cmd/tests
 
+## tests: run the cmd/tests application
 .PHONY: tests
 tests: build/tests
-	./bin/tests -postgresql-host=${POSTGRESQL_HOST} -postgresql-user=${POSTGRESQL_USER} -postgresql-password=${POSTGRESQL_PASSWORD} -postgresql-port=${POSTGRESQL_PORT} \
+	docker rm -f tests
+	docker compose up --build -d tests
+
+.PHONY: run-tests
+run-tests: tests
+	docker exec -it tests /usr/local/bin/tests -postgresql-host=${POSTGRESQL_HOST} -postgresql-user=${POSTGRESQL_USER} -postgresql-password=${POSTGRESQL_PASSWORD} -postgresql-port=${POSTGRESQL_PORT} \
 		-mysql-host=${MYSQL_HOST} -mysql-user=${MYSQL_USER} -mysql-password=${MYSQL_PASSWORD} -mysql-port=${MYSQL_PORT} \
 		-mssql-host=${MSSQL_HOST} -mssql-user=${MSSQL_USER} -mssql-password=${MSSQL_PASSWORD} -mssql-port=${MSSQL_PORT} \
 		-oracle-host=${ORACLE_HOST} -oracle-user=${ORACLE_USER} -oracle-password=${ORACLE_PASSWORD} -oracle-port=${ORACLE_PORT} \

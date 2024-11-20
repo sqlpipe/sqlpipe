@@ -28,7 +28,6 @@ var postgresqlPassword string
 var postgresqlDBName = "mydb"
 var postgresqlSchema = "public"
 var postgresqlTable = "my_table"
-var postgresqlSchemaRequired = true
 
 var mysqlHost string
 var mysqlPort int
@@ -36,7 +35,6 @@ var mysqlUser string
 var mysqlPassword string
 var mysqlDBName = "mydb"
 var mysqlTable = "my_table"
-var mysqlSchemaRequired = false
 
 var mssqlHost string
 var mssqlPort int
@@ -45,7 +43,6 @@ var mssqlPassword string
 var mssqlDBName = "mydb"
 var mssqlSchema = "dbo"
 var mssqlTable = "my_table"
-var mssqlSchemaRequired = true
 
 var oracleHost string
 var oraclePort int
@@ -53,7 +50,6 @@ var oracleUser string
 var oraclePassword string
 var oracleDBName = "XE"
 var oracleTable = "my_table"
-var oracleSchemaRequired = false
 
 var snowflakeAccount string
 var snowflakeUser string
@@ -61,7 +57,6 @@ var snowflakePassword string
 var snowflakeDBName = "mydb"
 var snowflakeSchema = "public"
 var snowflakeTable = "my_table"
-var snowflakeSchemaRequired = true
 
 var serverAddress string
 
@@ -94,33 +89,6 @@ func main() {
 	flag.StringVar(&serverAddress, "server-address", "", "Server address")
 
 	flag.Parse()
-
-	// mysqlConnectionInfo := ConnectionInfo{
-	// 	SystemType: "mysql",
-	// 	Host:       mysqlHost,
-	// 	Port:       mysqlPort,
-	// 	User:       mysqlUser,
-	// 	Password:   mysqlPassword,
-	// 	DBName:     mysqlDBName,
-	// }
-
-	// mssqlConnectionInfo := ConnectionInfo{
-	// 	SystemType: "mssql",
-	// 	Host:       mssqlHost,
-	// 	Port:       mssqlPort,
-	// 	User:       mssqlUser,
-	// 	Password:   mssqlPassword,
-	// 	DBName:     mssqlDBName,
-	// }
-
-	// oracleConnectionInfo := ConnectionInfo{
-	// 	SystemType: "oracle",
-	// 	Host:       oracleHost,
-	// 	Port:       oraclePort,
-	// 	User:       oracleUser,
-	// 	Password:   oraclePassword,
-	// 	DBName:     oracleDBName,
-	// }
 
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -180,7 +148,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	snowflakeDsn := fmt.Sprintf("%s:%s@%s/%s", snowflakeUser, snowflakePassword, snowflakeAccount, snowflakeDBName)
+	snowflakeDsn := fmt.Sprintf("%s:%s@%s/%s/%v", snowflakeUser, snowflakePassword, snowflakeAccount, snowflakeDBName, snowflakeSchema)
 
 	snowflakeDB, err = sql.Open("snowflake", snowflakeDsn)
 	if err != nil {
@@ -194,17 +162,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	snowflakeConnectionInfo := ConnectionInfo{
-		SystemType:       "snowflake",
-		Host:             snowflakeAccount,
-		User:             snowflakeUser,
-		Password:         snowflakePassword,
-		DBName:           snowflakeDBName,
-		ConnectionString: snowflakeDsn,
-		Schema:           snowflakeSchema,
-		Table:            snowflakeTable,
-	}
-
 	logger.Info("All connections successful")
 
 	postgresqlConnectionInfo, err := setupPostgreSQL()
@@ -212,24 +169,36 @@ func main() {
 		logger.Info(fmt.Sprintf("error setting up PostgreSQL :: %v", err))
 	}
 
-	err = setupMySQL()
+	mysqlConnectionInfo, err := setupMySQL()
 	if err != nil {
 		logger.Info(fmt.Sprintf("error setting up MySQL :: %v", err))
 	}
 
-	err = setupMssql()
+	mssqlConnectionInfo, err := setupMssql()
 	if err != nil {
 		logger.Info(fmt.Sprintf("error setting up SQL Server :: %v", err))
 	}
 
-	err = setupOracle()
+	oracleConnectionInfo, err := setupOracle()
 	if err != nil {
 		logger.Info(fmt.Sprintf("error setting up Oracle :: %v", err))
 	}
 
-	err = makeSqlpipeTransfer(postgresqlConnectionInfo, snowflakeConnectionInfo)
+	snowflakeConnectionInfo, err := setupSnowflake()
 	if err != nil {
-		logger.Info(fmt.Sprintf("error transferring data :: %v", err))
+		logger.Info(fmt.Sprintf("error setting up Snowflake :: %v", err))
 	}
 
+	sources := []ConnectionInfo{postgresqlConnectionInfo, mysqlConnectionInfo, mssqlConnectionInfo, oracleConnectionInfo, snowflakeConnectionInfo}
+	targets := []ConnectionInfo{postgresqlConnectionInfo, mysqlConnectionInfo, mssqlConnectionInfo, oracleConnectionInfo, snowflakeConnectionInfo}
+
+	for _, source := range sources {
+		for _, target := range targets {
+			err = makeSqlpipeTransfer(source, target)
+			if err != nil {
+				logger.Error(fmt.Sprintf("error transferring data from %v to %v :: %v", source.SystemType, target.SystemType, err))
+			}
+			logger.Info(fmt.Sprintf("transferred data from %v to %v", source.SystemType, target.SystemType))
+		}
+	}
 }

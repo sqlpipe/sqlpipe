@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
-func setupMssql() error {
+func setupMssql() (ConnectionInfo, error) {
+
+	var connectionInfo ConnectionInfo
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -22,17 +24,29 @@ func setupMssql() error {
 
 	_, err = mssqlDB.ExecContext(ctx, "CREATE DATABASE mydb")
 	if err != nil {
-		return fmt.Errorf("error creating database :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating database :: %v", err)
 	}
 
-	mssqlDB, err = sql.Open("mssql", fmt.Sprintf("server=%s;user id=%s;password=%s;port=%v;database=mydb", mssqlHost, mssqlUser, mssqlPassword, mssqlPort))
+	dsn := fmt.Sprintf("server=%s;user id=%s;password=%s;port=%v;database=mydb", mssqlHost, mssqlUser, mssqlPassword, mssqlPort)
+	mssqlDB, err = sql.Open("mssql", dsn)
 	if err != nil {
-		return fmt.Errorf("error creating mssql connection pool :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating mssql connection pool :: %v", err)
 	}
 
 	err = mssqlDB.Ping()
 	if err != nil {
-		return fmt.Errorf("error pinging mssql :: %v", err)
+		return connectionInfo, fmt.Errorf("error pinging mssql :: %v", err)
+	}
+
+	connectionInfo = ConnectionInfo{
+		SystemType:       "mssql",
+		Host:             mssqlHost,
+		User:             mssqlUser,
+		Password:         mssqlPassword,
+		DBName:           mssqlDBName,
+		ConnectionString: dsn,
+		Schema:           mssqlSchema,
+		Table:            mssqlTable,
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -72,7 +86,7 @@ CREATE TABLE my_table (
     last_modified DATETIME DEFAULT GETDATE()
 )`)
 	if err != nil {
-		return fmt.Errorf("error creating my_table :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating my_table :: %v", err)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -89,7 +103,7 @@ BEGIN
     WHERE my_id IN (SELECT DISTINCT my_id FROM inserted)
 END`)
 	if err != nil {
-		return fmt.Errorf("error creating tr_my_table_last_modified function :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating tr_my_table_last_modified function :: %v", err)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -200,11 +214,11 @@ VALUES
 (N'ABCD', 'ABCD', N'This is a "test" message', N'Test message', 'This is a ''test'' message', 'Test message', '', 123456789, 12345, 123, 12, 123.45, 123.45, 123.43, 123.45, 123.45, '2023-07-23T14:30:00.7654321', '2023-07-23T14:30:00.765', '2023-07-23T14:30:00', '2023-07-23T14:30:00.7654321-07:00', '2023-07-23', '14:30:00', 0x010101, 0x010101, 1, NEWID(), '<root><test>Some XML data</test></root>'),
 (N'ABCD', 'ABCD', N'This is a "test" message', N'Test message', 'This is a ''test'' message', 'Test message', '', 123456789, 12345, 123, 12, 123.45, 123.45, 123.43, 123.45, 123.45, '2023-07-23T14:30:00.7654321', '2023-07-23T14:30:00.765', '2023-07-23T14:30:00', '2023-07-23T14:30:00.7654321-07:00', '2023-07-23', '14:30:00', 0x010101, 0x010101, 1, NEWID(), '<root><test>Some XML data</test></root>');`)
 		if err != nil {
-			return fmt.Errorf("failed to insert data: %w", err)
+			return connectionInfo, fmt.Errorf("failed to insert data: %w", err)
 		}
 	}
 
 	logger.Info("mssql setup successful")
 
-	return nil
+	return connectionInfo, nil
 }

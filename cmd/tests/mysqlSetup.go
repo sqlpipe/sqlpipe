@@ -7,12 +7,14 @@ import (
 	"time"
 )
 
-func setupMySQL() error {
+func setupMySQL() (ConnectionInfo, error) {
+
+	connectionInfo := ConnectionInfo{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := mysqlDB.ExecContext(ctx, "DROP DATABASE mydb")
+	_, err := mysqlDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE %v", mysqlDBName))
 	if err != nil {
 		logger.Warn(fmt.Sprintf("error dropping mydb in mysql :: %v", err))
 	}
@@ -22,17 +24,28 @@ func setupMySQL() error {
 
 	_, err = mysqlDB.ExecContext(ctx, "CREATE DATABASE mydb")
 	if err != nil {
-		return fmt.Errorf("error creating database :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating database :: %v", err)
 	}
 
 	mysqlDB, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%v)/%s", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, "mydb"))
 	if err != nil {
-		return fmt.Errorf("error creating mysql connection pool :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating mysql connection pool :: %v", err)
 	}
 
 	err = mysqlDB.Ping()
 	if err != nil {
-		return fmt.Errorf("error pinging mysql :: %v", err)
+		return connectionInfo, fmt.Errorf("error pinging mysql :: %v", err)
+	}
+
+	connectionInfo = ConnectionInfo{
+		SystemType:       "mysql",
+		Host:             mysqlHost,
+		Port:             mysqlPort,
+		User:             mysqlUser,
+		Password:         mysqlPassword,
+		DBName:           mysqlDBName,
+		ConnectionString: fmt.Sprintf("%s:%s@tcp(%s:%v)/%s?parseTime=true&loc=US%%2FPacific", mysqlUser, mysqlPassword, mysqlHost, mysqlPort, "mydb"),
+		Table:            mysqlTable,
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -79,7 +92,7 @@ CREATE TABLE my_table (
     last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 )`)
 	if err != nil {
-		return fmt.Errorf("error creating my_table :: %v", err)
+		return connectionInfo, fmt.Errorf("error creating my_table :: %v", err)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -198,11 +211,11 @@ VALUES
 ('abc', 'abc', 'This "is" a test', 'This is a test', 'This is a test', 'Test', 'value1', 123456789012345678, 123456789012345678, 12345678, 12345678, 1234567, 1234567, 12345, 12345, 123, 123, 1.23456789012345678, 1.2345678, 123.456, '2023-07-22 12:34:56.765432', '2023-07-22 12:34:56.765432', '2023-07-22', '12:34:56.765432', 2023, 0b110011, 0b110011, 0x89504E470D0A1A0A, 0x89504E470D0A1A0A, 0x89504E470D0A1A0A, 0x89504E470D0A1A0A, ST_GeomFromText('POINT(1 1)'), b'1011001101', '{"key": "value"}', 'value1'),
 ('abc', 'abc', 'This "is" a test', 'This is a test', 'This is a test', 'Test', 'value1', 123456789012345678, 123456789012345678, 12345678, 12345678, 1234567, 1234567, 12345, 12345, 123, 123, 1.23456789012345678, 1.2345678, 123.456, '2023-07-22 12:34:56.765432', '2023-07-22 12:34:56.765432', '2023-07-22', '12:34:56.765432', 2023, 0b110011, 0b110011, 0x89504E470D0A1A0A, 0x89504E470D0A1A0A, 0x89504E470D0A1A0A, 0x89504E470D0A1A0A, ST_GeomFromText('POINT(1 1)'), b'1011001101', '{"key": "value"}', 'value1')`)
 		if err != nil {
-			return fmt.Errorf("failed to insert data: %w", err)
+			return connectionInfo, fmt.Errorf("failed to insert data: %w", err)
 		}
 	}
 
 	logger.Info("mysql setup successful")
 
-	return nil
+	return connectionInfo, nil
 }
