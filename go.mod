@@ -1,4 +1,4 @@
-module github.com/sqlpipe/sqlpipe-pro
+module github.com/sqlpipe/sqlpipe
 
 go 1.20
 
