@@ -595,7 +595,7 @@ func createPipeFiles(
 			pipeFileInfoChannel <- pipeFileInfo
 		}
 
-		logger.Info(fmt.Sprintf("transfer %v finished writing pipe files", transfer.Id))
+		logger.Info("transfer %v finished writing pipe files")
 	}()
 
 	return pipeFileInfoChannel
@@ -740,7 +740,7 @@ func convertPipeFiles(
 			}
 		}
 
-		logger.Info(fmt.Sprintf("transfer %v finished converting pipe files to final csvs", transfer.Id))
+		logger.Info("transfer %v finished converting pipe files to final csvs")
 	}()
 
 	return finalCsvInfoChannel
@@ -777,7 +777,7 @@ func insertFinalCsvs(
 		}
 	}
 
-	logger.Info(fmt.Sprintf("transfer %v finished inserting final csvs", transfer.Id))
+	logger.Info("transfer %v finished inserting final csvs")
 
 	return nil
 }
@@ -1061,7 +1061,7 @@ func deletePks(pipeFilesIn <-chan PipeFileInfo, columnInfos []ColumnInfo, transf
 			pipeFilesOut <- pipeFileInfo
 
 		}
-		logger.Info(fmt.Sprintf("transfer %v finished deleting pks", transfer.Id))
+		logger.Info("transfer %v finished deleting pks")
 
 	}()
 

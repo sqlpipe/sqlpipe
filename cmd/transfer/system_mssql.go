@@ -623,7 +623,7 @@ func (system Mssql) convertPipeFilesOverride(
 			}
 
 		}
-		logger.Info(fmt.Sprintf("transferInfo %v finished converting pipe files", transferInfo.Id))
+		logger.Info("finished converting pipe files")
 	}()
 
 	return finalCsvChannel, true

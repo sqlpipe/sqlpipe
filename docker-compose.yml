@@ -1,16 +1,16 @@
 services:
-  sqlpipe:
-    build:
-      context: .
-      dockerfile: sqlpipe.dockerfile
-    container_name: sqlpipe
-    platform: linux/amd64
-    ports:
-      - "9000:9000"
-    deploy:
-      resources:
-        limits:
-          memory: 4G
+#   sqlpipe:
+#     build:
+#       context: .
+#       dockerfile: sqlpipe.dockerfile
+#     container_name: sqlpipe
+#     platform: linux/amd64
+#     ports:
+#       - "9000:9000"
+#     deploy:
+#       resources:
+#         limits:
+#           memory: 4G
 
   tests:
     build:
@@ -64,15 +64,15 @@ services:
           memory: 4G
     command: --local-infile=1
 
-  oracle:
-    container_name: oracle
-    image: oracle/database:21CXE
-    ports:
-      - "1521:1521"
-    environment:
-      - ORACLE_PWD=Mypass123
-      - NLS_CHARACTERSET=AL32UTF8
-    deploy:
-      resources:
-        limits:
-          memory: 8G
+#   oracle:
+#     container_name: oracle
+#     image: oracle/database:21CXE
+#     ports:
+#       - "1521:1521"
+#     environment:
+#       - ORACLE_PWD=Mypass123
+#       - NLS_CHARACTERSET=AL32UTF8
+#     deploy:
+#       resources:
+#         limits:
+#           memory: 8G

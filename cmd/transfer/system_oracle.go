@@ -492,7 +492,7 @@ func (system Oracle) createCtlFiles(finalCsvsIn <-chan FinalCsvInfo, transferInf
 			finalCsvChannelOut <- finalCsvInfo
 		}
 
-		logger.Info(fmt.Sprintf("transferInfo %v finished creating sqllder ctl files", transferInfo.Id))
+		logger.Info("transferInfo %v finished creating sqllder ctl files")
 	}()
 
 	return finalCsvChannelOut

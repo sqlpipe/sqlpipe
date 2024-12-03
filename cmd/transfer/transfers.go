@@ -5,17 +5,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sqlpipe/sqlpipe/internal/commonHelpers"
 )
 
 func runTransfer() error {
 
-	id := uuid.New().String()
+	var err error
 
-	_, _, _, err := commonHelpers.CreateTransferTmpDirs(id, globalTmpDir, logger)
+	transferInfo.TmpDir, transferInfo.PipeFileDir, transferInfo.FinalCsvDir, err = commonHelpers.CreateTransferTmpDirs(transferInfo.Id, globalTmpDir, logger)
 	if err != nil {
-		logger.Error("error creating transfer tmp dirs :: ", err)
+		logger.Error(fmt.Sprintf("error creating transfer tmp dirs :: %v", err))
 	}
 
 	if transferInfo.Delimiter == "" {
@@ -26,7 +25,7 @@ func runTransfer() error {
 	}
 	if transferInfo.Null == "" {
 		transferInfo.Null = "{nll}"
-		if transferInfo.TargetType == TypeMySQL {
+		if transferInfo.TargetType == "mysql" {
 			transferInfo.Null = `NULL`
 		}
 	}
@@ -259,7 +258,7 @@ func runTransfer() error {
 		}
 	}
 
-	logger.Info(fmt.Sprintf("transfer %v complete", transferInfo.Id))
+	logger.Info("transfer %v complete")
 
 	return nil
 }

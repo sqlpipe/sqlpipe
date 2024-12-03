@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
@@ -22,13 +23,10 @@ import (
 )
 
 var (
-	logger          *slog.Logger
-	version         = vcs.Version()
-	psqlAvailable   bool
-	bcpAvailable    bool
-	sqlldrAvailable bool
-	globalTmpDir    string
-	transferInfo    data.TransferInfo
+	logger       *slog.Logger
+	version      = vcs.Version()
+	globalTmpDir string
+	transferInfo data.TransferInfo
 )
 
 func main() {
@@ -58,6 +56,8 @@ func main() {
 	flag.StringVar(&transferInfo.Delimiter, "delimiter", "{dlm}", "delimiter")
 	flag.StringVar(&transferInfo.Newline, "newline", "{nwln}", "newline")
 	flag.StringVar(&transferInfo.Null, "null", "{nll}", "null")
+	transferInfo.TriggeredByCli = true
+	transferInfo.Id = uuid.New().String()
 
 	flag.Parse()
 
@@ -74,12 +74,12 @@ func main() {
 
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	checkDeps()
+	checkDeps(&transferInfo)
 
 	globalTmpDir = filepath.Join(os.TempDir(), "sqlpipe")
 	err := os.MkdirAll(globalTmpDir, 0600)
 	if err != nil {
-		logger.Error("failed to create tmp dir :: ", err)
+		logger.Error(fmt.Sprintf("failed to create tmp dir :: %v", err))
 		os.Exit(1)
 	}
 
@@ -95,5 +95,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	runTransfer()
+	err = runTransfer()
+	if err != nil {
+		logger.Error(fmt.Sprintf("error running transfer :: %v", err))
+		os.Exit(1)
+	}
 }

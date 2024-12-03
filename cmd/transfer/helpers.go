@@ -3,12 +3,8 @@ package main
 import (
 	"crypto/rand"
 	"encoding/csv"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"math/big"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,29 +12,11 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
-type envelope map[string]any
-
-var schemaRequired = map[string]bool{TypePostgreSQL: true, TypeMySQL: false, TypeMSSQL: true, TypeOracle: true, TypeSnowflake: true}
-var permittedTransferSources = []string{TypePostgreSQL, TypeMySQL, TypeMSSQL, TypeOracle, TypeSnowflake}
-var permittedTransferTargets = []string{TypePostgreSQL, TypeMySQL, TypeMSSQL, TypeOracle, TypeSnowflake}
-
 var (
-	Statuses = []string{StatusQueued, StatusRunning, StatusCancelled, StatusError, StatusComplete, ""}
-
-	StatusQueued    = "queued"
-	StatusRunning   = "running"
-	StatusCancelled = "cancelled"
-	StatusError     = "error"
-	StatusComplete  = "complete"
-
-	TypePostgreSQL = "postgresql"
-	TypeMySQL      = "mysql"
-	TypeMSSQL      = "mssql"
-	TypeOracle     = "oracle"
-	TypeSnowflake  = "snowflake"
-
 	DriverPostgreSQL = "pgx"
 	DriverMySQL      = "mysql"
 	DriverMSSQL      = "sqlserver"
@@ -55,78 +33,6 @@ func getFileNum(fileName string) (fileNum int64, err error) {
 	}
 
 	return fileNum, nil
-}
-
-func readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	maxBytes := 1_048_576
-	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
-
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-
-	err := dec.Decode(dst)
-	if err != nil {
-		var syntaxError *json.SyntaxError
-		var unmarshalTypeError *json.UnmarshalTypeError
-		var invalidUnmarshalError *json.InvalidUnmarshalError
-		var maxBytesError *http.MaxBytesError
-
-		switch {
-		case errors.As(err, &syntaxError):
-			return fmt.Errorf("body contains badly-formed JSON (at character %d)", syntaxError.Offset)
-
-		case errors.Is(err, io.ErrUnexpectedEOF):
-			return errors.New("body contains badly-formed JSON")
-
-		case errors.As(err, &unmarshalTypeError):
-			if unmarshalTypeError.Field != "" {
-				return fmt.Errorf("body contains incorrect JSON type for field %q", unmarshalTypeError.Field)
-			}
-			return fmt.Errorf("body contains incorrect JSON type (at character %d)", unmarshalTypeError.Offset)
-
-		case errors.Is(err, io.EOF):
-			return errors.New("body must not be empty")
-
-		case strings.HasPrefix(err.Error(), "json: unknown field "):
-			fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
-			return fmt.Errorf("body contains unknown key %s", fieldName)
-
-		case errors.As(err, &maxBytesError):
-			return fmt.Errorf("body must not be larger than %d bytes", maxBytesError.Limit)
-
-		case errors.As(err, &invalidUnmarshalError):
-			panic(err)
-
-		default:
-			return err
-		}
-	}
-
-	err = dec.Decode(&struct{}{})
-	if err != io.EOF {
-		return errors.New("body must only contain a single JSON value")
-	}
-
-	return nil
-}
-
-func writeJSON(w http.ResponseWriter, status int, data envelope, headers http.Header) error {
-	js, err := json.MarshalIndent(data, "", "\t")
-	if err != nil {
-		return err
-	}
-
-	js = append(js, '\n')
-
-	for key, value := range headers {
-		w.Header()[key] = value
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write(js)
-
-	return nil
 }
 
 func ProgramVersion() string {
@@ -152,19 +58,6 @@ func ProgramVersion() string {
 	}
 
 	return revision
-}
-
-func recoverPanic(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				w.Header().Set("Connection", "close")
-				serverErrorResponse(w, r, http.StatusInternalServerError, fmt.Errorf("%s", err))
-			}
-		}()
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 func maxColumnByteLength(filename, null string, columnIndex int) (int, error) {
@@ -196,40 +89,40 @@ func maxColumnByteLength(filename, null string, columnIndex int) (int, error) {
 	return maxLength + len(null), nil
 }
 
-func checkDeps() {
-	checkPsql()
-	checkBcp()
-	checkSqlLdr()
+func checkDeps(transferInfo *data.TransferInfo) {
+	checkPsql(transferInfo)
+	checkBcp(transferInfo)
+	checkSqlLdr(transferInfo)
 }
 
-func checkPsql() {
+func checkPsql(transferInfo *data.TransferInfo) {
 	output, err := exec.Command("psql", "--version").CombinedOutput()
 	if err != nil {
 		logger.Warn(fmt.Sprintf("psql not found. please install psql to transfer data to postgresql :: %v :: %v\n", err, string(output)))
 		return
 	}
 
-	psqlAvailable = true
+	transferInfo.PsqlAvailable = true
 }
 
-func checkBcp() {
+func checkBcp(transferInfo *data.TransferInfo) {
 	output, err := exec.Command("bcp", "-v").CombinedOutput()
 	if err != nil {
 		logger.Warn(fmt.Sprintf("bcp not found. please install bcp to transfer data to mssql :: %v :: %v\n", err, string(output)))
 		return
 	}
 
-	bcpAvailable = true
+	transferInfo.BcpAvailable = true
 }
 
-func checkSqlLdr() {
+func checkSqlLdr(transferInfo *data.TransferInfo) {
 	output, err := exec.Command("sqlldr", "-help").CombinedOutput()
 	if err != nil {
 		logger.Warn(fmt.Sprintf("sqlldr not found. please install sqllder to transfer data to oracle :: %v :: %v\n", err, string(output)))
 		return
 	}
 
-	sqlldrAvailable = true
+	transferInfo.SqlLdrAvailable = true
 }
 
 func containsSpaces(s string) bool {

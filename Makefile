@@ -31,7 +31,7 @@ run: build/sqlpipe
 
 ## compose-reset: run docker compose
 .PHONY: compose
-compose: build/sqlpipe
+compose:
 	docker compose down -v
 	docker compose up --build -d
 	docker compose logs -f
@@ -103,6 +103,12 @@ build/sqlpipe:
 	# GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
 	go build -ldflags="-w -s" -o=./bin/sqlpipe ./cmd/sqlpipe
 
+## build/transfer: build the cmd/transfer application
+.PHONY: build/transfer
+build/transfer:
+	@echo 'Building cmd/transfer...'
+	go build -ldflags="-w -s" -o=./bin/transfer ./cmd/transfer
+
 ## build/docker: build the cmd/sqlpipe docker image and push
 .PHONY: build/docker
 build/docker:
@@ -122,8 +128,8 @@ build/docker:
 .PHONY: build/tests
 build/tests:
 	@echo 'Building cmd/tests...'
-	# GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/tests ./cmd/tests
-	go build -ldflags="-w -s" -o=./bin/tests ./cmd/tests
+	GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/tests ./cmd/tests
+	# go build -ldflags="-w -s" -o=./bin/tests ./cmd/tests
 
 ## tests: run the cmd/tests application
 .PHONY: tests
@@ -136,6 +142,6 @@ run-tests: tests
 	docker exec -it tests /usr/local/bin/tests -postgresql-host=${POSTGRESQL_HOST} -postgresql-user=${POSTGRESQL_USER} -postgresql-password=${POSTGRESQL_PASSWORD} -postgresql-port=${POSTGRESQL_PORT} \
 		-mysql-host=${MYSQL_HOST} -mysql-user=${MYSQL_USER} -mysql-password=${MYSQL_PASSWORD} -mysql-port=${MYSQL_PORT} \
 		-mssql-host=${MSSQL_HOST} -mssql-user=${MSSQL_USER} -mssql-password=${MSSQL_PASSWORD} -mssql-port=${MSSQL_PORT} \
-		-oracle-host=${ORACLE_HOST} -oracle-user=${ORACLE_USER} -oracle-password=${ORACLE_PASSWORD} -oracle-port=${ORACLE_PORT} \
 		-snowflake-account=${SNOWFLAKE_ACCOUNT} -snowflake-user=${SNOWFLAKE_USER} -snowflake-password=${SNOWFLAKE_PASSWORD} \
 		-server-address=${SERVER_ADDRESS}
+		# -oracle-host=${ORACLE_HOST} -oracle-user=${ORACLE_USER} -oracle-password=${ORACLE_PASSWORD} -oracle-port=${ORACLE_PORT} \

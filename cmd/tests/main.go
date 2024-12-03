@@ -10,14 +10,14 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/microsoft/go-mssqldb"
-	go_ora "github.com/sijms/go-ora/v2"
 	_ "github.com/snowflakedb/gosnowflake"
 )
 
 var postgresqlDB *sql.DB
 var mysqlDB *sql.DB
 var mssqlDB *sql.DB
-var oracleDB *sql.DB
+
+// var oracleDB *sql.DB
 var snowflakeDB *sql.DB
 var logger *slog.Logger
 
@@ -44,12 +44,12 @@ var mssqlDBName = "mydb"
 var mssqlSchema = "dbo"
 var mssqlTable = "my_table"
 
-var oracleHost string
-var oraclePort int
-var oracleUser string
-var oraclePassword string
-var oracleDBName = "XE"
-var oracleTable = "my_table"
+// var oracleHost string
+// var oraclePort int
+// var oracleUser string
+// var oraclePassword string
+// var oracleDBName = "XE"
+// var oracleTable = "my_table"
 
 var snowflakeAccount string
 var snowflakeUser string
@@ -77,10 +77,10 @@ func main() {
 	flag.StringVar(&mssqlUser, "mssql-user", "", "SQL Server user")
 	flag.StringVar(&mssqlPassword, "mssql-password", "", "SQL Server password")
 
-	flag.StringVar(&oracleHost, "oracle-host", "", "Oracle host")
-	flag.IntVar(&oraclePort, "oracle-port", 0, "Oracle port")
-	flag.StringVar(&oracleUser, "oracle-user", "", "Oracle user")
-	flag.StringVar(&oraclePassword, "oracle-password", "", "Oracle password")
+	// flag.StringVar(&oracleHost, "oracle-host", "", "Oracle host")
+	// flag.IntVar(&oraclePort, "oracle-port", 0, "Oracle port")
+	// flag.StringVar(&oracleUser, "oracle-user", "", "Oracle user")
+	// flag.StringVar(&oraclePassword, "oracle-password", "", "Oracle password")
 
 	flag.StringVar(&snowflakeAccount, "snowflake-account", "", "Snowflake account")
 	flag.StringVar(&snowflakeUser, "snowflake-user", "", "Snowflake user")
@@ -130,23 +130,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	urlOptions := map[string]string{
-		"dba privilege": "sysdba",
-	}
+	// urlOptions := map[string]string{
+	// 	"dba privilege": "sysdba",
+	// }
 
-	connStr := go_ora.BuildUrl(oracleHost, oraclePort, oracleDBName, oracleUser, oraclePassword, urlOptions)
+	// connStr := go_ora.BuildUrl(oracleHost, oraclePort, oracleDBName, oracleUser, oraclePassword, urlOptions)
 
-	oracleDB, err = sql.Open("oracle", connStr)
-	if err != nil {
-		logger.Error(fmt.Sprintf("error creating Oracle connection pool :: %v", err))
-		os.Exit(1)
-	}
+	// oracleDB, err = sql.Open("oracle", connStr)
+	// if err != nil {
+	// 	logger.Error(fmt.Sprintf("error creating Oracle connection pool :: %v", err))
+	// 	os.Exit(1)
+	// }
 
-	err = oracleDB.Ping()
-	if err != nil {
-		logger.Error(fmt.Sprintf("error pinging Oracle :: %v", err))
-		os.Exit(1)
-	}
+	// err = oracleDB.Ping()
+	// if err != nil {
+	// 	logger.Error(fmt.Sprintf("error pinging Oracle :: %v", err))
+	// 	os.Exit(1)
+	// }
 
 	snowflakeDsn := fmt.Sprintf("%s:%s@%s/%s/%v", snowflakeUser, snowflakePassword, snowflakeAccount, snowflakeDBName, snowflakeSchema)
 
@@ -179,18 +179,21 @@ func main() {
 		logger.Info(fmt.Sprintf("error setting up SQL Server :: %v", err))
 	}
 
-	oracleConnectionInfo, err := setupOracle()
-	if err != nil {
-		logger.Info(fmt.Sprintf("error setting up Oracle :: %v", err))
-	}
+	// oracleConnectionInfo, err := setupOracle()
+	// if err != nil {
+	// 	logger.Info(fmt.Sprintf("error setting up Oracle :: %v", err))
+	// }
 
 	snowflakeConnectionInfo, err := setupSnowflake()
 	if err != nil {
 		logger.Info(fmt.Sprintf("error setting up Snowflake :: %v", err))
 	}
 
-	sources := []ConnectionInfo{postgresqlConnectionInfo, mysqlConnectionInfo, mssqlConnectionInfo, oracleConnectionInfo, snowflakeConnectionInfo}
-	targets := []ConnectionInfo{postgresqlConnectionInfo, mysqlConnectionInfo, mssqlConnectionInfo, oracleConnectionInfo, snowflakeConnectionInfo}
+	// sources := []ConnectionInfo{postgresqlConnectionInfo, mysqlConnectionInfo, mssqlConnectionInfo, oracleConnectionInfo, snowflakeConnectionInfo}
+	// targets := []ConnectionInfo{postgresqlConnectionInfo, mysqlConnectionInfo, mssqlConnectionInfo, oracleConnectionInfo, snowflakeConnectionInfo}
+
+	sources := []ConnectionInfo{postgresqlConnectionInfo, mysqlConnectionInfo, mssqlConnectionInfo, snowflakeConnectionInfo}
+	targets := []ConnectionInfo{postgresqlConnectionInfo, mysqlConnectionInfo, mssqlConnectionInfo, snowflakeConnectionInfo}
 
 	for _, source := range sources {
 		for _, target := range targets {

@@ -47,11 +47,14 @@ type TransferInfo struct {
 	PsqlAvailable                 bool               `json:"-"`
 	BcpAvailable                  bool               `json:"-"`
 	SqlLdrAvailable               bool               `json:"-"`
+	TriggeredByCli                bool               `json:"-"`
 }
 
 func ValidateTransferInfo(v *validator.Validator, transferInfo *TransferInfo) {
 
-	validateTransferAutomatedFields(transferInfo)
+	if !transferInfo.TriggeredByCli {
+		validateTransferAutomatedFields(transferInfo)
+	}
 
 	if transferInfo.Query == "" {
 		if transferInfo.SourceTable == "" {

@@ -347,7 +347,7 @@ func (system Snowflake) putCsvs(
 			finalCsvChannelOut <- finalCsvInfo
 		}
 
-		logger.Info(fmt.Sprintf("transferInfo %v finished uploading snowflake csvs", transferInfo.Id))
+		logger.Info("transferInfo %v finished uploading snowflake csvs")
 	}()
 
 	return finalCsvChannelOut
