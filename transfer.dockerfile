@@ -27,4 +27,3 @@ WORKDIR /
 COPY ./bin/transfer /usr/local/bin/transfer
 COPY ./LICENSE.MD /SQLPIPE-LICENSE.MD
 ENTRYPOINT ["/usr/local/bin/transfer"]
-CMD []

@@ -258,7 +258,7 @@ func runTransfer() error {
 		}
 	}
 
-	logger.Info("transfer %v complete")
+	logger.Info(fmt.Sprintf("transfer %v complete", transferInfo.Id))
 
 	return nil
 }
