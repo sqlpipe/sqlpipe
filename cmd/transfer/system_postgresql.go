@@ -14,6 +14,8 @@ import (
 type Postgresql struct {
 	Name       string
 	Connection *sql.DB
+	ConnectionInfo
+	SchemaTree SchemaTree
 }
 
 func (system Postgresql) getSystemName() (name string) {
@@ -21,13 +23,18 @@ func (system Postgresql) getSystemName() (name string) {
 }
 
 func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err error) {
-	db, err := openConnectionPool(connectionInfo.Name, connectionInfo.ConnectionString, DriverPostgreSQL)
+
+	connectionString := fmt.Sprintf("postgresql://%v:%v@%v:%v/%v", connectionInfo.Username,
+		connectionInfo.Password, connectionInfo.Hostname, connectionInfo.Port, connectionInfo.Database)
+
+	db, err := openConnectionPool(connectionInfo.Name, connectionString, DriverPostgreSQL)
 	if err != nil {
 		return postgresql, fmt.Errorf("error opening postgresql db :: %v", err)
 	}
 
 	postgresql.Connection = db
 	postgresql.Name = connectionInfo.Name
+	postgresql.ConnectionInfo = connectionInfo
 
 	return postgresql, nil
 }
@@ -779,6 +786,42 @@ func (system Postgresql) getTableColumnInfosRows(schema, table string) (rows *sq
 	return rows, nil
 }
 
+func (system Postgresql) getAllColumnInfosRows() (rows *sql.Rows, err error) {
+	query := `
+		WITH PrimaryKeys AS (
+			SELECT
+				kcu.column_name
+			FROM
+				information_schema.key_column_usage AS kcu
+				JOIN information_schema.table_constraints AS tc
+					ON kcu.constraint_name = tc.constraint_name
+					AND kcu.table_name = tc.table_name
+					AND kcu.table_schema = tc.table_schema
+			WHERE
+				tc.constraint_type = 'PRIMARY KEY'
+		)
+		
+		SELECT
+			columns.column_name AS col_name,
+			columns.data_type AS col_type,
+			coalesce(columns.numeric_precision, -1) AS col_precision,
+			coalesce(columns.numeric_scale, -1) AS col_scale,
+			coalesce(columns.character_maximum_length, -1) AS col_length,
+			CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS col_is_primary
+		FROM
+			information_schema.columns
+			LEFT JOIN PrimaryKeys pk ON columns.column_name = pk.column_name
+		ORDER BY
+			columns.ordinal_position;`
+
+	rows, err = system.query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error getting table column infos rows :: %v", err)
+	}
+
+	return rows, nil
+}
+
 func (system Postgresql) getPrimaryKeysRows(schema, table string) (rows *sql.Rows, err error) {
 
 	unescapedSchemaPeriodTable := getSchemaPeriodTable(schema, table, system, false)
@@ -806,6 +849,63 @@ func (system Postgresql) getPrimaryKeysRows(schema, table string) (rows *sql.Row
 	return rows, nil
 }
 
+func (system Postgresql) listAllDatabases() (databases []string, err error) {
+	rows, err := system.query("SELECT datname FROM pg_database WHERE datistemplate = false;")
+	if err != nil {
+		return nil, fmt.Errorf("error listing all databases :: %v", err)
+	}
+
+	for rows.Next() {
+		var database string
+		err = rows.Scan(&database)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning database :: %v", err)
+		}
+
+		databases = append(databases, database)
+	}
+
+	return databases, nil
+}
+
+func (system Postgresql) listAllSchemasInDatabase() (schemas []string, err error) {
+	rows, err := system.query("SELECT schema_name FROM information_schema.schemata")
+	if err != nil {
+		return nil, fmt.Errorf("error listing all schemas in database :: %v", err)
+	}
+
+	for rows.Next() {
+		var schema string
+		err = rows.Scan(&schema)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning schema :: %v", err)
+		}
+
+		schemas = append(schemas, schema)
+	}
+
+	return schemas, nil
+}
+
+func (system Postgresql) listAllTablesInSchema(schema string) (tables []string, err error) {
+	rows, err := system.query(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_schema = '%v'", schema))
+	if err != nil {
+		return nil, fmt.Errorf("error listing all tables in schema :: %v", err)
+	}
+
+	for rows.Next() {
+		var table string
+		err = rows.Scan(&table)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning table :: %v", err)
+		}
+
+		tables = append(tables, table)
+	}
+
+	return tables, nil
+}
+
 func (system Postgresql) createSchemaIfNotExistsOverride(schema string) (overridden bool, err error) {
 	return false, nil
 }
@@ -820,4 +920,46 @@ func (system Postgresql) getIncrementalTimeOverride(schema, table, incrementalCo
 
 func (system Postgresql) IsTableNotFoundError(err error) bool {
 	return strings.Contains(err.Error(), "does not exist")
+}
+
+func (system Postgresql) discoverStructure() (*SchemaTree, error) {
+	root := &SchemaTree{Name: system.Name}
+
+	databases, err := system.listAllDatabases()
+	if err != nil {
+		return nil, fmt.Errorf("error listing all databases :: %v", err)
+	}
+
+	dbConnInfo := system.ConnectionInfo
+
+	for _, database := range databases {
+
+		dbNode := root.AddChild(database)
+
+		dbConnInfo.Database = database
+
+		dbSystem, err := newPostgresql(system.ConnectionInfo)
+		if err != nil {
+			return nil, fmt.Errorf("error creating db system :: %v", err)
+		}
+
+		schemas, err := dbSystem.listAllSchemasInDatabase()
+		if err != nil {
+			return nil, fmt.Errorf("error listing all schemas in database %v :: %v", database, err)
+		}
+		for _, schema := range schemas {
+			schemaNode := dbNode.AddChild(schema)
+
+			tables, err := dbSystem.listAllTablesInSchema(schema)
+			if err != nil {
+				return nil, fmt.Errorf("error listing all tables in schema %v :: %v", schema, err)
+			}
+			for _, table := range tables {
+				schemaNode.AddChild(table)
+			}
+		}
+	}
+
+	return root, nil
+
 }

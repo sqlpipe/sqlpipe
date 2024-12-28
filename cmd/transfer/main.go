@@ -36,7 +36,12 @@ func main() {
 	flag.BoolVar(&transferInfo.KeepFiles, "keep-files", false, "keep files after cli transfer")
 	flag.StringVar(&transferInfo.SourceName, "source-name", "", "source name")
 	flag.StringVar(&transferInfo.SourceType, "source-type", "", "source type")
-	flag.StringVar(&transferInfo.SourceConnectionString, "source-connection-string", "", "source connection string")
+	// flag.StringVar(&transferInfo.SourceConnectionString, "source-connection-string", "", "source connection string")
+	flag.StringVar(&transferInfo.SourceHostname, "source-hostname", "", "source hostname")
+	flag.IntVar(&transferInfo.SourcePort, "source-port", 0, "source port")
+	flag.StringVar(&transferInfo.SourceDatabase, "source-database", "", "source database")
+	flag.StringVar(&transferInfo.SourceUsername, "source-username", "", "source username")
+	flag.StringVar(&transferInfo.SourcePassword, "source-password", "", "source password")
 	flag.StringVar(&transferInfo.TargetName, "target-name", "", "target name")
 	flag.StringVar(&transferInfo.TargetType, "target-type", "", "target type")
 	flag.StringVar(&transferInfo.TargetConnectionString, "target-connection-string", "", "target connection string")
@@ -52,6 +57,7 @@ func main() {
 	flag.StringVar(&transferInfo.SourceTable, "source-table", "", "source table")
 	flag.StringVar(&transferInfo.TargetSchema, "target-schema", "", "target schema")
 	flag.StringVar(&transferInfo.TargetTable, "target-table", "", "target table")
+	flag.BoolVar(&transferInfo.EntireInstance, "entire-instance", false, "entire instance")
 	flag.StringVar(&transferInfo.Query, "query", "", "query")
 	flag.StringVar(&transferInfo.Delimiter, "delimiter", "{dlm}", "delimiter")
 	flag.StringVar(&transferInfo.Newline, "newline", "{nwln}", "newline")
@@ -95,7 +101,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = runTransfer()
+	if transferInfo.EntireInstance {
+		err := transferInstance(transferInfo)
+		if err != nil {
+			logger.Error(fmt.Sprintf("error transferring instance :: %v", err))
+			os.Exit(1)
+		}
+		return
+	}
+
+	err = runTransfer(transferInfo)
 	if err != nil {
 		logger.Error(fmt.Sprintf("error running transfer :: %v", err))
 		os.Exit(1)

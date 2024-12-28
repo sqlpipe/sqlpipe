@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/sqlpipe/sqlpipe/internal/commonHelpers"
+	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
-func runTransfer() error {
+func runTransfer(transferInfo data.TransferInfo) error {
 
 	var err error
 
@@ -31,9 +32,13 @@ func runTransfer() error {
 	}
 
 	sourceConnectionInfo := ConnectionInfo{
-		Name:             transferInfo.SourceName,
-		Type:             transferInfo.SourceType,
-		ConnectionString: transferInfo.SourceConnectionString,
+		Name:     transferInfo.SourceName,
+		Type:     transferInfo.SourceType,
+		Hostname: transferInfo.SourceHostname,
+		Port:     transferInfo.SourcePort,
+		Database: transferInfo.SourceDatabase,
+		Username: transferInfo.SourceUsername,
+		Password: transferInfo.SourcePassword,
 	}
 
 	source, err := newSystem(sourceConnectionInfo)
@@ -43,9 +48,13 @@ func runTransfer() error {
 	defer source.closeConnectionPool(true)
 
 	targetConnectionInfo := ConnectionInfo{
-		Name:             transferInfo.TargetName,
-		Type:             transferInfo.TargetType,
-		ConnectionString: transferInfo.TargetConnectionString,
+		Name:     transferInfo.TargetName,
+		Type:     transferInfo.TargetType,
+		Hostname: transferInfo.TargetHostname,
+		Port:     transferInfo.TargetPort,
+		Database: transferInfo.TargetDatabase,
+		Username: transferInfo.TargetUsername,
+		Password: transferInfo.TargetPassword,
 	}
 
 	target, err := newSystem(targetConnectionInfo)

@@ -18,9 +18,36 @@ import (
 )
 
 type ConnectionInfo struct {
-	Name             string
-	Type             string
-	ConnectionString string
+	Name     string
+	Type     string
+	Hostname string
+	Port     int
+	Database string
+	Username string
+	Password string
+}
+
+type SchemaTree struct {
+	Name     string
+	Children []*SchemaTree
+}
+
+func (n *SchemaTree) AddChild(name string) *SchemaTree {
+	child := &SchemaTree{Name: name}
+	n.Children = append(n.Children, child)
+	return child
+}
+
+func (n *SchemaTree) PrintIndented(level int) {
+	fmt.Printf("%s%s\n", getIndent(level), n.Name)
+	for _, child := range n.Children {
+		child.PrintIndented(level + 1)
+	}
+}
+
+// Helper function for generating indentation
+func getIndent(level int) string {
+	return "  " + "  "[:level*2]
 }
 
 type System interface {
@@ -75,6 +102,12 @@ type System interface {
 	insertFinalCsvsOverride(transfer data.TransferInfo) (overridden bool, err error)
 	runInsertCmd(finalCsvInfo FinalCsvInfo, transfer data.TransferInfo, schema, table string) (err error)
 	getIncrementalTimeOverride(schema, table, incrementalColumn string, intialLoad bool) (incrementalTime time.Time, overridden bool, initialLoad bool, err error)
+
+	// --------------------
+	// -- Data discovery --
+	// --------------------
+
+	discoverStructure() (schemaTree *SchemaTree, err error)
 }
 
 func newSystem(connectionInfo ConnectionInfo) (system System, err error) {
@@ -83,14 +116,14 @@ func newSystem(connectionInfo ConnectionInfo) (system System, err error) {
 	switch connectionInfo.Type {
 	case "postgresql":
 		return newPostgresql(connectionInfo)
-	case "mssql":
-		return newMssql(connectionInfo)
-	case "mysql":
-		return newMysql(connectionInfo)
-	case "oracle":
-		return newOracle(connectionInfo)
-	case "snowflake":
-		return newSnowflake(connectionInfo)
+	// case "mssql":
+	// 	return newMssql(connectionInfo)
+	// case "mysql":
+	// 	return newMysql(connectionInfo)
+	// case "oracle":
+	// 	return newOracle(connectionInfo)
+	// case "snowflake":
+	// 	return newSnowflake(connectionInfo)
 	default:
 		return system, fmt.Errorf("unsupported system type %v", connectionInfo.Type)
 	}
