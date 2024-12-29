@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -8,14 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
 type Postgresql struct {
-	Name       string
-	Connection *sql.DB
-	ConnectionInfo
-	SchemaTree SchemaTree
+	Name           string
+	Connection     *sql.DB
+	ConnectionInfo ConnectionInfo
+	SchemaTree     SchemaTree
 }
 
 func (system Postgresql) getSystemName() (name string) {
@@ -244,6 +246,8 @@ func (system Postgresql) dbTypeToPipeType(
 	case "pg_lsn":
 		return "nvarchar", nil
 	case "pg_snapshot":
+		return "nvarchar", nil
+	case "USER-DEFINED":
 		return "nvarchar", nil
 	default:
 		return "", fmt.Errorf("unsupported database type for postgresql: %v", databaseTypeName)
@@ -786,42 +790,6 @@ func (system Postgresql) getTableColumnInfosRows(schema, table string) (rows *sq
 	return rows, nil
 }
 
-func (system Postgresql) getAllColumnInfosRows() (rows *sql.Rows, err error) {
-	query := `
-		WITH PrimaryKeys AS (
-			SELECT
-				kcu.column_name
-			FROM
-				information_schema.key_column_usage AS kcu
-				JOIN information_schema.table_constraints AS tc
-					ON kcu.constraint_name = tc.constraint_name
-					AND kcu.table_name = tc.table_name
-					AND kcu.table_schema = tc.table_schema
-			WHERE
-				tc.constraint_type = 'PRIMARY KEY'
-		)
-		
-		SELECT
-			columns.column_name AS col_name,
-			columns.data_type AS col_type,
-			coalesce(columns.numeric_precision, -1) AS col_precision,
-			coalesce(columns.numeric_scale, -1) AS col_scale,
-			coalesce(columns.character_maximum_length, -1) AS col_length,
-			CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS col_is_primary
-		FROM
-			information_schema.columns
-			LEFT JOIN PrimaryKeys pk ON columns.column_name = pk.column_name
-		ORDER BY
-			columns.ordinal_position;`
-
-	rows, err = system.query(query)
-	if err != nil {
-		return nil, fmt.Errorf("error getting table column infos rows :: %v", err)
-	}
-
-	return rows, nil
-}
-
 func (system Postgresql) getPrimaryKeysRows(schema, table string) (rows *sql.Rows, err error) {
 
 	unescapedSchemaPeriodTable := getSchemaPeriodTable(schema, table, system, false)
@@ -869,7 +837,10 @@ func (system Postgresql) listAllDatabases() (databases []string, err error) {
 }
 
 func (system Postgresql) listAllSchemasInDatabase() (schemas []string, err error) {
-	rows, err := system.query("SELECT schema_name FROM information_schema.schemata")
+	rows, err := system.query(`SELECT schema_name
+		FROM information_schema.schemata
+		WHERE schema_name NOT IN ('pg_catalog', 'information_schema')
+		AND schema_name NOT LIKE 'pg_%'`)
 	if err != nil {
 		return nil, fmt.Errorf("error listing all schemas in database :: %v", err)
 	}
@@ -888,7 +859,10 @@ func (system Postgresql) listAllSchemasInDatabase() (schemas []string, err error
 }
 
 func (system Postgresql) listAllTablesInSchema(schema string) (tables []string, err error) {
-	rows, err := system.query(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_schema = '%v'", schema))
+	rows, err := system.query(fmt.Sprintf(`SELECT table_name
+		FROM information_schema.tables
+		WHERE table_schema = '%v'
+		AND table_type = 'BASE TABLE'`, schema))
 	if err != nil {
 		return nil, fmt.Errorf("error listing all tables in schema :: %v", err)
 	}
@@ -931,6 +905,7 @@ func (system Postgresql) discoverStructure() (*SchemaTree, error) {
 	}
 
 	dbConnInfo := system.ConnectionInfo
+	transferInfos := make([]data.TransferInfo, 0)
 
 	for _, database := range databases {
 
@@ -938,7 +913,7 @@ func (system Postgresql) discoverStructure() (*SchemaTree, error) {
 
 		dbConnInfo.Database = database
 
-		dbSystem, err := newPostgresql(system.ConnectionInfo)
+		dbSystem, err := newPostgresql(dbConnInfo)
 		if err != nil {
 			return nil, fmt.Errorf("error creating db system :: %v", err)
 		}
@@ -956,10 +931,59 @@ func (system Postgresql) discoverStructure() (*SchemaTree, error) {
 			}
 			for _, table := range tables {
 				schemaNode.AddChild(table)
+
+				id := uuid.New().String()
+				ctx, cancel := context.WithCancel(context.Background())
+
+				targetDbName := fmt.Sprintf("%v_%v", dbSystem.Name, database)
+
+				transferInfo := &data.TransferInfo{
+					Id:                            id,
+					CreatedAt:                     time.Now(),
+					Status:                        StatusPending,
+					Context:                       ctx,
+					Cancel:                        cancel,
+					SourceName:                    instanceTransfer.SourceName,
+					SourceType:                    instanceTransfer.SourceType,
+					SourceHostname:                instanceTransfer.SourceHostname,
+					SourcePort:                    instanceTransfer.SourcePort,
+					SourceUsername:                instanceTransfer.SourceUsername,
+					SourcePassword:                instanceTransfer.SourcePassword,
+					SourceDatabase:                database,
+					SourceSchema:                  schema,
+					SourceTable:                   table,
+					TargetName:                    instanceTransfer.TargetName,
+					TargetType:                    instanceTransfer.TargetType,
+					TargetHostname:                instanceTransfer.TargetHostname,
+					TargetPort:                    instanceTransfer.TargetPort,
+					TargetUsername:                instanceTransfer.TargetUsername,
+					TargetPassword:                instanceTransfer.TargetPassword,
+					TargetDatabase:                targetDbName,
+					TargetSchema:                  schema,
+					TargetTable:                   table,
+					DropTargetTableIfExists:       true,
+					CreateTargetSchemaIfNotExists: true,
+					CreateTargetTableIfNotExists:  true,
+					Delimiter:                     instanceTransfer.Delimiter,
+					Newline:                       instanceTransfer.Newline,
+					Null:                          instanceTransfer.Null,
+					PsqlAvailable:                 instanceTransfer.PsqlAvailable,
+					BcpAvailable:                  instanceTransfer.BcpAvailable,
+					SqlLdrAvailable:               instanceTransfer.SqlLdrAvailable,
+				}
+
+				transferInfos = append(transferInfos, *transferInfo)
+
 			}
 		}
 	}
 
+	instanceTransfer.TransferInfos = transferInfos
+
 	return root, nil
 
+}
+
+func (system Postgresql) createDbIfNotExistsOverride(database string) (overridden bool, err error) {
+	return false, errors.New("not implemented")
 }

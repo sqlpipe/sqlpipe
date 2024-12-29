@@ -38,16 +38,11 @@ func (n *SchemaTree) AddChild(name string) *SchemaTree {
 	return child
 }
 
-func (n *SchemaTree) PrintIndented(level int) {
-	fmt.Printf("%s%s\n", getIndent(level), n.Name)
+func (n *SchemaTree) PrettyPrint(indent string) {
+	fmt.Println(indent + n.Name)
 	for _, child := range n.Children {
-		child.PrintIndented(level + 1)
+		child.PrettyPrint(indent + "  ")
 	}
-}
-
-// Helper function for generating indentation
-func getIndent(level int) string {
-	return "  " + "  "[:level*2]
 }
 
 type System interface {
@@ -91,6 +86,7 @@ type System interface {
 	createSchemaIfNotExistsOverride(schema string) (overridden bool, err error)
 	createTableIfNotExistsOverride(schema, table string, columnInfo []ColumnInfo, incremental bool) (overridden bool, err error)
 	dropTableIfExistsOverride(schema, table string) (overridden bool, err error)
+	createDbIfNotExistsOverride(database string) (overridden bool, err error)
 
 	// *******************
 	// ** Data movement **
@@ -122,8 +118,8 @@ func newSystem(connectionInfo ConnectionInfo) (system System, err error) {
 	// 	return newMysql(connectionInfo)
 	// case "oracle":
 	// 	return newOracle(connectionInfo)
-	// case "snowflake":
-	// 	return newSnowflake(connectionInfo)
+	case "snowflake":
+		return newSnowflake(connectionInfo)
 	default:
 		return system, fmt.Errorf("unsupported system type %v", connectionInfo.Type)
 	}

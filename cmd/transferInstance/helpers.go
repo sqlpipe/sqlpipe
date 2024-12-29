@@ -2,10 +2,8 @@ package main
 
 import (
 	"crypto/rand"
-	"encoding/csv"
 	"fmt"
 	"math/big"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
@@ -22,6 +20,13 @@ var (
 	DriverMSSQL      = "sqlserver"
 	DriverOracle     = "oracle"
 	DriverSnowflake  = "snowflake"
+)
+
+var (
+	StatusPending  = "pending"
+	StatusRunning  = "running"
+	StatusError    = "error"
+	StatusComplete = "complete"
 )
 
 func getFileNum(fileName string) (fileNum int64, err error) {
@@ -60,69 +65,69 @@ func ProgramVersion() string {
 	return revision
 }
 
-func maxColumnByteLength(filename, null string, columnIndex int) (int, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
+// func maxColumnByteLength(filename, null string, columnIndex int) (int, error) {
+// 	file, err := os.Open(filename)
+// 	if err != nil {
+// 		return 0, err
+// 	}
+// 	defer file.Close()
 
-	r := csv.NewReader(file)
-	maxLength := 0
+// 	r := csv.NewReader(file)
+// 	maxLength := 0
 
-	for {
-		record, err := r.Read()
-		if err != nil {
-			break
-		}
+// 	for {
+// 		record, err := r.Read()
+// 		if err != nil {
+// 			break
+// 		}
 
-		if columnIndex < 0 || columnIndex >= len(record) {
-			return 0, fmt.Errorf("invalid column index %d", columnIndex)
-		}
+// 		if columnIndex < 0 || columnIndex >= len(record) {
+// 			return 0, fmt.Errorf("invalid column index %d", columnIndex)
+// 		}
 
-		length := len(record[columnIndex])
-		if length > maxLength {
-			maxLength = length
-		}
-	}
+// 		length := len(record[columnIndex])
+// 		if length > maxLength {
+// 			maxLength = length
+// 		}
+// 	}
 
-	return maxLength + len(null), nil
+// 	return maxLength + len(null), nil
+// }
+
+func checkDeps(instanceTransfer *data.InstanceTransfer) {
+	checkPsql(instanceTransfer)
+	checkBcp(instanceTransfer)
+	checkSqlLdr(instanceTransfer)
 }
 
-func checkDeps(transferInfo *data.TransferInfo) {
-	checkPsql(transferInfo)
-	checkBcp(transferInfo)
-	checkSqlLdr(transferInfo)
-}
-
-func checkPsql(transferInfo *data.TransferInfo) {
+func checkPsql(instanceTransfer *data.InstanceTransfer) {
 	output, err := exec.Command("psql", "--version").CombinedOutput()
 	if err != nil {
 		logger.Warn(fmt.Sprintf("psql not found. please install psql to transfer data to postgresql :: %v :: %v\n", err, string(output)))
 		return
 	}
 
-	transferInfo.PsqlAvailable = true
+	instanceTransfer.PsqlAvailable = true
 }
 
-func checkBcp(transferInfo *data.TransferInfo) {
+func checkBcp(instanceTransfer *data.InstanceTransfer) {
 	output, err := exec.Command("bcp", "-v").CombinedOutput()
 	if err != nil {
 		logger.Warn(fmt.Sprintf("bcp not found. please install bcp to transfer data to mssql :: %v :: %v\n", err, string(output)))
 		return
 	}
 
-	transferInfo.BcpAvailable = true
+	instanceTransfer.BcpAvailable = true
 }
 
-func checkSqlLdr(transferInfo *data.TransferInfo) {
+func checkSqlLdr(instanceTransfer *data.InstanceTransfer) {
 	output, err := exec.Command("sqlldr", "-help").CombinedOutput()
 	if err != nil {
 		logger.Warn(fmt.Sprintf("sqlldr not found. please install sqllder to transfer data to oracle :: %v :: %v\n", err, string(output)))
 		return
 	}
 
-	transferInfo.SqlLdrAvailable = true
+	instanceTransfer.SqlLdrAvailable = true
 }
 
 func containsSpaces(s string) bool {

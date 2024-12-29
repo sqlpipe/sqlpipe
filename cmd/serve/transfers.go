@@ -868,6 +868,6 @@ func handleCliTransfer(cliTransferInput CliTransferInput) {
 	if err != nil {
 		transfer.Error = fmt.Sprintf("error running transfer %v :: %v", transfer.Id, err)
 		transferMap.CancelAndSetStatus(transfer.Id, transfer, StatusError)
-		errorLog.Fatalf(transfer.Error)
+		errorLog.Fatal(transfer.Error)
 	}
 }

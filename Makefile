@@ -120,13 +120,13 @@ build/docker:
 	@echo 'Pushing docker image...'
 	docker push sqlpipe/sqlpipe:latest
 
-## docker/build/transfer: build the cmd/sqlpipe docker image and push
-.PHONY: docker/build/transfer
-docker/build/transfer:
-	@echo 'Building cmd/transfer...'
-	GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/transfer ./cmd/transfer
+## docker/build/transferInstance: build the cmd/sqlpipe docker image and push
+.PHONY: docker/build/transferInstance
+docker/build/transferInstance:
+	@echo 'Building cmd/transferInstance...'
+	GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o=./bin/transferInstance ./cmd/transferInstance
 	@echo 'Building docker image...'
-	docker buildx build --platform linux/amd64 -t sqlpipe/transfer:latest -f transfer.dockerfile . --load
+	docker buildx build --platform linux/amd64 -t sqlpipe/transfer-instance:latest -f transferInstance.dockerfile . --load
 
 ## docker/push/transfer: build the cmd/sqlpipe docker image and push
 .PHONY: docker/push/transfer

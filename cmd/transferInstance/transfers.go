@@ -52,12 +52,24 @@ func runTransfer(transferInfo data.TransferInfo) error {
 		Type:     transferInfo.TargetType,
 		Hostname: transferInfo.TargetHostname,
 		Port:     transferInfo.TargetPort,
-		Database: transferInfo.TargetDatabase,
 		Username: transferInfo.TargetUsername,
 		Password: transferInfo.TargetPassword,
 	}
 
 	target, err := newSystem(targetConnectionInfo)
+	if err != nil {
+		return fmt.Errorf("error creating target system :: %v", err)
+	}
+	defer target.closeConnectionPool(true)
+
+	_, err = target.createDbIfNotExistsOverride(transferInfo.TargetDatabase)
+	if err != nil {
+		return fmt.Errorf("error creating target database :: %v", err)
+	}
+
+	targetConnectionInfo.Database = transferInfo.TargetDatabase
+
+	target, err = newSystem(targetConnectionInfo)
 	if err != nil {
 		return fmt.Errorf("error creating target system :: %v", err)
 	}
