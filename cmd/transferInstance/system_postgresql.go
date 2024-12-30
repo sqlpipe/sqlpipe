@@ -909,6 +909,11 @@ func (system Postgresql) discoverStructure() (*SchemaTree, error) {
 
 	for _, database := range databases {
 
+		// skip rdsadmin database
+		if database == "rdsadmin" {
+			continue
+		}
+
 		dbNode := root.AddChild(database)
 
 		dbConnInfo.Database = database

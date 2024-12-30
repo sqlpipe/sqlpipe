@@ -129,10 +129,10 @@ docker/build/transferInstance:
 	docker buildx build --platform linux/amd64 -t sqlpipe/transfer-instance:latest -f transferInstance.dockerfile . --load
 
 ## docker/push/transfer: build the cmd/sqlpipe docker image and push
-.PHONY: docker/push/transfer
-docker/push/transfer: docker/build/transfer
+.PHONY: docker/push/transferInstance
+docker/push/transfer: docker/build/transferInstance
 	@echo 'Pushing docker image...'
-	docker push sqlpipe/transfer:latest
+	docker push sqlpipe/transfer-instance:latest
 
 # ==================================================================================== #
 # TESTS
