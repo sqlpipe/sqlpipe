@@ -4,8 +4,6 @@ RUN apt-get update
 
 RUN apt-get install -y ca-certificates
 
-RUN update-ca-certificates
-
 ENV DELIMITER="{dlm}"
 ENV NEWLINE="{nwln}"
 ENV NULL="{nll}"
@@ -15,7 +13,7 @@ WORKDIR /
 COPY ./bin/transferInstance /usr/local/bin/transferInstance
 COPY ./LICENSE.MD /SQLPIPE-LICENSE.MD
 
-ENTRYPOINT /usr/local/bin/transferInstance \
+ENTRYPOINT update-ca-certificates && /usr/local/bin/transferInstance \
     -source-name="${SOURCE_NAME}" \
     -source-type="${SOURCE_TYPE}" \
     -source-hostname="${SOURCE_HOSTNAME}" \
@@ -29,4 +27,9 @@ ENTRYPOINT /usr/local/bin/transferInstance \
     -target-password="${TARGET_PASSWORD}" \
     -delimiter="${DELIMITER}" \
     -newline="${NEWLINE}" \
-    -null="${NULL}"
+    -null="${NULL}" \
+    -account-id="${ACCOUNT_ID}" \
+    -region="${REGION}" \
+    -account-username="${ACCOUNT_USERNAME}" \
+    -account-password="${ACCOUNT_PASSWORD}" \
+    -backup-id="${BACKUP_ID}"

@@ -67,7 +67,12 @@ func runTransfer(transferInfo data.TransferInfo) error {
 		return fmt.Errorf("error creating target database :: %v", err)
 	}
 
-	targetConnectionInfo.Database = transferInfo.TargetDatabase
+	_, err = target.createDbIfNotExistsOverride(transferInfo.StagingDbName)
+	if err != nil {
+		return fmt.Errorf("error creating staging database :: %v", err)
+	}
+
+	targetConnectionInfo.Database = transferInfo.StagingDbName
 
 	target, err = newSystem(targetConnectionInfo)
 	if err != nil {
@@ -277,6 +282,29 @@ func runTransfer(transferInfo data.TransferInfo) error {
 		if err != nil {
 			return fmt.Errorf("error vacuuming target table :: %v", err)
 		}
+	}
+
+	// drop the target db name if exists, replace with the staging db name
+	targetConnectionInfo.Database = transferInfo.TargetDatabase
+
+	target, err = newSystem(targetConnectionInfo)
+	if err != nil {
+		return fmt.Errorf("error creating target system :: %v", err)
+	}
+
+	err = createSchemaIfNotExists(transferInfo.TargetSchema, target)
+	if err != nil {
+		return fmt.Errorf("error creating target schema :: %v", err)
+	}
+
+	err = dropTableIfExists(transferInfo.TargetSchema, transferInfo.TargetTable, target)
+	if err != nil {
+		return fmt.Errorf("error dropping target table :: %v", err)
+	}
+
+	err = target.exec(fmt.Sprintf(`ALTER TABLE %v.%v.%v RENAME TO %v.%v.%v`, transferInfo.StagingDbName, transferInfo.TargetSchema, transferInfo.TargetTable, transferInfo.TargetDatabase, transferInfo.TargetSchema, transferInfo.TargetTable))
+	if err != nil {
+		return fmt.Errorf("error renaming staging table to target table :: %v", err)
 	}
 
 	logger.Info(fmt.Sprintf("transfer %v complete", transferInfo.Id))

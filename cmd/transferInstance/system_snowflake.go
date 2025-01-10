@@ -283,9 +283,9 @@ func (system Snowflake) insertPipeFilesOverride(columnInfos []ColumnInfo, transf
 	escapedSchemaName := escapeIfNeeded(transferInfo.TargetSchema, system)
 
 	fileFormatQuery := fmt.Sprintf(
-		`CREATE FILE FORMAT if not exists %s.sqlpipe_csv type = CSV ESCAPE_UNENCLOSED_FIELD = 'NONE'
+		`CREATE FILE FORMAT if not exists %s.%s.sqlpipe_csv type = CSV ESCAPE_UNENCLOSED_FIELD = 'NONE'
 		FIELD_OPTIONALLY_ENCLOSED_BY = '\"' NULL_IF = ('%s');`,
-		escapedSchemaName, transferInfo.Null)
+		transferInfo.StagingDbName, escapedSchemaName, transferInfo.Null)
 	err = system.exec(fileFormatQuery)
 	if err != nil {
 		return true, fmt.Errorf("error creating snowflake file format :: %v", err)
@@ -293,7 +293,7 @@ func (system Snowflake) insertPipeFilesOverride(columnInfos []ColumnInfo, transf
 	logger.Info(fmt.Sprintf("created %v.sqlpipe_csv file format if not exists in snowflake", escapedSchemaName))
 
 	createStageQuery := fmt.Sprintf(
-		`CREATE STAGE if not exists %v.sqlpipe_stage;`,
+		`CREATE STAGE if not exists %s.%v.sqlpipe_stage;`, transferInfo.StagingDbName,
 		escapedSchemaName)
 	err = system.exec(createStageQuery)
 	if err != nil {
@@ -339,7 +339,7 @@ func (system Snowflake) putCsvs(
 
 			finalCsvInfo.InsertInfo = fmt.Sprintf("%v.csv", uuid.New().String())
 
-			putQuery := fmt.Sprintf(`PUT file://%v @%v.sqlpipe_stage/%v`, finalCsvInfo.FilePath, escapedSchema, finalCsvInfo.InsertInfo)
+			putQuery := fmt.Sprintf(`PUT file://%v @%s.%v.sqlpipe_stage/%v`, finalCsvInfo.FilePath, transferInfo.StagingDbName, escapedSchema, finalCsvInfo.InsertInfo)
 
 			err := system.exec(putQuery)
 			if err != nil {

@@ -27,6 +27,7 @@ func (system Postgresql) getSystemName() (name string) {
 func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err error) {
 
 	connectionString := fmt.Sprintf("postgresql://%v:%v@%v:%v/%v", connectionInfo.Username,
+		// connectionString := fmt.Sprintf("postgresql://%v:%v@%v:%v/%v?sslmode=verify-full", connectionInfo.Username,
 		connectionInfo.Password, connectionInfo.Hostname, connectionInfo.Port, connectionInfo.Database)
 
 	db, err := openConnectionPool(connectionInfo.Name, connectionString, DriverPostgreSQL)
@@ -975,10 +976,9 @@ func (system Postgresql) discoverStructure() (*SchemaTree, error) {
 					PsqlAvailable:                 instanceTransfer.PsqlAvailable,
 					BcpAvailable:                  instanceTransfer.BcpAvailable,
 					SqlLdrAvailable:               instanceTransfer.SqlLdrAvailable,
+					StagingDbName:                 instanceTransfer.BackupId,
 				}
-
 				transferInfos = append(transferInfos, *transferInfo)
-
 			}
 		}
 	}

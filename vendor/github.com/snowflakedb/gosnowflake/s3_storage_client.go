@@ -106,7 +106,7 @@ func (util *snowflakeS3Client) getFileHeader(meta *fileMetadata, filename string
 	}
 	return &fileHeader{
 		out.Metadata[sfcDigest],
-		out.ContentLength,
+		*out.ContentLength,
 		&encMeta,
 	}, nil
 }

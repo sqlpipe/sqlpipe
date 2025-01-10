@@ -51,6 +51,7 @@ type TransferInfo struct {
 	BcpAvailable                  bool               `json:"-"`
 	SqlLdrAvailable               bool               `json:"-"`
 	TriggeredByCli                bool               `json:"-"`
+	StagingDbName                 string             `json:"staging-db-name"`
 }
 
 func ValidateTransferInfo(v *validator.Validator, transferInfo *TransferInfo) {

@@ -306,6 +306,30 @@ func permittedValue[T comparable](value T, permittedValues ...T) bool {
 	return false
 }
 
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const charsetLength = int64(len(charset))
+
+func generateRandomString(length int) (string, error) {
+
+	randomChars := make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		nBig, err := rand.Int(rand.Reader, big.NewInt(charsetLength))
+		if err != nil {
+			err = fmt.Errorf("error generating random number:: %v", err)
+			return "", err
+		}
+		randomInt := int(nBig.Int64())
+
+		randomChars[i] = charset[randomInt]
+	}
+
+	randomString := string(randomChars)
+
+	return randomString, nil
+
+}
+
 type ColumnInfo struct {
 	Name         string `json:"name"`
 	PipeType     string `json:"pipe-type"`

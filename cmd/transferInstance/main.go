@@ -9,11 +9,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	sf "github.com/snowflakedb/gosnowflake"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -31,6 +34,7 @@ var (
 
 func main() {
 
+	flag.StringVar(&instanceTransfer.Id, "id", "", "id")
 	flag.StringVar(&instanceTransfer.SourceName, "source-name", "", "source name")
 	flag.StringVar(&instanceTransfer.SourceType, "source-type", "", "source type")
 	flag.StringVar(&instanceTransfer.SourceHostname, "source-hostname", "", "source hostname")
@@ -46,6 +50,12 @@ func main() {
 	flag.StringVar(&instanceTransfer.Delimiter, "delimiter", "{dlm}", "delimiter")
 	flag.StringVar(&instanceTransfer.Newline, "newline", "{nwln}", "newline")
 	flag.StringVar(&instanceTransfer.Null, "null", "{nll}", "null")
+	flag.StringVar(&instanceTransfer.AccountID, "account-id", "", "account id")
+	flag.StringVar(&instanceTransfer.Region, "region", "", "region")
+	flag.StringVar(&instanceTransfer.AccountUsername, "account-username", "", "account username")
+	flag.StringVar(&instanceTransfer.AccountPassword, "account-password", "", "account password")
+	flag.StringVar(&instanceTransfer.BackupId, "backup-id", "", "backup id")
+
 	displayVersion := flag.Bool("version", false, "display version and exit")
 
 	flag.Parse()
@@ -55,7 +65,37 @@ func main() {
 		os.Exit(0)
 	}
 
-	instanceTransfer.Id = uuid.New().String()
+	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	deleteCredentials := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
+		instanceTransfer.AccountUsername,
+		instanceTransfer.AccountPassword,
+		"",
+	))
+
+	deleteCfg, err := awsConfig.LoadDefaultConfig(context.Background(), awsConfig.WithRegion(instanceTransfer.Region), awsConfig.WithCredentialsProvider(deleteCredentials))
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to load AWS configuration :: %v", err))
+		os.Exit(1)
+	}
+
+	// Create an RDS client
+	deleteClient := rds.NewFromConfig(deleteCfg)
+
+	// Input parameters for deletion
+	input := &rds.DeleteDBInstanceInput{
+		DBInstanceIdentifier:   aws.String(instanceTransfer.BackupId),
+		SkipFinalSnapshot:      aws.Bool(true),
+		DeleteAutomatedBackups: aws.Bool(true),
+	}
+
+	defer func() {
+		_, err = deleteClient.DeleteDBInstance(context.TODO(), input)
+		if err != nil {
+			logger.Error(fmt.Sprintf("failed to delete RDS instance %v :: %v", instanceTransfer.BackupId, err))
+			os.Exit(1)
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -63,12 +103,10 @@ func main() {
 	instanceTransfer.Context = ctx
 	instanceTransfer.Cancel = cancel
 
-	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-
 	checkDeps(&instanceTransfer)
 
 	globalTmpDir = filepath.Join(os.TempDir(), "sqlpipe")
-	err := os.MkdirAll(globalTmpDir, 0600)
+	err = os.MkdirAll(globalTmpDir, 0600)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create tmp dir :: %v", err))
 		os.Exit(1)
@@ -89,6 +127,5 @@ func main() {
 	err = transferInstance()
 	if err != nil {
 		logger.Error(fmt.Sprintf("error transferring instance :: %v", err))
-		os.Exit(1)
 	}
 }

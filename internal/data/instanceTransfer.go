@@ -33,6 +33,11 @@ type InstanceTransfer struct {
 	Context         context.Context    `json:"-"`
 	Cancel          context.CancelFunc `json:"-"`
 	TransferInfos   []TransferInfo     `json:"transfer-infos"`
+	AccountID       string             `json:"account-id"`
+	Region          string             `json:"region"`
+	AccountUsername string             `json:"username"`
+	AccountPassword string             `json:"-"`
+	BackupId        string             `json:"backup-id"`
 }
 
 func ValidateInstanceTransfer(v *validator.Validator, instanceTransfer *InstanceTransfer) {
