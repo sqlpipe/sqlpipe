@@ -34,7 +34,7 @@ func setupPostgreSQL() (ConnectionInfo, error) {
 		return connectionInfo, fmt.Errorf("error creating PostgreSQL connection pool :: %v", err)
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err = postgresqlDB.PingContext(ctx)
@@ -54,7 +54,7 @@ func setupPostgreSQL() (ConnectionInfo, error) {
 		Table:            postgresqlTable,
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_, err = postgresqlDB.ExecContext(ctx, `
@@ -104,7 +104,7 @@ CREATE TABLE my_table (
 		return connectionInfo, fmt.Errorf("error creating my_table :: %v", err)
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_, err = postgresqlDB.ExecContext(ctx, `
@@ -119,7 +119,7 @@ $$ LANGUAGE plpgsql;`)
 		return connectionInfo, fmt.Errorf("error creating update_last_modified function :: %v", err)
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_, err = postgresqlDB.ExecContext(ctx, `
@@ -131,7 +131,7 @@ EXECUTE FUNCTION update_last_modified();`)
 		return connectionInfo, fmt.Errorf("error creating tr_update_last_modified trigger :: %w", err)
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_, err = postgresqlDB.ExecContext(ctx, `

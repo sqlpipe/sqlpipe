@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,71 +16,78 @@ func transferInstance() error {
 
 	var err error
 
-	instanceTransfer.SourcePassword, err = generateRandomString(20)
+	instanceTransfer.SourceInstance.Password, err = generateRandomString(20)
 	if err != nil {
 		return fmt.Errorf("error generating random password :: %v", err)
 	}
 
 	changePasswordInput := &rds.ModifyDBInstanceInput{
-		DBInstanceIdentifier: aws.String(instanceTransfer.BackupId),
-		MasterUserPassword:   aws.String(instanceTransfer.SourcePassword),
+		DBInstanceIdentifier: aws.String(instanceTransfer.RestoredInstanceID),
+		MasterUserPassword:   aws.String(instanceTransfer.SourceInstance.Password),
 		ApplyImmediately:     aws.Bool(true),
 	}
 
 	awsConfig := aws.Config{
-		Credentials: credentials.NewStaticCredentialsProvider(instanceTransfer.AccountUsername, instanceTransfer.AccountPassword, ""),
-		Region:      instanceTransfer.Region,
+		Credentials: credentials.NewStaticCredentialsProvider(instanceTransfer.CloudUsername, instanceTransfer.CloudPassword, ""),
+		Region:      instanceTransfer.SourceInstance.Region,
 	}
 
 	rdsClient := rds.NewFromConfig(awsConfig)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	logger.Info("changing instances password")
+	logger.Info("changing backup instances password", BackupInstanceId, instanceTransfer.RestoredInstanceID)
 
 	_, err = rdsClient.ModifyDBInstance(ctx, changePasswordInput)
 	if err != nil {
 		return fmt.Errorf("error changing source password :: %v", err)
 	}
 
-	time.Sleep(10 * time.Second)
+	// it takes a few seconds for the password change process to start
+	time.Sleep(30 * time.Second)
 
-	// wait for the source instance to be available, check every second
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
 	for {
-		time.Sleep(1 * time.Second)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if ctx.Err() != nil {
+			return fmt.Errorf("timeout waiting for instance to be available")
+		}
+
+		time.Sleep(5 * time.Second)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		dbInstances, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
-			DBInstanceIdentifier: aws.String(instanceTransfer.BackupId),
+			DBInstanceIdentifier: aws.String(instanceTransfer.RestoredInstanceID),
 		})
 		if err != nil {
-			return fmt.Errorf("error describing source instance :: %v", err)
+			return fmt.Errorf("error describing backup instance :: %v", err)
 		}
 
 		if len(dbInstances.DBInstances) == 0 {
-			return fmt.Errorf("source instance not found")
+			return fmt.Errorf("backup instance id %v not found", instanceTransfer.RestoredInstanceID)
 		}
+
+		logger.Info("now checking instance", "instance status", fmt.Sprintf("%v", *dbInstances.DBInstances[0].DBInstanceStatus))
 
 		if *dbInstances.DBInstances[0].DBInstanceStatus == "available" {
 			break
 		}
 	}
 
-	logger.Info("source instance password has changed, now available")
-
-	time.Sleep(5 * time.Second)
+	logger.Info("source instance password has changed, starting transfer", BackupInstanceId, instanceTransfer.RestoredInstanceID)
 
 	sourceConnectionInfo := ConnectionInfo{
-		Name:     instanceTransfer.SourceName,
-		Type:     instanceTransfer.SourceType,
-		Hostname: instanceTransfer.SourceHostname,
-		Port:     instanceTransfer.SourcePort,
-		Username: instanceTransfer.SourceUsername,
-		Password: instanceTransfer.SourcePassword,
+		Type:     instanceTransfer.SourceInstance.Type,
+		Hostname: instanceTransfer.SourceInstance.Host,
+		Port:     instanceTransfer.SourceInstance.Port,
+		// Database: instanceTransfer.SourceInstance.AdminDB,
+		Username: instanceTransfer.SourceInstance.Username,
+		Password: instanceTransfer.SourceInstance.Password,
 	}
 
 	source, err := newSystem(sourceConnectionInfo)
@@ -88,25 +96,24 @@ func transferInstance() error {
 	}
 	defer source.closeConnectionPool(true)
 
-	_, err = source.discoverStructure()
+	_, err = source.discoverStructure(&instanceTransfer)
 	if err != nil {
 		return fmt.Errorf("error getting instance structure :: %v", err)
 	}
 
 	transferErrG := errgroup.Group{}
-	// set limit on number of concurrent transfers
 
 	transferErrG.SetLimit(5)
 
 	for _, transferInfo := range instanceTransfer.TransferInfos {
 		transferInfo := transferInfo
 
-		logger.Info("starting transfer", "transfer-info", fmt.Sprintf("%+v", transferInfo))
+		logger.Info("starting transfer", OriginalDatabaseName, transferInfo.SourceDatabase, "schema", transferInfo.SourceSchema, "table", transferInfo.SourceTable)
 
 		transferErrG.Go(func() error {
 			err = runTransfer(transferInfo)
 			if err != nil {
-				logger.Error("error running transfer", "error", err)
+				logger.Error("error running transfer", "error", err, "database", transferInfo.SourceDatabase, "schema", transferInfo.SourceSchema, "table", transferInfo.SourceTable)
 				return err
 			}
 
@@ -116,28 +123,7 @@ func transferInstance() error {
 
 	err = transferErrG.Wait()
 	if err != nil {
-		return fmt.Errorf("error running at least one transfer :: %v", err)
-	}
-
-	// drop staging database in snowflake
-	targetConnectionInfo := ConnectionInfo{
-		Name:     instanceTransfer.TargetName,
-		Type:     instanceTransfer.TargetType,
-		Hostname: instanceTransfer.TargetHostname,
-		Port:     instanceTransfer.TargetPort,
-		Username: instanceTransfer.TargetUsername,
-		Password: instanceTransfer.TargetPassword,
-	}
-
-	target, err := newSystem(targetConnectionInfo)
-	if err != nil {
-		return fmt.Errorf("error creating target system :: %v", err)
-	}
-	defer target.closeConnectionPool(true)
-
-	err = target.exec(fmt.Sprintf("DROP DATABASE IF EXISTS %v", instanceTransfer.BackupId))
-	if err != nil {
-		return fmt.Errorf("error dropping staging database :: %v", err)
+		return errors.New("error running one or more transfers. please check logs for more information")
 	}
 
 	return nil

@@ -2,63 +2,48 @@ package data
 
 import (
 	"context"
-	"time"
 
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 )
 
 type TransferInfo struct {
-	Id                            string             `json:"id"`
-	CreatedAt                     time.Time          `json:"created-at"`
-	StoppedAt                     string             `json:"stopped-at,omitempty"`
-	Status                        string             `json:"status"`
-	Error                         string             `json:"error,omitempty"`
-	KeepFiles                     bool               `json:"keep-files"`
-	TmpDir                        string             `json:"tmp-dir"`
-	PipeFileDir                   string             `json:"pipe-file-dir"`
-	FinalCsvDir                   string             `json:"final-csv-dir"`
-	Context                       context.Context    `json:"-"`
-	Cancel                        context.CancelFunc `json:"-"`
-	SourceName                    string             `json:"source-instance-name"`
-	SourceType                    string             `json:"source-type"`
-	SourceHostname                string             `json:"source-hostname"`
-	SourcePort                    int                `json:"source-port,omitempty"`
-	SourceDatabase                string             `json:"source-database"`
-	SourceUsername                string             `json:"source-username"`
-	SourcePassword                string             `json:"-"`
-	SourceSchema                  string             `json:"source-schema,omitempty"`
-	SourceTable                   string             `json:"source-table,omitempty"`
-	TargetName                    string             `json:"target-instance-name"`
-	TargetType                    string             `json:"target-type"`
-	TargetConnectionString        string             `json:"-"`
-	TargetHostname                string             `json:"target-hostname"`
-	TargetPort                    int                `json:"target-port,omitempty"`
-	TargetDatabase                string             `json:"target-database"`
-	TargetUsername                string             `json:"target-username"`
-	TargetPassword                string             `json:"-"`
-	DropTargetTableIfExists       bool               `json:"drop-target-table-if-exists"`
-	CreateTargetSchemaIfNotExists bool               `json:"create-target-schema-if-not-exists"`
-	CreateTargetTableIfNotExists  bool               `json:"create-target-table-if-not-exists"`
-	TargetSchema                  string             `json:"target-schema,omitempty"`
-	TargetTable                   string             `json:"target-name"`
-	Query                         string             `json:"query,omitempty"`
-	Delimiter                     string             `json:"delimiter"`
-	Newline                       string             `json:"newline"`
-	Null                          string             `json:"null"`
-	IncrementalColumn             string             `json:"incremental-column,omitempty"`
-	Vacuum                        bool               `json:"vacuum"`
-	PsqlAvailable                 bool               `json:"-"`
-	BcpAvailable                  bool               `json:"-"`
-	SqlLdrAvailable               bool               `json:"-"`
-	TriggeredByCli                bool               `json:"-"`
-	StagingDbName                 string             `json:"staging-db-name"`
+	ID                            string   `json:"id"`
+	Error                         string   `json:"error,omitempty"`
+	KeepFiles                     bool     `json:"keep-files"`
+	TmpDir                        string   `json:"tmp-dir"`
+	PipeFileDir                   string   `json:"pipe-file-dir"`
+	FinalCsvDir                   string   `json:"final-csv-dir"`
+	SourceInstance                Instance `json:"source-instance"`
+	SourceDatabase                string   `json:"source-database"`
+	SourceSchema                  string   `json:"source-schema,omitempty"`
+	SourceTable                   string   `json:"source-table,omitempty"`
+	TargetType                    string   `json:"target-type"`
+	TargetConnectionString        string   `json:"-"`
+	TargetHost                    string   `json:"target-host"`
+	TargetPort                    int      `json:"target-port,omitempty"`
+	TargetDatabase                string   `json:"target-database"`
+	TargetUsername                string   `json:"target-username"`
+	TargetPassword                string   `json:"-"`
+	DropTargetTableIfExists       bool     `json:"drop-target-table-if-exists"`
+	CreateTargetSchemaIfNotExists bool     `json:"create-target-schema-if-not-exists"`
+	CreateTargetTableIfNotExists  bool     `json:"create-target-table-if-not-exists"`
+	TargetSchema                  string   `json:"target-schema,omitempty"`
+	TargetTable                   string   `json:"target-name"`
+	Query                         string   `json:"query,omitempty"`
+	Delimiter                     string   `json:"delimiter"`
+	Newline                       string   `json:"newline"`
+	Null                          string   `json:"null"`
+	PsqlAvailable                 bool     `json:"-"`
+	BcpAvailable                  bool     `json:"-"`
+	SqlLdrAvailable               bool     `json:"-"`
+	StagingDbName                 string   `json:"staging-db-name"`
+	Context                       context.Context
+	Cancel                        context.CancelFunc
 }
 
 func ValidateTransferInfo(v *validator.Validator, transferInfo *TransferInfo) {
 
-	if !transferInfo.TriggeredByCli {
-		validateTransferAutomatedFields(transferInfo)
-	}
+	validateTransferAutomatedFields(transferInfo)
 
 	v.NotBlank(transferInfo.TargetTable)
 
@@ -81,7 +66,7 @@ func ValidateTransferInfo(v *validator.Validator, transferInfo *TransferInfo) {
 	// v.NotBlank(transferInfo.SourceConnectionString)
 	v.NotBlank(transferInfo.TargetConnectionString)
 
-	switch transferInfo.SourceType {
+	switch transferInfo.SourceInstance.Type {
 	case "postgresql":
 		validatePostgreSQLSource(v, transferInfo)
 	case "mysql":
@@ -152,7 +137,7 @@ func validateMySQLTarget(v *validator.Validator, transferInfo *TransferInfo) {
 func validateMSSQLTarget(v *validator.Validator, transferInfo *TransferInfo) {
 	v.CheckField(transferInfo.BcpAvailable, "target-type", "you must install bcp to transfer data to mssql")
 	v.CheckField(transferInfo.TargetPort != 0, "target-port", "you must provide a target-port for MSSQL")
-	v.CheckField(transferInfo.TargetHostname != "", "target-hostname", "you must provide a target-hostname for MSSQL")
+	v.CheckField(transferInfo.TargetHost != "", "target-host", "you must provide a target host for MSSQL")
 	v.CheckField(transferInfo.TargetUsername != "", "target-username", "you must provide a target-username for MSSQL")
 	v.CheckField(transferInfo.TargetPassword != "", "target-password", "you must provide a target-password for MSSQL")
 	v.CheckField(transferInfo.TargetDatabase != "", "target-database", "you must provide a target-database for MSSQL")
@@ -160,7 +145,7 @@ func validateMSSQLTarget(v *validator.Validator, transferInfo *TransferInfo) {
 
 func validateOracleTarget(v *validator.Validator, transferInfo *TransferInfo) {
 	v.CheckField(transferInfo.SqlLdrAvailable, "target-type", "you must install sqlldr to transfer data to oracle")
-	v.CheckField(transferInfo.TargetHostname != "", "target-hostname", "you must provide a target-hostname for Oracle")
+	v.CheckField(transferInfo.TargetHost != "", "target-host", "you must provide a target host for Oracle")
 	v.CheckField(transferInfo.TargetUsername != "", "target-username", "you must provide a target-username for Oracle")
 	v.CheckField(transferInfo.TargetPassword != "", "target-password", "you must provide a target-password for Oracle")
 	v.CheckField(transferInfo.TargetDatabase != "", "target-database", "you must provide a target-database for Oracle")
@@ -171,12 +156,8 @@ func validateSnowflakeTarget(v *validator.Validator, transferInfo *TransferInfo)
 }
 
 func validateTransferAutomatedFields(transferInfo *TransferInfo) {
-	if transferInfo.Id == "" {
+	if transferInfo.ID == "" {
 		panic("id not set")
-	}
-
-	if transferInfo.CreatedAt.IsZero() {
-		panic("created-at not set")
 	}
 
 	if transferInfo.Context == nil {

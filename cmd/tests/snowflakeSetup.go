@@ -34,7 +34,7 @@ func setupSnowflake() (ConnectionInfo, error) {
 		return connectionInfo, fmt.Errorf("error creating snowflake connection pool :: %v", err)
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err = snowflakeDB.PingContext(ctx)
@@ -53,7 +53,7 @@ func setupSnowflake() (ConnectionInfo, error) {
 		Table:            snowflakeTable,
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_, err = snowflakeDB.ExecContext(ctx, "DROP SEQUENCE IF EXISTS my_table_seq")
@@ -93,7 +93,7 @@ CREATE TABLE my_table (
 	}
 
 	for i := 0; i < 10; i++ {
-		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		_, err = snowflakeDB.ExecContext(ctx, `
@@ -141,7 +141,7 @@ SELECT
 		return connectionInfo, fmt.Errorf("error inserting data :: %v", err)
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_, err = snowflakeDB.ExecContext(ctx, `

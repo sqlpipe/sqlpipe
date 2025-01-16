@@ -96,7 +96,7 @@ func openConnectionPool(name, connectionString, driverName string) (connectionPo
 		return nil, fmt.Errorf("error opening connection to %v :: %v", name, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err = connectionPool.PingContext(ctx)

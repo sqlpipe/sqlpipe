@@ -14,22 +14,22 @@ COPY ./bin/transferInstance /usr/local/bin/transferInstance
 COPY ./LICENSE.MD /SQLPIPE-LICENSE.MD
 
 ENTRYPOINT update-ca-certificates && /usr/local/bin/transferInstance \
-    -source-name="${SOURCE_NAME}" \
-    -source-type="${SOURCE_TYPE}" \
-    -source-hostname="${SOURCE_HOSTNAME}" \
-    -source-port="${SOURCE_PORT}" \
-    -source-username="${SOURCE_USERNAME}" \
-    -source-password="${SOURCE_PASSWORD}" \
-    -target-name="${TARGET_NAME}" \
+    -instance-transfer-id="${INSTANCE_TRANSFER_ID}" \
+    -naming-template="${NAMING_TEMPLATE}" \
+    -source-instance-id="${SOURCE_INSTANCE_ID}" \
+    -source-instance-type="${SOURCE_INSTANCE_TYPE}" \
+    -source-instance-region="${SOURCE_INSTANCE_REGION}" \
+    -source-instance-host="${SOURCE_INSTANCE_HOST}" \
+    -source-instance-port="${SOURCE_INSTANCE_PORT}" \
+    -source-instance-username="${SOURCE_INSTANCE_USERNAME}" \
+    -restored-instance-id="${RESTORED_INSTANCE_ID}" \
     -target-type="${TARGET_TYPE}" \
-    -target-hostname="${TARGET_HOSTNAME}" \
+    -target-host="${TARGET_HOST}" \
     -target-username="${TARGET_USERNAME}" \
     -target-password="${TARGET_PASSWORD}" \
+    -cloud-username="${CLOUD_USERNAME}" \
+    -cloud-password="${CLOUD_PASSWORD}" \
     -delimiter="${DELIMITER}" \
     -newline="${NEWLINE}" \
-    -null="${NULL}" \
-    -account-id="${ACCOUNT_ID}" \
-    -region="${REGION}" \
-    -account-username="${ACCOUNT_USERNAME}" \
-    -account-password="${ACCOUNT_PASSWORD}" \
-    -backup-id="${BACKUP_ID}"
+    -null="${NULL}"
+

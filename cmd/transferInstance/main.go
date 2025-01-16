@@ -7,16 +7,15 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/sqlpipe/sqlpipe/internal/data"
 	"github.com/sqlpipe/sqlpipe/internal/validator"
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 
-	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	sf "github.com/snowflakedb/gosnowflake"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -29,32 +28,32 @@ var (
 	logger           *slog.Logger
 	version          = vcs.Version()
 	globalTmpDir     string
-	instanceTransfer data.InstanceTransfer
+	instanceTransfer = data.InstanceTransfer{
+		SourceInstance: &data.Instance{},
+		TransferInfos:  []data.TransferInfo{},
+	}
 )
 
 func main() {
 
-	flag.StringVar(&instanceTransfer.Id, "id", "", "id")
-	flag.StringVar(&instanceTransfer.SourceName, "source-name", "", "source name")
-	flag.StringVar(&instanceTransfer.SourceType, "source-type", "", "source type")
-	flag.StringVar(&instanceTransfer.SourceHostname, "source-hostname", "", "source hostname")
-	flag.IntVar(&instanceTransfer.SourcePort, "source-port", 0, "source port")
-	flag.StringVar(&instanceTransfer.SourceUsername, "source-username", "", "source username")
-	flag.StringVar(&instanceTransfer.SourcePassword, "source-password", "", "source password")
-	flag.StringVar(&instanceTransfer.TargetName, "target-name", "", "target name")
+	flag.StringVar(&instanceTransfer.ID, "instance-transfer-id", "", "The UUID of the instance transfer")
+	flag.StringVar(&instanceTransfer.NamingTemplate, "naming-template", "", "naming template")
+	flag.StringVar(&instanceTransfer.SourceInstance.ID, "source-instance-id", "", "source name")
+	flag.StringVar(&instanceTransfer.SourceInstance.Type, "source-instance-type", "", "source type")
+	flag.StringVar(&instanceTransfer.SourceInstance.Region, "source-instance-region", "", "source region")
+	flag.StringVar(&instanceTransfer.SourceInstance.Host, "source-instance-host", "", "source host")
+	flag.IntVar(&instanceTransfer.SourceInstance.Port, "source-instance-port", 0, "source port")
+	flag.StringVar(&instanceTransfer.SourceInstance.Username, "source-instance-username", "", "source username")
+	flag.StringVar(&instanceTransfer.RestoredInstanceID, "restored-instance-id", "", "backup id")
 	flag.StringVar(&instanceTransfer.TargetType, "target-type", "", "target type")
-	flag.StringVar(&instanceTransfer.TargetHostname, "target-hostname", "", "target hostname")
-	flag.IntVar(&instanceTransfer.TargetPort, "target-port", 0, "target port")
+	flag.StringVar(&instanceTransfer.TargetHost, "target-host", "", "target host")
 	flag.StringVar(&instanceTransfer.TargetUsername, "target-username", "", "target username")
 	flag.StringVar(&instanceTransfer.TargetPassword, "target-password", "", "target password")
+	flag.StringVar(&instanceTransfer.CloudUsername, "cloud-username", "", "account username")
+	flag.StringVar(&instanceTransfer.CloudPassword, "cloud-password", "", "account password")
 	flag.StringVar(&instanceTransfer.Delimiter, "delimiter", "{dlm}", "delimiter")
 	flag.StringVar(&instanceTransfer.Newline, "newline", "{nwln}", "newline")
 	flag.StringVar(&instanceTransfer.Null, "null", "{nll}", "null")
-	flag.StringVar(&instanceTransfer.AccountID, "account-id", "", "account id")
-	flag.StringVar(&instanceTransfer.Region, "region", "", "region")
-	flag.StringVar(&instanceTransfer.AccountUsername, "account-username", "", "account username")
-	flag.StringVar(&instanceTransfer.AccountPassword, "account-password", "", "account password")
-	flag.StringVar(&instanceTransfer.BackupId, "backup-id", "", "backup id")
 
 	displayVersion := flag.Bool("version", false, "display version and exit")
 
@@ -67,48 +66,43 @@ func main() {
 
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 
+	var err error
+
 	deleteCredentials := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
-		instanceTransfer.AccountUsername,
-		instanceTransfer.AccountPassword,
+		instanceTransfer.CloudUsername,
+		instanceTransfer.CloudPassword,
 		"",
 	))
 
-	deleteCfg, err := awsConfig.LoadDefaultConfig(context.Background(), awsConfig.WithRegion(instanceTransfer.Region), awsConfig.WithCredentialsProvider(deleteCredentials))
+	deleteCfg, err := awsConfig.LoadDefaultConfig(context.Background(), awsConfig.WithRegion(instanceTransfer.SourceInstance.Region), awsConfig.WithCredentialsProvider(deleteCredentials))
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to load AWS configuration :: %v", err))
+		logger.Error("failed to load AWS configuration", "error", err)
 		os.Exit(1)
 	}
 
-	// Create an RDS client
 	deleteClient := rds.NewFromConfig(deleteCfg)
 
 	// Input parameters for deletion
 	input := &rds.DeleteDBInstanceInput{
-		DBInstanceIdentifier:   aws.String(instanceTransfer.BackupId),
+		DBInstanceIdentifier:   aws.String(instanceTransfer.RestoredInstanceID),
 		SkipFinalSnapshot:      aws.Bool(true),
 		DeleteAutomatedBackups: aws.Bool(true),
 	}
 
 	defer func() {
-		_, err = deleteClient.DeleteDBInstance(context.TODO(), input)
+		_, err = deleteClient.DeleteDBInstance(context.Background(), input)
 		if err != nil {
-			logger.Error(fmt.Sprintf("failed to delete RDS instance %v :: %v", instanceTransfer.BackupId, err))
+			logger.Error("failed to terminate RDS instance", BackupInstanceId, instanceTransfer.RestoredInstanceID, "error", err)
 			os.Exit(1)
 		}
 	}()
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	instanceTransfer.CreatedAt = time.Now()
-	instanceTransfer.Context = ctx
-	instanceTransfer.Cancel = cancel
 
 	checkDeps(&instanceTransfer)
 
 	globalTmpDir = filepath.Join(os.TempDir(), "sqlpipe")
 	err = os.MkdirAll(globalTmpDir, 0600)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to create tmp dir :: %v", err))
+		logger.Error("failed to create tmp dir", "error", err)
 		os.Exit(1)
 	}
 
@@ -120,12 +114,15 @@ func main() {
 	data.ValidateInstanceTransfer(v, &instanceTransfer)
 
 	if !v.Valid() {
-		logger.Error(fmt.Sprintf("%+v", v.FieldErrors))
+		logger.Error("invalid instance transfer", "errors", fmt.Sprintf("%+v", v.FieldErrors))
 		os.Exit(1)
 	}
 
 	err = transferInstance()
 	if err != nil {
-		logger.Error(fmt.Sprintf("error transferring instance :: %v", err))
+		logger.Error("error transferring instance", "error", err)
+		os.Exit(1)
 	}
+
+	logger.Info("instance transfer complete")
 }

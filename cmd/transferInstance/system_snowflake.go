@@ -25,12 +25,11 @@ func newSnowflake(connectionInfo ConnectionInfo) (snowflake Snowflake, err error
 	connectionString := fmt.Sprintf("%v:%v@%v/%v", connectionInfo.Username,
 		connectionInfo.Password, connectionInfo.Hostname, connectionInfo.Database)
 
-	db, err := openConnectionPool(connectionInfo.Name, connectionString, DriverSnowflake)
+	db, err := openConnectionPool(connectionString, DriverSnowflake)
 	if err != nil {
 		return snowflake, fmt.Errorf("error opening snowflake db :: %v", err)
 	}
 	snowflake.Connection = db
-	snowflake.Name = connectionInfo.Name
 	return snowflake, nil
 }
 
@@ -79,7 +78,7 @@ func (system Snowflake) isReservedKeyword(keyword string) bool {
 	return false
 }
 
-func (system Snowflake) createTableIfNotExistsOverride(schema, table string, columnInfos []ColumnInfo, incremental bool) (overridden bool, err error) {
+func (system Snowflake) createTableIfNotExistsOverride(schema, table string, columnInfos []ColumnInfo) (overridden bool, err error) {
 	return false, nil
 }
 
@@ -351,7 +350,7 @@ func (system Snowflake) putCsvs(
 			finalCsvChannelOut <- finalCsvInfo
 		}
 
-		logger.Info(fmt.Sprintf("transfer %v finished uploading snowflake csvs", transferInfo.Id))
+		logger.Info(fmt.Sprintf("transfer %v finished uploading snowflake csvs", transferInfo.ID))
 	}()
 
 	return finalCsvChannelOut
@@ -473,13 +472,7 @@ func (system Snowflake) schemaRequired() bool {
 }
 
 func (system Snowflake) createDbIfNotExistsOverride(database string) (overridden bool, err error) {
-	query := fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %v;`, database)
-	err = system.exec(query)
-	if err != nil {
-		return true, fmt.Errorf("error creating snowflake database :: %v", err)
-	}
-
-	return true, nil
+	return false, nil
 }
 
 func (system Snowflake) createSchemaIfNotExistsOverride(schema string) (overridden bool, err error) {
@@ -719,6 +712,6 @@ func (system Snowflake) getSqlFormatters() (
 	}
 }
 
-func (system Snowflake) discoverStructure() (instanceRootNode *SchemaTree, err error) {
+func (system Snowflake) discoverStructure(instnaceTransfer *data.InstanceTransfer) (instanceRootNode *SchemaTree, err error) {
 	return nil, errors.New("snowflake does not support discovering structure")
 }

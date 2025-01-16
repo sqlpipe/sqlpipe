@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/sqlpipe/sqlpipe/internal/commonHelpers"
 	"github.com/sqlpipe/sqlpipe/internal/data"
@@ -13,9 +11,9 @@ func runTransfer(transferInfo data.TransferInfo) error {
 
 	var err error
 
-	transferInfo.TmpDir, transferInfo.PipeFileDir, transferInfo.FinalCsvDir, err = commonHelpers.CreateTransferTmpDirs(transferInfo.Id, globalTmpDir, logger)
+	transferInfo.TmpDir, transferInfo.PipeFileDir, transferInfo.FinalCsvDir, err = commonHelpers.CreateTransferTmpDirs(transferInfo.ID, globalTmpDir, logger)
 	if err != nil {
-		logger.Error(fmt.Sprintf("error creating transfer tmp dirs :: %v", err))
+		return fmt.Errorf("error creating transfer tmp dirs :: %v", err)
 	}
 
 	if transferInfo.Delimiter == "" {
@@ -32,13 +30,12 @@ func runTransfer(transferInfo data.TransferInfo) error {
 	}
 
 	sourceConnectionInfo := ConnectionInfo{
-		Name:     transferInfo.SourceName,
-		Type:     transferInfo.SourceType,
-		Hostname: transferInfo.SourceHostname,
-		Port:     transferInfo.SourcePort,
+		Type:     transferInfo.SourceInstance.Type,
+		Hostname: transferInfo.SourceInstance.Host,
+		Port:     transferInfo.SourceInstance.Port,
 		Database: transferInfo.SourceDatabase,
-		Username: transferInfo.SourceUsername,
-		Password: transferInfo.SourcePassword,
+		Username: transferInfo.SourceInstance.Username,
+		Password: transferInfo.SourceInstance.Password,
 	}
 
 	source, err := newSystem(sourceConnectionInfo)
@@ -48,9 +45,8 @@ func runTransfer(transferInfo data.TransferInfo) error {
 	defer source.closeConnectionPool(true)
 
 	targetConnectionInfo := ConnectionInfo{
-		Name:     transferInfo.TargetName,
 		Type:     transferInfo.TargetType,
-		Hostname: transferInfo.TargetHostname,
+		Hostname: transferInfo.TargetHost,
 		Port:     transferInfo.TargetPort,
 		Username: transferInfo.TargetUsername,
 		Password: transferInfo.TargetPassword,
@@ -62,15 +58,23 @@ func runTransfer(transferInfo data.TransferInfo) error {
 	}
 	defer target.closeConnectionPool(true)
 
-	_, err = target.createDbIfNotExistsOverride(transferInfo.TargetDatabase)
+	err = createDbIfNotExists(transferInfo, target)
 	if err != nil {
 		return fmt.Errorf("error creating target database :: %v", err)
 	}
 
-	_, err = target.createDbIfNotExistsOverride(transferInfo.StagingDbName)
+	err = createStagingDbIfNotExists(transferInfo, target)
 	if err != nil {
 		return fmt.Errorf("error creating staging database :: %v", err)
 	}
+
+	defer func() {
+		dropStagingDbQuery := fmt.Sprintf(`DROP DATABASE IF EXISTS %v`, transferInfo.StagingDbName)
+		err = target.exec(dropStagingDbQuery)
+		if err != nil {
+			logger.Error("error dropping staging database", "error", err)
+		}
+	}()
 
 	targetConnectionInfo.Database = transferInfo.StagingDbName
 
@@ -81,14 +85,14 @@ func runTransfer(transferInfo data.TransferInfo) error {
 	defer target.closeConnectionPool(true)
 
 	if target.schemaRequired() && transferInfo.CreateTargetSchemaIfNotExists {
-		err = createSchemaIfNotExists(transferInfo.TargetSchema, target)
+		err = createSchemaIfNotExists(transferInfo, target)
 		if err != nil {
 			return fmt.Errorf("error creating target schema :: %v", err)
 		}
 	}
 
 	if transferInfo.DropTargetTableIfExists {
-		err = dropTableIfExists(transferInfo.TargetSchema, transferInfo.TargetTable, target)
+		err = dropTableIfExists(transferInfo, target)
 		if err != nil {
 			return fmt.Errorf("error dropping target table :: %v", err)
 		}
@@ -96,11 +100,8 @@ func runTransfer(transferInfo data.TransferInfo) error {
 
 	escapedSourceSchemaPeriodTable := getSchemaPeriodTable(transferInfo.SourceSchema, transferInfo.SourceTable, source, true)
 	query := transferInfo.Query
-	incremental := false
-	initialLoad := true
-	var incrementalTime time.Time
+
 	var columnInfos []ColumnInfo
-	var incrementalColumnInfo ColumnInfo
 
 	if transferInfo.SourceTable != "" {
 
@@ -109,112 +110,8 @@ func runTransfer(transferInfo data.TransferInfo) error {
 			return fmt.Errorf("error getting source table column infos :: %v", err)
 		}
 
-		if transferInfo.IncrementalColumn != "" {
-			incremental = true
+		query = fmt.Sprintf(`SELECT * FROM %v`, escapedSourceSchemaPeriodTable)
 
-			// check for existence of incremental column in columnInfos
-			var found bool
-			for _, columnInfo := range columnInfos {
-				if strings.EqualFold(columnInfo.Name, transferInfo.IncrementalColumn) {
-					found = true
-					incrementalColumnInfo = columnInfo
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("incremental column %v not found in source table %v", transferInfo.IncrementalColumn, transferInfo.SourceTable)
-			}
-
-			initialLoad, incrementalTime, err = getIncrementalTime(transferInfo.TargetSchema, transferInfo.TargetTable, transferInfo.IncrementalColumn, initialLoad, target)
-			if err != nil {
-				return fmt.Errorf("error getting incremental time :: %v", err)
-			}
-		}
-
-		if initialLoad {
-			query = fmt.Sprintf(`SELECT * FROM %v`, escapedSourceSchemaPeriodTable)
-		} else {
-
-			sqlFormatters := source.getSqlFormatters()
-
-			timeStringVal, err := sqlFormatters[incrementalColumnInfo.PipeType](incrementalTime.Format(time.RFC3339Nano))
-			if err != nil {
-				return fmt.Errorf("error formatting incremental time :: %v", err)
-			}
-
-			query = fmt.Sprintf(`SELECT * FROM %v WHERE %v > %v`, escapedSourceSchemaPeriodTable, transferInfo.IncrementalColumn, timeStringVal)
-		}
-	}
-
-	vacuumTableName := ""
-	schemaPeriodVacuumTableName := ""
-
-	if transferInfo.Vacuum {
-
-		randomLetters, err := RandomLetters(16)
-		if err != nil {
-			return fmt.Errorf("error generating random letters :: %v", err)
-		}
-
-		vacuumTableName = fmt.Sprintf("sqlpipe_vacuum_%v_%v", randomLetters, transferInfo.TargetTable)
-
-		// shorten vacuum table name to 64 chars if necessary
-		if len(vacuumTableName) > 64 {
-			vacuumTableName = vacuumTableName[:64]
-		}
-
-		schemaPeriodVacuumTableName = getSchemaPeriodTable(transferInfo.TargetSchema, vacuumTableName, target, true)
-
-		columnInfos, err = getTableColumnInfos(transferInfo.SourceSchema, transferInfo.SourceTable, source)
-		if err != nil {
-			return fmt.Errorf("error getting source table column infos :: %v", err)
-		}
-
-		pkColumnInfos := []ColumnInfo{}
-
-		for _, columnInfo := range columnInfos {
-			if columnInfo.IsPrimaryKey {
-				pkColumnInfos = append(pkColumnInfos, columnInfo)
-			}
-		}
-
-		columnInfos = pkColumnInfos
-
-		err = createTableIfNotExists(transferInfo.TargetSchema, vacuumTableName, columnInfos, target, incremental)
-		if err != nil {
-			return fmt.Errorf("error creating target table :: %v", err)
-		}
-
-		err = source.exec(fmt.Sprintf(`DELETE FROM %v`, schemaPeriodVacuumTableName))
-		if err != nil {
-			return fmt.Errorf("error deleting rows from source table :: %v", err)
-		}
-
-		if !transferInfo.KeepFiles {
-			defer func() {
-				err = dropTableIfExists(transferInfo.TargetSchema, vacuumTableName, target)
-				if err != nil {
-					logger.Error(fmt.Sprintf("error dropping vacuum table %v :: %v", vacuumTableName, err))
-					return
-				}
-				logger.Info(fmt.Sprintf("vacuum table %v dropped", vacuumTableName))
-			}()
-		}
-
-		queryBuilder := strings.Builder{}
-
-		queryBuilder.WriteString("select ")
-
-		for i, columnInfo := range columnInfos {
-			if i != 0 {
-				queryBuilder.WriteString(", ")
-			}
-			queryBuilder.WriteString(columnInfo.Name)
-		}
-
-		queryBuilder.WriteString(fmt.Sprintf(" from %v", escapedSourceSchemaPeriodTable))
-
-		query = queryBuilder.String()
 	}
 
 	rows, err := source.query(query)
@@ -231,57 +128,17 @@ func runTransfer(transferInfo data.TransferInfo) error {
 	}
 
 	if transferInfo.CreateTargetTableIfNotExists {
-		err = createTableIfNotExists(transferInfo.TargetSchema, transferInfo.TargetTable, columnInfos, target, incremental)
+		err = createTableIfNotExists(transferInfo, columnInfos, target)
 		if err != nil {
 			return fmt.Errorf("error creating target table :: %v", err)
 		}
 	}
 
-	newPipeFiles := createPipeFiles(columnInfos, transferInfo, rows, source, incremental)
+	newPipeFiles := createPipeFiles(columnInfos, transferInfo, rows, source)
 
-	pksProcessedPipeFiles := deletePks(newPipeFiles, columnInfos, transferInfo, target, incremental, initialLoad)
-
-	err = insertPipeFiles(pksProcessedPipeFiles, transferInfo, columnInfos, target, "")
+	err = insertPipeFiles(newPipeFiles, transferInfo, columnInfos, target, "")
 	if err != nil {
 		return fmt.Errorf("error inserting pipe files :: %v", err)
-	}
-
-	if transferInfo.Vacuum {
-
-		escapedTargetSchemaPeriodTable := getSchemaPeriodTable(transferInfo.TargetSchema, transferInfo.TargetTable, target, true)
-
-		queryBuilder := strings.Builder{}
-
-		queryBuilder.WriteString(`DELETE FROM `)
-		queryBuilder.WriteString(escapedTargetSchemaPeriodTable)
-		queryBuilder.WriteString(` where (`)
-		for i, columnInfo := range columnInfos {
-			escapedColumnName := escapeIfNeeded(columnInfo.Name, target)
-			if i != 0 {
-				queryBuilder.WriteString(", ")
-			}
-
-			queryBuilder.WriteString(escapedColumnName)
-		}
-		queryBuilder.WriteString(`) not in (select `)
-		for i, columnInfo := range columnInfos {
-			escapedColumnName := escapeIfNeeded(columnInfo.Name, target)
-			if i != 0 {
-				queryBuilder.WriteString(", ")
-			}
-
-			queryBuilder.WriteString(escapedColumnName)
-		}
-		queryBuilder.WriteString(` from `)
-		queryBuilder.WriteString(schemaPeriodVacuumTableName)
-		queryBuilder.WriteString(`)`)
-
-		query = queryBuilder.String()
-
-		err = target.exec(query)
-		if err != nil {
-			return fmt.Errorf("error vacuuming target table :: %v", err)
-		}
 	}
 
 	// drop the target db name if exists, replace with the staging db name
@@ -292,12 +149,12 @@ func runTransfer(transferInfo data.TransferInfo) error {
 		return fmt.Errorf("error creating target system :: %v", err)
 	}
 
-	err = createSchemaIfNotExists(transferInfo.TargetSchema, target)
+	err = createSchemaIfNotExists(transferInfo, target)
 	if err != nil {
 		return fmt.Errorf("error creating target schema :: %v", err)
 	}
 
-	err = dropTableIfExists(transferInfo.TargetSchema, transferInfo.TargetTable, target)
+	err = dropTableIfExists(transferInfo, target)
 	if err != nil {
 		return fmt.Errorf("error dropping target table :: %v", err)
 	}
@@ -307,7 +164,7 @@ func runTransfer(transferInfo data.TransferInfo) error {
 		return fmt.Errorf("error renaming staging table to target table :: %v", err)
 	}
 
-	logger.Info(fmt.Sprintf("transfer %v complete", transferInfo.Id))
+	logger.Info("transfer complete", "transfer-id", transferInfo.ID)
 
 	return nil
 }

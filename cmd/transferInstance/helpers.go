@@ -14,6 +14,19 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
+// misc log keys
+const (
+	OriginalInstanceId   = "instance-id"
+	OriginalDatabaseName = "database"
+	OriginalSchemaName   = "schema"
+	OriginalTableName    = "table"
+	BackupInstanceId     = "backup-instance-id"
+	StagingDatabaseName  = "staging-database"
+	TargetDatabaseName   = "target-database"
+	TargetSchemaName     = "target-schema"
+	TargetTableName      = "target-table"
+)
+
 var (
 	DriverPostgreSQL = "pgx"
 	DriverMySQL      = "mysql"
@@ -348,3 +361,18 @@ type FinalCsvInfo struct {
 	FilePath   string
 	InsertInfo string
 }
+
+// func getAdminDbName(dbType string) (string, error) {
+
+// 	var adminDbName string
+
+// 	switch dbType {
+// 	case data.TypePostgreSQL:
+// 		adminDbName = "postgres"
+// 	default:
+// 		return "", fmt.Errorf("unsupported db type: %s", dbType)
+// 	}
+
+// 	return adminDbName, nil
+
+// }

@@ -18,7 +18,6 @@ import (
 )
 
 type ConnectionInfo struct {
-	Name     string
 	Type     string
 	Hostname string
 	Port     int
@@ -59,7 +58,6 @@ type System interface {
 	closeConnectionPool(printError bool) (err error)
 
 	// getNowSyntax() string
-	getSystemName() string
 	schemaRequired() bool
 	isReservedKeyword(word string) (isReserved bool)
 	escape(objectName string) (escaped string)
@@ -84,7 +82,7 @@ type System interface {
 	// -------------------
 
 	createSchemaIfNotExistsOverride(schema string) (overridden bool, err error)
-	createTableIfNotExistsOverride(schema, table string, columnInfo []ColumnInfo, incremental bool) (overridden bool, err error)
+	createTableIfNotExistsOverride(schema, table string, columnInfo []ColumnInfo) (overridden bool, err error)
 	dropTableIfExistsOverride(schema, table string) (overridden bool, err error)
 	createDbIfNotExistsOverride(database string) (overridden bool, err error)
 
@@ -103,7 +101,7 @@ type System interface {
 	// -- Data discovery --
 	// --------------------
 
-	discoverStructure() (schemaTree *SchemaTree, err error)
+	discoverStructure(instanceTransfer *data.InstanceTransfer) (schemaTree *SchemaTree, err error)
 }
 
 func newSystem(connectionInfo ConnectionInfo) (system System, err error) {
@@ -125,19 +123,19 @@ func newSystem(connectionInfo ConnectionInfo) (system System, err error) {
 	}
 }
 
-func openConnectionPool(name, connectionString, driverName string) (connectionPool *sql.DB, err error) {
+func openConnectionPool(connectionString, driverName string) (connectionPool *sql.DB, err error) {
 
 	connectionPool, err = sql.Open(driverName, connectionString)
 	if err != nil {
-		return nil, fmt.Errorf("error opening connection to %v :: %v", name, err)
+		return nil, fmt.Errorf("error opening connection :: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err = connectionPool.PingContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error pinging %v :: %v", name, err)
+		return nil, fmt.Errorf("error pinging :: %v", err)
 	}
 
 	return connectionPool, nil
@@ -229,20 +227,19 @@ func getQueryColumnInfos(rows *sql.Rows, source System) (columnInfo []ColumnInfo
 }
 
 func createTableIfNotExists(
-	schema, table string,
+	transferInfo data.TransferInfo,
 	columnInfos []ColumnInfo,
 	target System,
-	incremental bool,
 ) (
 	err error,
 ) {
 
-	overridden, err := target.createTableIfNotExistsOverride(schema, table, columnInfos, incremental)
+	overridden, err := target.createTableIfNotExistsOverride(transferInfo.TargetSchema, transferInfo.TargetTable, columnInfos)
 	if overridden {
 		return err
 	}
 
-	schemaPeriodTable := getSchemaPeriodTable(schema, table, target, true)
+	schemaPeriodTable := getSchemaPeriodTable(transferInfo.TargetSchema, transferInfo.TargetTable, target, true)
 
 	escapedPrimaryKeys := []string{}
 
@@ -276,12 +273,6 @@ func createTableIfNotExists(
 		queryBuilder.WriteString(createType)
 	}
 
-	if incremental && len(escapedPrimaryKeys) > 0 {
-		queryBuilder.WriteString(", primary key (")
-		queryBuilder.WriteString(strings.Join(escapedPrimaryKeys, ","))
-		queryBuilder.WriteString(")")
-	}
-
 	queryBuilder.WriteString(")")
 
 	err = target.exec(queryBuilder.String())
@@ -289,7 +280,7 @@ func createTableIfNotExists(
 		return fmt.Errorf("error running create table %v :: %v", schemaPeriodTable, err)
 	}
 
-	logger.Info(fmt.Sprintf("created table %v if not exists in %v", schemaPeriodTable, target.getSystemName()))
+	logger.Info("table created if not exists", "database", transferInfo.TargetDatabase, "staging-database", transferInfo.StagingDbName, "schema", transferInfo.TargetSchema, "table", transferInfo.TargetTable)
 
 	return nil
 }
@@ -304,7 +295,6 @@ func createPipeFiles(
 	transfer data.TransferInfo,
 	rows *sql.Rows,
 	source System,
-	incremental bool,
 ) <-chan PipeFileInfo {
 
 	pipeFileInfoChannel := make(chan PipeFileInfo)
@@ -331,28 +321,6 @@ func createPipeFiles(
 		}
 		defer pipeFile.Close()
 
-		var numPks int
-		var pkWriter *csv.Writer
-		var pkFile *os.File
-
-		if incremental {
-			pkFile, err = os.Create(
-				filepath.Join(transfer.PipeFileDir, fmt.Sprintf("%032bpk.pipe", pipeFileNum)))
-			if err != nil {
-				transfer.Error = fmt.Sprintf("error creating temp file :: %v", err)
-				logger.Error(transfer.Error)
-				return
-			}
-			defer pkFile.Close()
-			pkWriter = csv.NewWriter(pkFile)
-
-			for i := range columnInfos {
-				if columnInfos[i].IsPrimaryKey {
-					numPks++
-				}
-			}
-		}
-
 		numCols := len(columnInfos)
 
 		csvWriter := csv.NewWriter(pipeFile)
@@ -366,7 +334,6 @@ func createPipeFiles(
 
 		dataInRam := false
 		csvRow := make([]string, numCols)
-		pkRow := make([]string, numPks)
 
 		eg := errgroup.Group{}
 
@@ -398,29 +365,6 @@ func createPipeFiles(
 				return nil
 			})
 
-			eg.Go(func() error {
-				if incremental {
-					j := 0
-					for i := 0; i < numCols; i++ {
-						if columnInfos[i].IsPrimaryKey {
-							if values[i] == nil {
-								pkRow[j] = transfer.Null
-							} else {
-								pkRow[j], err = pipeFileFormatters[columnInfos[i].PipeType](values[i])
-								if err != nil {
-									err = fmt.Errorf("error formatting pipe file :: %v", err)
-									transfer.Error = err.Error()
-									logger.Error(transfer.Error)
-									return err
-								}
-							}
-							j++
-						}
-					}
-				}
-				return nil
-			})
-
 			err = eg.Wait()
 			if err != nil {
 				transfer.Error = fmt.Sprintf("error formatting pipe file :: %v", err)
@@ -435,19 +379,6 @@ func createPipeFiles(
 					transfer.Error = err.Error()
 					logger.Error(transfer.Error)
 					return err
-				}
-				return nil
-			})
-
-			eg.Go(func() error {
-				if incremental {
-					err = pkWriter.Write(pkRow)
-					if err != nil {
-						err = fmt.Errorf("error writing pk row :: %v", err)
-						transfer.Error = err.Error()
-						logger.Error(transfer.Error)
-						return err
-					}
 				}
 				return nil
 			})
@@ -476,21 +407,6 @@ func createPipeFiles(
 					return nil
 				})
 
-				eg.Go(func() error {
-					if incremental {
-						pkWriter.Flush()
-
-						err = pkFile.Close()
-						if err != nil {
-							err = fmt.Errorf("error closing pk file :: %v", err)
-							transfer.Error = err.Error()
-							logger.Error(transfer.Error)
-							return err
-						}
-					}
-					return nil
-				})
-
 				err = eg.Wait()
 				if err != nil {
 					transfer.Error = fmt.Sprintf("error writing pipe file :: %v", err)
@@ -505,10 +421,6 @@ func createPipeFiles(
 				}
 
 				pkFilePath := ""
-
-				if incremental {
-					pkFilePath = pkFile.Name()
-				}
 
 				pipeFileInfo := PipeFileInfo{
 					FilePath:   pipeFile.Name(),
@@ -537,26 +449,6 @@ func createPipeFiles(
 				defer pipeFile.Close()
 				dataInRam = false
 				csvLength = 0
-
-				eg.Go(func() error {
-					if incremental {
-						pkFileName := filepath.Join(
-							transfer.PipeFileDir, fmt.Sprintf("%032bpk.pipe", pipeFileNum))
-
-						pkFile, err = os.Create(pkFileName)
-						if err != nil {
-							err = fmt.Errorf("error creating temp file :: %v", err)
-							transfer.Error = err.Error()
-							logger.Error(transfer.Error)
-							return err
-						}
-
-						pkWriter = csv.NewWriter(pkFile)
-					}
-
-					return nil
-				})
-				defer pkFile.Close()
 
 				err = eg.Wait()
 				if err != nil {
@@ -588,21 +480,6 @@ func createPipeFiles(
 				return nil
 			})
 
-			eg.Go(func() error {
-				if incremental {
-					pkWriter.Flush()
-
-					err = pkFile.Close()
-					if err != nil {
-						err = fmt.Errorf("error closing pk file :: %v", err)
-						transfer.Error = err.Error()
-						logger.Error(transfer.Error)
-						return err
-					}
-				}
-				return nil
-			})
-
 			err = eg.Wait()
 			if err != nil {
 				transfer.Error = fmt.Sprintf("error writing pipe file :: %v", err)
@@ -612,10 +489,6 @@ func createPipeFiles(
 
 			pkFilePath := ""
 
-			if incremental {
-				pkFilePath = pkFile.Name()
-			}
-
 			pipeFileInfo := PipeFileInfo{
 				FilePath:   pipeFile.Name(),
 				PkFilePath: pkFilePath,
@@ -624,7 +497,7 @@ func createPipeFiles(
 			pipeFileInfoChannel <- pipeFileInfo
 		}
 
-		logger.Info(fmt.Sprintf("transfer %v finished writing pipe files", transfer.Id))
+		logger.Info(fmt.Sprintf("transfer %v finished writing pipe files", transfer.ID))
 	}()
 
 	return pipeFileInfoChannel
@@ -769,7 +642,7 @@ func convertPipeFiles(
 			}
 		}
 
-		logger.Info(fmt.Sprintf("transfer %v finished converting pipe files to final csvs", transfer.Id))
+		logger.Info(fmt.Sprintf("transfer %v finished converting pipe files to final csvs", transfer.ID))
 	}()
 
 	return finalCsvInfoChannel
@@ -806,7 +679,7 @@ func insertFinalCsvs(
 		}
 	}
 
-	logger.Info(fmt.Sprintf("transfer %v finished inserting final csvs", transfer.Id))
+	logger.Info(fmt.Sprintf("transfer %v finished inserting final csvs", transfer.ID))
 
 	return nil
 }
@@ -860,32 +733,71 @@ func escapeIfNeeded(objectName string, system System) (objectNameOut string) {
 	return objectName
 }
 
-func createSchemaIfNotExists(schema string, system System) (err error) {
-	overridden, err := system.createSchemaIfNotExistsOverride(schema)
+func createDbIfNotExists(transferInfo data.TransferInfo, system System) (err error) {
+
+	database := transferInfo.TargetDatabase
+
+	overridden, err := system.createDbIfNotExistsOverride(database)
 	if overridden {
-		logger.Info(fmt.Sprintf("schema %v created if not exists", schema))
 		return err
 	}
 
-	query := fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS %v`, escapeIfNeeded(schema, system))
-
+	query := fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %v`, escapeIfNeeded(database, system))
 	err = system.exec(query)
 	if err != nil {
-		return fmt.Errorf("error creating schema %v :: %v", schema, err)
+		return fmt.Errorf("error creating database %v :: %v", database, err)
 	}
 
-	logger.Info(fmt.Sprintf("schema %v created if not exists in %v", schema, system.getSystemName()))
+	logger.Info("database created if not exists", "database", transferInfo.TargetDatabase)
 
 	return nil
 }
 
-func dropTableIfExists(schema, table string, system System) (err error) {
-	overridden, err := system.dropTableIfExistsOverride(schema, table)
+func createStagingDbIfNotExists(transferInfo data.TransferInfo, system System) (err error) {
+
+	database := transferInfo.StagingDbName
+
+	overridden, err := system.createDbIfNotExistsOverride(database)
 	if overridden {
 		return err
 	}
 
-	escapedSchemaPeriodTable := getSchemaPeriodTable(schema, table, system, true)
+	query := fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %v`, escapeIfNeeded(database, system))
+	err = system.exec(query)
+	if err != nil {
+		return fmt.Errorf("error creating database %v :: %v", database, err)
+	}
+
+	logger.Info("staging database created if not exists", "staging-database", transferInfo.StagingDbName, "database", transferInfo.TargetDatabase)
+
+	return nil
+}
+
+func createSchemaIfNotExists(transferInfo data.TransferInfo, system System) (err error) {
+	overridden, err := system.createSchemaIfNotExistsOverride(transferInfo.TargetSchema)
+	if overridden {
+		return err
+	}
+
+	query := fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS %v`, escapeIfNeeded(transferInfo.TargetSchema, system))
+
+	err = system.exec(query)
+	if err != nil {
+		return fmt.Errorf("error creating schema %v :: %v", transferInfo.TargetSchema, err)
+	}
+
+	logger.Info("schema created if not exists", "database", transferInfo.TargetDatabase, "staging-database", transferInfo.StagingDbName, "schema", transferInfo.TargetSchema)
+
+	return nil
+}
+
+func dropTableIfExists(transferInfo data.TransferInfo, system System) (err error) {
+	overridden, err := system.dropTableIfExistsOverride(transferInfo.TargetSchema, transferInfo.TargetTable)
+	if overridden {
+		return err
+	}
+
+	escapedSchemaPeriodTable := getSchemaPeriodTable(transferInfo.TargetSchema, transferInfo.TargetTable, system, true)
 
 	query := fmt.Sprintf("drop table if exists %v", escapedSchemaPeriodTable)
 	err = system.exec(query)
@@ -893,7 +805,7 @@ func dropTableIfExists(schema, table string, system System) (err error) {
 		return fmt.Errorf("error dropping table %v :: %v", escapedSchemaPeriodTable, err)
 	}
 
-	logger.Info(fmt.Sprintf("dropped %v if exists in %v", escapedSchemaPeriodTable, system.getSystemName()))
+	logger.Info("dropped table if exists", "database", transferInfo.TargetDatabase, "staging-database", transferInfo.StagingDbName, "schema", transferInfo.TargetSchema, "table", transferInfo.TargetTable)
 
 	return nil
 }
@@ -942,159 +854,6 @@ func getIncrementalTime(schema, table, incrementalColumn string, initialLoad boo
 	}
 
 	return initialLoad, incrementalTime, nil
-}
-
-func deletePks(pipeFilesIn <-chan PipeFileInfo, columnInfos []ColumnInfo, transfer data.TransferInfo, target System, incremental, initialLoad bool) <-chan PipeFileInfo {
-	if initialLoad || !incremental {
-		return pipeFilesIn
-	}
-
-	pipeFilesOut := make(chan PipeFileInfo)
-
-	sqlFormatters := target.getSqlFormatters()
-
-	go func() {
-
-		defer close(pipeFilesOut)
-
-		for pipeFileInfo := range pipeFilesIn {
-
-			select {
-			case <-transfer.Context.Done():
-				return
-			default:
-			}
-
-			pkColumnInfos := []ColumnInfo{}
-
-			for i := range columnInfos {
-				if columnInfos[i].IsPrimaryKey {
-					pkColumnInfos = append(pkColumnInfos, columnInfos[i])
-				}
-			}
-
-			escapedSchemaPeriodTable := getSchemaPeriodTable(transfer.TargetSchema, transfer.TargetTable, target, true)
-
-			queryBuilder := strings.Builder{}
-
-			pkPipeFile, err := os.Open(pipeFileInfo.PkFilePath)
-			if err != nil {
-				transfer.Error = fmt.Sprintf("error opening pipeFile :: %v", err)
-				logger.Error(transfer.Error)
-				return
-			}
-
-			csvReader := csv.NewReader(pkPipeFile)
-
-			queryBuilder.WriteString("delete from ")
-			queryBuilder.WriteString(escapedSchemaPeriodTable)
-			queryBuilder.WriteString(" where (")
-			for i := range pkColumnInfos {
-				if i > 0 {
-					queryBuilder.WriteString(",")
-				}
-				queryBuilder.WriteString(escapeIfNeeded(pkColumnInfos[i].Name, target))
-			}
-			queryBuilder.WriteString(") in (")
-
-			var rowNum int64 = 0
-
-			for {
-				row, err := csvReader.Read()
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						break
-					}
-					transfer.Error = fmt.Sprintf("error reading csv row :: %v", err)
-					logger.Error(transfer.Error)
-					return
-				}
-
-				if rowNum != 0 {
-					queryBuilder.WriteString(",")
-				}
-
-				queryBuilder.WriteString("(")
-
-				for colNum := range row {
-
-					if colNum > 0 {
-						queryBuilder.WriteString(",")
-					}
-
-					if row[colNum] == transfer.Null {
-						queryBuilder.WriteString("null")
-					} else {
-						stringVal, err := sqlFormatters[pkColumnInfos[colNum].PipeType](row[colNum])
-						if err != nil {
-							transfer.Error = fmt.Sprintf("error formatting sql value :: %v", err)
-							logger.Error(transfer.Error)
-							return
-						}
-						queryBuilder.WriteString(stringVal)
-					}
-
-				}
-				queryBuilder.WriteString(")")
-
-				rowNum++
-
-				if rowNum > 5 {
-					queryBuilder.WriteString(")")
-
-					err = target.exec(queryBuilder.String())
-					if err != nil {
-						transfer.Error = fmt.Sprintf("error deleting pks in middle :: %v", err)
-						logger.Error(transfer.Error)
-						return
-					}
-
-					queryBuilder.Reset()
-
-					queryBuilder.WriteString("delete from ")
-					queryBuilder.WriteString(escapedSchemaPeriodTable)
-					queryBuilder.WriteString(" where (")
-					for pkColNum := range pkColumnInfos {
-						if pkColNum > 0 {
-							queryBuilder.WriteString(",")
-						}
-						queryBuilder.WriteString(escapeIfNeeded(pkColumnInfos[pkColNum].Name, target))
-					}
-
-					queryBuilder.WriteString(") in (")
-
-					rowNum = 0
-				}
-			}
-
-			queryBuilder.WriteString(")")
-
-			err = pkPipeFile.Close()
-			if err != nil {
-				transfer.Error = fmt.Sprintf("error closing pipeFile :: %v", err)
-				logger.Error(transfer.Error)
-				return
-			}
-
-			// if we exited on the first row, there was nothing to delete
-			if rowNum != 0 {
-
-				err = target.exec(queryBuilder.String())
-				if err != nil {
-					transfer.Error = fmt.Sprintf("error deleting pks at end :: %v", err)
-					logger.Error(transfer.Error)
-					return
-				}
-			}
-
-			pipeFilesOut <- pipeFileInfo
-
-		}
-		logger.Info("transfer %v finished deleting pks")
-
-	}()
-
-	return pipeFilesOut
 }
 
 func getTableColumnInfos(schema, table string, system System) (columnInfos []ColumnInfo, err error) {

@@ -14,14 +14,9 @@ import (
 )
 
 type Postgresql struct {
-	Name           string
 	Connection     *sql.DB
 	ConnectionInfo ConnectionInfo
 	SchemaTree     SchemaTree
-}
-
-func (system Postgresql) getSystemName() (name string) {
-	return system.Name
 }
 
 func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err error) {
@@ -30,13 +25,14 @@ func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err er
 		// connectionString := fmt.Sprintf("postgresql://%v:%v@%v:%v/%v?sslmode=verify-full", connectionInfo.Username,
 		connectionInfo.Password, connectionInfo.Hostname, connectionInfo.Port, connectionInfo.Database)
 
-	db, err := openConnectionPool(connectionInfo.Name, connectionString, DriverPostgreSQL)
+	logger.Info(fmt.Sprintf("connecting to postgresql :: %v", connectionString))
+
+	db, err := openConnectionPool(connectionString, DriverPostgreSQL)
 	if err != nil {
 		return postgresql, fmt.Errorf("error opening postgresql db :: %v", err)
 	}
 
 	postgresql.Connection = db
-	postgresql.Name = connectionInfo.Name
 	postgresql.ConnectionInfo = connectionInfo
 
 	return postgresql, nil
@@ -45,7 +41,7 @@ func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err er
 func (system Postgresql) closeConnectionPool(printError bool) (err error) {
 	err = system.Connection.Close()
 	if err != nil && printError {
-		logger.Error(fmt.Sprintf("error closing %v connection pool :: %v", system.Name, err))
+		logger.Error(fmt.Sprintf("error closing connection pool :: %v", err))
 	}
 	return err
 }
@@ -53,7 +49,7 @@ func (system Postgresql) closeConnectionPool(printError bool) (err error) {
 func (system Postgresql) query(query string) (rows *sql.Rows, err error) {
 	rows, err = system.Connection.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("error running dql on %v :: %v :: %v", system.Name, query, err)
+		return nil, fmt.Errorf("error running dql :: %v :: %v", query, err)
 	}
 	return rows, nil
 }
@@ -65,7 +61,7 @@ func (system Postgresql) queryRow(query string) (row *sql.Row) {
 func (system Postgresql) exec(query string) (err error) {
 	_, err = system.Connection.Exec(query)
 	if err != nil {
-		return fmt.Errorf("error running ddl/dml on %v :: %v :: %v", system.Name, query, err)
+		return fmt.Errorf("error running ddl/dml on :: %v :: %v", query, err)
 	}
 	return nil
 }
@@ -885,7 +881,7 @@ func (system Postgresql) createSchemaIfNotExistsOverride(schema string) (overrid
 	return false, nil
 }
 
-func (system Postgresql) createTableIfNotExistsOverride(schema, table string, columnInfos []ColumnInfo, incremental bool) (overridden bool, err error) {
+func (system Postgresql) createTableIfNotExistsOverride(schema, table string, columnInfos []ColumnInfo) (overridden bool, err error) {
 	return false, nil
 }
 
@@ -897,8 +893,8 @@ func (system Postgresql) IsTableNotFoundError(err error) bool {
 	return strings.Contains(err.Error(), "does not exist")
 }
 
-func (system Postgresql) discoverStructure() (*SchemaTree, error) {
-	root := &SchemaTree{Name: system.Name}
+func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransfer) (*SchemaTree, error) {
+	root := &SchemaTree{Name: system.ConnectionInfo.Hostname}
 
 	databases, err := system.listAllDatabases()
 	if err != nil {
@@ -941,27 +937,29 @@ func (system Postgresql) discoverStructure() (*SchemaTree, error) {
 				id := uuid.New().String()
 				ctx, cancel := context.WithCancel(context.Background())
 
-				targetDbName := fmt.Sprintf("%v_%v", dbSystem.Name, database)
+				targetDbName := fmt.Sprintf("%v_%v", instanceTransfer.SourceInstance.ID, database)
+
+				// replace dashes with underscores in instanceTransferID
+				stagingDbNameSuffix := strings.ReplaceAll(instanceTransfer.RestoredInstanceID, "-", "_")
+				stagingDbName := fmt.Sprintf("%v_%v", stagingDbNameSuffix, database)
 
 				transferInfo := &data.TransferInfo{
-					Id:                            id,
-					CreatedAt:                     time.Now(),
-					Status:                        StatusPending,
-					Context:                       ctx,
-					Cancel:                        cancel,
-					SourceName:                    instanceTransfer.SourceName,
-					SourceType:                    instanceTransfer.SourceType,
-					SourceHostname:                instanceTransfer.SourceHostname,
-					SourcePort:                    instanceTransfer.SourcePort,
-					SourceUsername:                instanceTransfer.SourceUsername,
-					SourcePassword:                instanceTransfer.SourcePassword,
+					ID:      id,
+					Context: ctx,
+					Cancel:  cancel,
+					SourceInstance: data.Instance{
+						ID:       instanceTransfer.SourceInstance.ID,
+						Type:     instanceTransfer.SourceInstance.Type,
+						Host:     instanceTransfer.SourceInstance.Host,
+						Port:     instanceTransfer.SourceInstance.Port,
+						Username: instanceTransfer.SourceInstance.Username,
+						Password: instanceTransfer.SourceInstance.Password,
+					},
 					SourceDatabase:                database,
 					SourceSchema:                  schema,
 					SourceTable:                   table,
-					TargetName:                    instanceTransfer.TargetName,
 					TargetType:                    instanceTransfer.TargetType,
-					TargetHostname:                instanceTransfer.TargetHostname,
-					TargetPort:                    instanceTransfer.TargetPort,
+					TargetHost:                    instanceTransfer.TargetHost,
 					TargetUsername:                instanceTransfer.TargetUsername,
 					TargetPassword:                instanceTransfer.TargetPassword,
 					TargetDatabase:                targetDbName,
@@ -976,9 +974,9 @@ func (system Postgresql) discoverStructure() (*SchemaTree, error) {
 					PsqlAvailable:                 instanceTransfer.PsqlAvailable,
 					BcpAvailable:                  instanceTransfer.BcpAvailable,
 					SqlLdrAvailable:               instanceTransfer.SqlLdrAvailable,
-					StagingDbName:                 instanceTransfer.BackupId,
+					StagingDbName:                 stagingDbName,
 				}
-				transferInfos = append(transferInfos, *transferInfo)
+				transferInfos = append(instanceTransfer.TransferInfos, *transferInfo)
 			}
 		}
 	}
