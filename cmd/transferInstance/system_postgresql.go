@@ -25,8 +25,6 @@ func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err er
 		// connectionString := fmt.Sprintf("postgresql://%v:%v@%v:%v/%v?sslmode=verify-full", connectionInfo.Username,
 		connectionInfo.Password, connectionInfo.Hostname, connectionInfo.Port, connectionInfo.Database)
 
-	logger.Info(fmt.Sprintf("connecting to postgresql :: %v", connectionString))
-
 	db, err := openConnectionPool(connectionString, DriverPostgreSQL)
 	if err != nil {
 		return postgresql, fmt.Errorf("error opening postgresql db :: %v", err)
