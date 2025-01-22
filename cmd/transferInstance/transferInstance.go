@@ -85,7 +85,6 @@ func transferInstance() error {
 		Type:     instanceTransfer.SourceInstance.Type,
 		Hostname: instanceTransfer.SourceInstance.Host,
 		Port:     instanceTransfer.SourceInstance.Port,
-		// Database: instanceTransfer.SourceInstance.AdminDB,
 		Username: instanceTransfer.SourceInstance.Username,
 		Password: instanceTransfer.SourceInstance.Password,
 	}
@@ -96,7 +95,7 @@ func transferInstance() error {
 	}
 	defer source.closeConnectionPool(true)
 
-	_, err = source.discoverStructure(&instanceTransfer)
+	instanceTransfer, err = source.discoverStructure(instanceTransfer)
 	if err != nil {
 		return fmt.Errorf("error getting instance structure :: %v", err)
 	}
@@ -111,7 +110,7 @@ func transferInstance() error {
 		logger.Info("starting transfer", OriginalDatabaseName, transferInfo.SourceDatabase, "schema", transferInfo.SourceSchema, "table", transferInfo.SourceTable)
 
 		transferErrG.Go(func() error {
-			err = runTransfer(transferInfo)
+			err = runTransfer(*transferInfo)
 			if err != nil {
 				logger.Error("error running transfer", "error", err, "database", transferInfo.SourceDatabase, "schema", transferInfo.SourceSchema, "table", transferInfo.SourceTable)
 				return err

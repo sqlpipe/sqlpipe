@@ -28,17 +28,23 @@ var (
 	logger           *slog.Logger
 	version          = vcs.Version()
 	globalTmpDir     string
-	instanceTransfer = data.InstanceTransfer{
-		SourceInstance: &data.Instance{},
-		TransferInfos:  []data.TransferInfo{},
+	instanceTransfer = &data.InstanceTransfer{
+		SourceInstance:   &data.Instance{},
+		TransferInfos:    []*data.TransferInfo{},
+		NamingConvention: &data.NamingConvention{},
 	}
 )
 
 func main() {
 
 	flag.StringVar(&instanceTransfer.ID, "instance-transfer-id", "", "The UUID of the instance transfer")
-	flag.StringVar(&instanceTransfer.NamingTemplate, "naming-template", "", "naming template")
+	flag.StringVar(&instanceTransfer.NamingConvention.DatabaseNameInSnowflake, "database-naming-convention", "", "DB naming template")
+	flag.StringVar(&instanceTransfer.NamingConvention.SchemaNameInSnowflake, "schema-naming-convention", "", "schema naming template")
+	flag.StringVar(&instanceTransfer.NamingConvention.SchemaFallbackInSnowflake, "schema-fallback", "", "schema fallback")
+	flag.StringVar(&instanceTransfer.NamingConvention.TableNameInSnowflake, "table-naming-convention", "", "table naming template")
 	flag.StringVar(&instanceTransfer.SourceInstance.ID, "source-instance-id", "", "source name")
+	flag.StringVar(&instanceTransfer.SourceInstance.CloudProvider, "source-instance-cloud-provider", "", "source cloud provider")
+	flag.StringVar(&instanceTransfer.SourceInstance.CloudAccountID, "source-instance-cloud-account-id", "", "source account id")
 	flag.StringVar(&instanceTransfer.SourceInstance.Type, "source-instance-type", "", "source type")
 	flag.StringVar(&instanceTransfer.SourceInstance.Region, "source-instance-region", "", "source region")
 	flag.StringVar(&instanceTransfer.SourceInstance.Host, "source-instance-host", "", "source host")
@@ -97,7 +103,7 @@ func main() {
 		}
 	}()
 
-	checkDeps(&instanceTransfer)
+	checkDeps(instanceTransfer)
 
 	globalTmpDir = filepath.Join(os.TempDir(), "sqlpipe")
 	err = os.MkdirAll(globalTmpDir, 0600)
@@ -111,7 +117,7 @@ func main() {
 
 	v := validator.New()
 
-	data.ValidateInstanceTransfer(v, &instanceTransfer)
+	data.ValidateInstanceTransfer(v, instanceTransfer)
 
 	if !v.Valid() {
 		logger.Error("invalid instance transfer", "errors", fmt.Sprintf("%+v", v.FieldErrors))

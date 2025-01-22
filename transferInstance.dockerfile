@@ -15,7 +15,12 @@ COPY ./LICENSE.MD /SQLPIPE-LICENSE.MD
 
 ENTRYPOINT update-ca-certificates && /usr/local/bin/transferInstance \
     -instance-transfer-id="${INSTANCE_TRANSFER_ID}" \
-    -naming-template="${NAMING_TEMPLATE}" \
+    -database-naming-convention="${DATABASE_NAMING_CONVENTION}" \
+    -schema-naming-convention="${SCHEMA_NAMING_CONVENTION}" \
+    -schema-fallback="${SCHEMA_FALLBACK}" \
+    -table-naming-convention="${TABLE_NAMING_CONVENTION}" \
+    -source-instance-cloud-provider="${SOURCE_INSTANCE_CLOUD_PROVIDER}" \
+    -source-instance-cloud-account-id="${SOURCE_INSTANCE_CLOUD_ACCOUNT_ID}" \
     -source-instance-id="${SOURCE_INSTANCE_ID}" \
     -source-instance-type="${SOURCE_INSTANCE_TYPE}" \
     -source-instance-region="${SOURCE_INSTANCE_REGION}" \

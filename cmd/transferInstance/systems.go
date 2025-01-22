@@ -26,24 +26,6 @@ type ConnectionInfo struct {
 	Password string
 }
 
-type SchemaTree struct {
-	Name     string
-	Children []*SchemaTree
-}
-
-func (n *SchemaTree) AddChild(name string) *SchemaTree {
-	child := &SchemaTree{Name: name}
-	n.Children = append(n.Children, child)
-	return child
-}
-
-func (n *SchemaTree) PrettyPrint(indent string) {
-	fmt.Println(indent + n.Name)
-	for _, child := range n.Children {
-		child.PrettyPrint(indent + "  ")
-	}
-}
-
 type System interface {
 	// The system interface abstracts differences between different database systems
 
@@ -101,7 +83,7 @@ type System interface {
 	// -- Data discovery --
 	// --------------------
 
-	discoverStructure(instanceTransfer *data.InstanceTransfer) (schemaTree *SchemaTree, err error)
+	discoverStructure(instanceTransfer *data.InstanceTransfer) (*data.InstanceTransfer, error)
 }
 
 func newSystem(connectionInfo ConnectionInfo) (system System, err error) {
@@ -240,14 +222,6 @@ func createTableIfNotExists(
 	}
 
 	schemaPeriodTable := getSchemaPeriodTable(transferInfo.TargetSchema, transferInfo.TargetTable, target, true)
-
-	escapedPrimaryKeys := []string{}
-
-	for i := range columnInfos {
-		if columnInfos[i].IsPrimaryKey {
-			escapedPrimaryKeys = append(escapedPrimaryKeys, escapeIfNeeded(columnInfos[i].Name, target))
-		}
-	}
 
 	var queryBuilder = strings.Builder{}
 
@@ -808,52 +782,6 @@ func dropTableIfExists(transferInfo data.TransferInfo, system System) (err error
 	logger.Info("dropped table if exists", "database", transferInfo.TargetDatabase, "staging-database", transferInfo.StagingDbName, "schema", transferInfo.TargetSchema, "table", transferInfo.TargetTable)
 
 	return nil
-}
-
-func getIncrementalTime(schema, table, incrementalColumn string, initialLoad bool, system System) (bool, time.Time, error) {
-
-	incrementalTime, overridden, initialLoad, err := system.getIncrementalTimeOverride(schema, table, incrementalColumn, initialLoad)
-	if overridden {
-		return initialLoad, incrementalTime, err
-	}
-
-	escapedSchemaPeriodTable := getSchemaPeriodTable(schema, table, system, true)
-
-	query := fmt.Sprintf("select max(%v) from %v", escapeIfNeeded(incrementalColumn, system), escapedSchemaPeriodTable)
-
-	rows, err := system.query(query)
-	if err != nil {
-		if !system.IsTableNotFoundError(err) {
-			return initialLoad, incrementalTime, fmt.Errorf("error getting max %v :: %v", incrementalColumn, err)
-		}
-		return initialLoad, incrementalTime, nil
-	}
-	defer rows.Close()
-
-	columnInfos, err := getQueryColumnInfos(rows, system)
-	if err != nil {
-		return initialLoad, incrementalTime, fmt.Errorf("error getting column info :: %v", err)
-	}
-
-	if !permittedValue(columnInfos[0].PipeType, "datetime", "datetimetz", "date") {
-		return initialLoad, incrementalTime, fmt.Errorf("column %v is unsupported pipe type %v", incrementalColumn, columnInfos[0].PipeType)
-	}
-
-	for rows.Next() {
-		err := rows.Scan(&incrementalTime)
-		if err != nil {
-			if !strings.Contains(err.Error(), "storing driver.Value type <nil>") {
-				return initialLoad, incrementalTime, fmt.Errorf("error scanning max %v :: %v", incrementalColumn, err)
-			}
-			return initialLoad, incrementalTime, nil
-		}
-	}
-
-	if !incrementalTime.IsZero() {
-		initialLoad = false
-	}
-
-	return initialLoad, incrementalTime, nil
 }
 
 func getTableColumnInfos(schema, table string, system System) (columnInfos []ColumnInfo, err error) {

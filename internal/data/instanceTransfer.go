@@ -6,7 +6,7 @@ import (
 
 type InstanceTransfer struct {
 	ID                 string
-	NamingTemplate     string
+	NamingConvention   *NamingConvention
 	SourceInstance     *Instance
 	RestoredInstanceID string
 	TargetType         string
@@ -21,7 +21,8 @@ type InstanceTransfer struct {
 	PsqlAvailable      bool
 	BcpAvailable       bool
 	SqlLdrAvailable    bool
-	TransferInfos      []TransferInfo
+	TransferInfos      []*TransferInfo
+	SchemaRootNode     *SchemaTree
 }
 
 var (

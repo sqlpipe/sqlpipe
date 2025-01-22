@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 type Postgresql struct {
 	Connection     *sql.DB
 	ConnectionInfo ConnectionInfo
-	SchemaTree     SchemaTree
+	SchemaTree     *data.SchemaTree
 }
 
 func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err error) {
@@ -891,8 +892,8 @@ func (system Postgresql) IsTableNotFoundError(err error) bool {
 	return strings.Contains(err.Error(), "does not exist")
 }
 
-func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransfer) (*SchemaTree, error) {
-	root := &SchemaTree{Name: system.ConnectionInfo.Hostname}
+func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransfer) (*data.InstanceTransfer, error) {
+	instanceTransfer.SchemaRootNode = &data.SchemaTree{Name: system.ConnectionInfo.Hostname}
 
 	databases, err := system.listAllDatabases()
 	if err != nil {
@@ -900,7 +901,7 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 	}
 
 	dbConnInfo := system.ConnectionInfo
-	transferInfos := make([]data.TransferInfo, 0)
+	transferInfos := make([]*data.TransferInfo, 0)
 
 	for _, database := range databases {
 
@@ -909,7 +910,7 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 			continue
 		}
 
-		dbNode := root.AddChild(database)
+		dbNode := instanceTransfer.SchemaRootNode.AddChild(database)
 
 		dbConnInfo.Database = database
 
@@ -922,6 +923,18 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 		if err != nil {
 			return nil, fmt.Errorf("error listing all schemas in database %v :: %v", database, err)
 		}
+
+		placeholders := map[string]string{
+			"cloud_provider":   instanceTransfer.SourceInstance.CloudProvider,
+			"cloud_account_id": instanceTransfer.SourceInstance.CloudAccountID,
+			"cloud_region":     instanceTransfer.SourceInstance.Region,
+			"instance_id":      instanceTransfer.SourceInstance.ID,
+		}
+
+		targetDbTemplate := instanceTransfer.NamingConvention.DatabaseNameInSnowflake
+		targetSchemaTemplate := instanceTransfer.NamingConvention.SchemaNameInSnowflake
+		targetTableTemplate := instanceTransfer.NamingConvention.TableNameInSnowflake
+
 		for _, schema := range schemas {
 			schemaNode := dbNode.AddChild(schema)
 
@@ -935,7 +948,45 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 				id := uuid.New().String()
 				ctx, cancel := context.WithCancel(context.Background())
 
-				targetDbName := fmt.Sprintf("%v_%v", instanceTransfer.SourceInstance.ID, database)
+				placeholders["database_name"] = database
+				placeholders["schema_name"] = schema
+				placeholders["table_name"] = table
+
+				pattern := regexp.MustCompile(`\[([^\]]+)\]`)
+
+				targetDbName := pattern.ReplaceAllStringFunc(targetDbTemplate, func(m string) string {
+					key := m[1 : len(m)-1]
+					if val, found := placeholders[key]; found {
+						return val
+					}
+					return m
+				})
+
+				targetDbName = dashToUnderscoreReplacer.Replace(targetDbName)
+
+				targetSchemaName := pattern.ReplaceAllStringFunc(targetSchemaTemplate, func(m string) string {
+					key := m[1 : len(m)-1]
+					if val, found := placeholders[key]; found {
+						return val
+					}
+					return m
+				})
+
+				targetSchemaName = dashToUnderscoreReplacer.Replace(targetSchemaName)
+
+				if targetSchemaName == "" {
+					targetSchemaName = instanceTransfer.NamingConvention.SchemaFallbackInSnowflake
+				}
+
+				targetTableName := pattern.ReplaceAllStringFunc(targetTableTemplate, func(m string) string {
+					key := m[1 : len(m)-1]
+					if val, found := placeholders[key]; found {
+						return val
+					}
+					return m
+				})
+
+				targetTableName = dashToUnderscoreReplacer.Replace(targetTableName)
 
 				// replace dashes with underscores in instanceTransferID
 				stagingDbNameSuffix := strings.ReplaceAll(instanceTransfer.RestoredInstanceID, "-", "_")
@@ -961,8 +1012,8 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 					TargetUsername:                instanceTransfer.TargetUsername,
 					TargetPassword:                instanceTransfer.TargetPassword,
 					TargetDatabase:                targetDbName,
-					TargetSchema:                  schema,
-					TargetTable:                   table,
+					TargetSchema:                  targetSchemaName,
+					TargetTable:                   targetTableName,
 					DropTargetTableIfExists:       true,
 					CreateTargetSchemaIfNotExists: true,
 					CreateTargetTableIfNotExists:  true,
@@ -974,15 +1025,16 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 					SqlLdrAvailable:               instanceTransfer.SqlLdrAvailable,
 					StagingDbName:                 stagingDbName,
 				}
-				transferInfos = append(instanceTransfer.TransferInfos, *transferInfo)
+				transferInfos = append(instanceTransfer.TransferInfos, transferInfo)
+
+				fmt.Printf("TransferInfo: %v\n", transferInfo)
 			}
 		}
 	}
 
 	instanceTransfer.TransferInfos = transferInfos
 
-	return root, nil
-
+	return instanceTransfer, nil
 }
 
 func (system Postgresql) createDbIfNotExistsOverride(database string) (overridden bool, err error) {

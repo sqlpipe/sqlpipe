@@ -42,6 +42,8 @@ var (
 	StatusComplete = "complete"
 )
 
+var dashToUnderscoreReplacer = strings.NewReplacer("-", "_")
+
 func getFileNum(fileName string) (fileNum int64, err error) {
 	fileNameClean := filepath.Base(fileName)
 	fileNumString := strings.Split(fileNameClean, ".")[0]
@@ -114,9 +116,9 @@ func checkDeps(instanceTransfer *data.InstanceTransfer) {
 }
 
 func checkPsql(instanceTransfer *data.InstanceTransfer) {
-	output, err := exec.Command("psql", "--version").CombinedOutput()
+	_, err := exec.Command("psql", "--version").CombinedOutput()
 	if err != nil {
-		logger.Warn(fmt.Sprintf("psql not found. please install psql to transfer data to postgresql :: %v :: %v\n", err, string(output)))
+		// logger.Warn(fmt.Sprintf("psql not found. please install psql to transfer data to postgresql :: %v :: %v\n", err, string(output)))
 		return
 	}
 
@@ -124,9 +126,9 @@ func checkPsql(instanceTransfer *data.InstanceTransfer) {
 }
 
 func checkBcp(instanceTransfer *data.InstanceTransfer) {
-	output, err := exec.Command("bcp", "-v").CombinedOutput()
+	_, err := exec.Command("bcp", "-v").CombinedOutput()
 	if err != nil {
-		logger.Warn(fmt.Sprintf("bcp not found. please install bcp to transfer data to mssql :: %v :: %v\n", err, string(output)))
+		// logger.Warn(fmt.Sprintf("bcp not found. please install bcp to transfer data to mssql :: %v :: %v\n", err, string(output)))
 		return
 	}
 
@@ -134,9 +136,9 @@ func checkBcp(instanceTransfer *data.InstanceTransfer) {
 }
 
 func checkSqlLdr(instanceTransfer *data.InstanceTransfer) {
-	output, err := exec.Command("sqlldr", "-help").CombinedOutput()
+	_, err := exec.Command("sqlldr", "-help").CombinedOutput()
 	if err != nil {
-		logger.Warn(fmt.Sprintf("sqlldr not found. please install sqllder to transfer data to oracle :: %v :: %v\n", err, string(output)))
+		// logger.Warn(fmt.Sprintf("sqlldr not found. please install sqllder to transfer data to oracle :: %v :: %v\n", err, string(output)))
 		return
 	}
 
@@ -308,15 +310,6 @@ func RandomLetters(length int) (string, error) {
 	}
 
 	return randomString, nil
-}
-
-func permittedValue[T comparable](value T, permittedValues ...T) bool {
-	for i := range permittedValues {
-		if value == permittedValues[i] {
-			return true
-		}
-	}
-	return false
 }
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

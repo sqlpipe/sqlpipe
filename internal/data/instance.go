@@ -11,14 +11,15 @@ var (
 )
 
 type Instance struct {
-	ID     string
-	Type   string
-	Region string
-	Host   string
-	Port   int
-	// AdminDB  string
-	Username string
-	Password string
+	ID             string
+	Type           string
+	CloudProvider  string
+	Region         string
+	CloudAccountID string
+	Host           string
+	Port           int
+	Username       string
+	Password       string
 }
 
 var AllowedInstanceTypes = map[string]struct{}{

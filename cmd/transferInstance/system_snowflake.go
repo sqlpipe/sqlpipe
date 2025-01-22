@@ -16,10 +16,6 @@ type Snowflake struct {
 	Connection *sql.DB
 }
 
-func (system Snowflake) getSystemName() (name string) {
-	return system.Name
-}
-
 func newSnowflake(connectionInfo ConnectionInfo) (snowflake Snowflake, err error) {
 
 	connectionString := fmt.Sprintf("%v:%v@%v/%v", connectionInfo.Username,
@@ -712,6 +708,6 @@ func (system Snowflake) getSqlFormatters() (
 	}
 }
 
-func (system Snowflake) discoverStructure(instnaceTransfer *data.InstanceTransfer) (instanceRootNode *SchemaTree, err error) {
+func (system Snowflake) discoverStructure(instnaceTransfer *data.InstanceTransfer) (instanceTransfer *data.InstanceTransfer, err error) {
 	return nil, errors.New("snowflake does not support discovering structure")
 }
