@@ -336,25 +336,6 @@ func generateRandomString(length int) (string, error) {
 
 }
 
-type ColumnInfo struct {
-	Name         string `json:"name"`
-	PipeType     string `json:"pipe-type"`
-	ScanType     string `json:"scan-type"`
-	DecimalOk    bool   `json:"decimal-ok"`
-	Precision    int64  `json:"precision"`
-	Scale        int64  `json:"scale"`
-	LengthOk     bool   `json:"length-ok"`
-	Length       int64  `json:"length"`
-	NullableOk   bool   `json:"nullable-ok"`
-	Nullable     bool   `json:"nullable"`
-	IsPrimaryKey bool   `json:"is-primary-key"`
-}
-
-type FinalCsvInfo struct {
-	FilePath   string
-	InsertInfo string
-}
-
 // func getAdminDbName(dbType string) (string, error) {
 
 // 	var adminDbName string

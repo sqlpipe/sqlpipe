@@ -7,26 +7,13 @@ import (
 	"github.com/sqlpipe/sqlpipe/internal/data"
 )
 
-func runTransfer(transferInfo data.TransferInfo) error {
+func runTransfer(transferInfo *data.TransferInfo) error {
 
 	var err error
 
 	transferInfo.TmpDir, transferInfo.PipeFileDir, transferInfo.FinalCsvDir, err = commonHelpers.CreateTransferTmpDirs(transferInfo.ID, globalTmpDir, logger)
 	if err != nil {
 		return fmt.Errorf("error creating transfer tmp dirs :: %v", err)
-	}
-
-	if transferInfo.Delimiter == "" {
-		transferInfo.Delimiter = "{dlm}"
-	}
-	if transferInfo.Newline == "" {
-		transferInfo.Newline = "{nwln}"
-	}
-	if transferInfo.Null == "" {
-		transferInfo.Null = "{nll}"
-		if transferInfo.TargetType == "mysql" {
-			transferInfo.Null = `NULL`
-		}
 	}
 
 	sourceConnectionInfo := ConnectionInfo{
@@ -99,44 +86,30 @@ func runTransfer(transferInfo data.TransferInfo) error {
 	}
 
 	escapedSourceSchemaPeriodTable := getSchemaPeriodTable(transferInfo.SourceSchema, transferInfo.SourceTable, source, true)
-	query := transferInfo.Query
 
-	var columnInfos []ColumnInfo
-
-	if transferInfo.SourceTable != "" {
-
-		columnInfos, err = getTableColumnInfos(transferInfo.SourceSchema, transferInfo.SourceTable, source)
-		if err != nil {
-			return fmt.Errorf("error getting source table column infos :: %v", err)
-		}
-
-		query = fmt.Sprintf(`SELECT * FROM %v`, escapedSourceSchemaPeriodTable)
-
+	err = getTableColumnInfos(transferInfo, source)
+	if err != nil {
+		return fmt.Errorf("error getting source table column infos :: %v", err)
 	}
 
-	rows, err := source.query(query)
+	instanceTransfer.SchemaTree.PrettyPrint("  ")
+
+	rows, err := source.query(fmt.Sprintf(`SELECT * FROM %v`, escapedSourceSchemaPeriodTable))
 	if err != nil {
 		return fmt.Errorf("error querying source :: %v", err)
 	}
 	defer rows.Close()
 
-	if transferInfo.Query != "" {
-		columnInfos, err = getQueryColumnInfos(rows, source)
-		if err != nil {
-			return fmt.Errorf("error getting query column infos :: %v", err)
-		}
-	}
-
 	if transferInfo.CreateTargetTableIfNotExists {
-		err = createTableIfNotExists(transferInfo, columnInfos, target)
+		err = createTableIfNotExists(transferInfo, target)
 		if err != nil {
 			return fmt.Errorf("error creating target table :: %v", err)
 		}
 	}
 
-	newPipeFiles := createPipeFiles(columnInfos, transferInfo, rows, source)
+	newPipeFiles := createPipeFiles(transferInfo, rows, source)
 
-	err = insertPipeFiles(newPipeFiles, transferInfo, columnInfos, target, "")
+	err = insertPipeFiles(newPipeFiles, transferInfo, target)
 	if err != nil {
 		return fmt.Errorf("error inserting pipe files :: %v", err)
 	}

@@ -37,8 +37,24 @@ type TransferInfo struct {
 	BcpAvailable                  bool     `json:"-"`
 	SqlLdrAvailable               bool     `json:"-"`
 	StagingDbName                 string   `json:"staging-db-name"`
+	TableNode                     *SafeTreeNode
+	ColumnInfos                   []*ColumnInfo
 	Context                       context.Context
 	Cancel                        context.CancelFunc
+}
+
+type ColumnInfo struct {
+	Name         string `json:"name"`
+	PipeType     string `json:"pipe-type"`
+	ScanType     string `json:"scan-type"`
+	DecimalOk    bool   `json:"decimal-ok"`
+	Precision    int64  `json:"precision"`
+	Scale        int64  `json:"scale"`
+	LengthOk     bool   `json:"length-ok"`
+	Length       int64  `json:"length"`
+	NullableOk   bool   `json:"nullable-ok"`
+	Nullable     bool   `json:"nullable"`
+	IsPrimaryKey bool   `json:"is-primary-key"`
 }
 
 func ValidateTransferInfo(v *validator.Validator, transferInfo *TransferInfo) {

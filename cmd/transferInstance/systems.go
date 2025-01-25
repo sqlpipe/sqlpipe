@@ -26,6 +26,11 @@ type ConnectionInfo struct {
 	Password string
 }
 
+type FinalCsvInfo struct {
+	FilePath   string
+	InsertInfo string
+}
+
 type System interface {
 	// The system interface abstracts differences between different database systems
 
@@ -53,7 +58,7 @@ type System interface {
 
 	dbTypeToPipeType(databaseTypeName string) (pipeType string, err error)
 	driverTypeToPipeType(columnType *sql.ColumnType, databaseTypeName string) (pipeType string, err error)
-	pipeTypeToCreateType(columnInfo ColumnInfo) (createType string, err error)
+	pipeTypeToCreateType(columnInfo *data.ColumnInfo) (createType string, err error)
 
 	getPipeFileFormatters() (pipeFileFormatters map[string]func(interface{}) (pipeFileValue string, err error))
 	getSqlFormatters() (sqlFormatters map[string]func(string) (sqlValue string, err error))
@@ -64,7 +69,7 @@ type System interface {
 	// -------------------
 
 	createSchemaIfNotExistsOverride(schema string) (overridden bool, err error)
-	createTableIfNotExistsOverride(schema, table string, columnInfo []ColumnInfo) (overridden bool, err error)
+	createTableIfNotExistsOverride(schema, table string, transferInfo *data.TransferInfo) (overridden bool, err error)
 	dropTableIfExistsOverride(schema, table string) (overridden bool, err error)
 	createDbIfNotExistsOverride(database string) (overridden bool, err error)
 
@@ -72,11 +77,11 @@ type System interface {
 	// ** Data movement **
 	// *******************
 
-	createPipeFilesOverride(pipeFileInfoChannel chan PipeFileInfo, columnInfo []ColumnInfo, transfer data.TransferInfo, rows *sql.Rows) (pipeFileChannel chan PipeFileInfo, overridden bool)
-	convertPipeFilesOverride(pipeFileInfoChannel <-chan PipeFileInfo, finalCsvInfoChannel chan FinalCsvInfo, transfer data.TransferInfo, columnInfo []ColumnInfo) (finalCsvChannel chan FinalCsvInfo, overridden bool)
-	insertPipeFilesOverride(columnInfo []ColumnInfo, transfer data.TransferInfo, pipeFileInfoChannel <-chan PipeFileInfo, vacuumTable string) (overridden bool, err error)
-	insertFinalCsvsOverride(transfer data.TransferInfo) (overridden bool, err error)
-	runInsertCmd(finalCsvInfo FinalCsvInfo, transfer data.TransferInfo, schema, table string) (err error)
+	createPipeFilesOverride(pipeFileInfoChannel chan PipeFileInfo, transferInfo *data.TransferInfo, rows *sql.Rows) (pipeFileChannel chan PipeFileInfo, overridden bool)
+	convertPipeFilesOverride(pipeFileInfoChannel <-chan PipeFileInfo, finalCsvInfoChannel chan FinalCsvInfo, transferInfo *data.TransferInfo) (finalCsvChannel chan FinalCsvInfo, overridden bool)
+	insertPipeFilesOverride(transferInfo *data.TransferInfo, pipeFileInfoChannel <-chan PipeFileInfo) (overridden bool, err error)
+	insertFinalCsvsOverride(transferInfo *data.TransferInfo) (overridden bool, err error)
+	runInsertCmd(finalCsvInfo FinalCsvInfo, transferInfo *data.TransferInfo, schema, table string) (err error)
 	getIncrementalTimeOverride(schema, table, incrementalColumn string, intialLoad bool) (incrementalTime time.Time, overridden bool, initialLoad bool, err error)
 
 	// --------------------
@@ -123,100 +128,14 @@ func openConnectionPool(connectionString, driverName string) (connectionPool *sq
 	return connectionPool, nil
 }
 
-func safeGetScanType(columnType *sql.ColumnType) (scanType string, err error) {
-	// safely gets scan type of a column
-
-	defer func() {
-		if r := recover(); r != nil {
-			scanType = ""
-			err = fmt.Errorf("panic caught while trying getting %v scan type :: %v",
-				columnType.DatabaseTypeName(), r)
-		}
-	}()
-
-	scanType = columnType.ScanType().String()
-
-	return scanType, err
-}
-
-func safeGetDbTypeName(columnType *sql.ColumnType) (dbTypeName string, err error) {
-	// safely gets scan type of a column
-
-	defer func() {
-		if r := recover(); r != nil {
-			dbTypeName = ""
-			err = fmt.Errorf("panic caught while trying getting %v db type name :: %v",
-				columnType.Name(), r)
-		}
-	}()
-
-	return columnType.DatabaseTypeName(), err
-}
-
-func getQueryColumnInfos(rows *sql.Rows, source System) (columnInfo []ColumnInfo, err error) {
-	// gets / consolidates info about columns, including
-	// pipe type, length, precision / scale, etc
-
-	columnInfo = []ColumnInfo{}
-
-	columnNames, err := rows.Columns()
-	if err != nil {
-		return columnInfo, fmt.Errorf("error getting column names :: %v", err)
-	}
-
-	columnTypes, err := rows.ColumnTypes()
-	if err != nil {
-		return columnInfo, fmt.Errorf("error getting column types :: %v", err)
-	}
-
-	numCols := len(columnNames)
-
-	for i := 0; i < numCols; i++ {
-		precision, scale, decimalOk := columnTypes[i].DecimalSize()
-		length, lengthOk := columnTypes[i].Length()
-		nullable, nullableOk := columnTypes[i].Nullable()
-
-		dbTypeName, err := safeGetDbTypeName(columnTypes[i])
-		if err != nil {
-			return columnInfo, fmt.Errorf("error getting dbTypeName :: %v", err)
-		}
-
-		pipeType, err := source.driverTypeToPipeType(columnTypes[i], dbTypeName)
-		if err != nil {
-			return columnInfo, fmt.Errorf("error getting pipeTypes :: %v", err)
-		}
-
-		scanType, err := safeGetScanType(columnTypes[i])
-		if err != nil {
-			logger.Warn(fmt.Sprintf("error getting scantype for column %v :: %v", columnNames[i], err))
-		}
-
-		columnInfo = append(columnInfo, ColumnInfo{
-			Name:       columnNames[i],
-			PipeType:   pipeType,
-			ScanType:   scanType,
-			DecimalOk:  decimalOk,
-			Precision:  precision,
-			Scale:      scale,
-			LengthOk:   lengthOk,
-			Length:     length,
-			NullableOk: nullableOk,
-			Nullable:   nullable,
-		})
-	}
-
-	return columnInfo, nil
-}
-
 func createTableIfNotExists(
-	transferInfo data.TransferInfo,
-	columnInfos []ColumnInfo,
+	transferInfo *data.TransferInfo,
 	target System,
 ) (
 	err error,
 ) {
 
-	overridden, err := target.createTableIfNotExistsOverride(transferInfo.TargetSchema, transferInfo.TargetTable, columnInfos)
+	overridden, err := target.createTableIfNotExistsOverride(transferInfo.TargetSchema, transferInfo.TargetTable, transferInfo)
 	if overridden {
 		return err
 	}
@@ -229,19 +148,19 @@ func createTableIfNotExists(
 	queryBuilder.WriteString(schemaPeriodTable)
 	queryBuilder.WriteString(" (")
 
-	for i := range columnInfos {
+	for i := range transferInfo.ColumnInfos {
 		if i > 0 {
 			queryBuilder.WriteString(", ")
 		}
 
-		escapedName := escapeIfNeeded(columnInfos[i].Name, target)
+		escapedName := escapeIfNeeded(transferInfo.ColumnInfos[i].Name, target)
 
 		queryBuilder.WriteString(escapedName)
 		queryBuilder.WriteString(" ")
 
-		createType, err := target.pipeTypeToCreateType(columnInfos[i])
+		createType, err := target.pipeTypeToCreateType(transferInfo.ColumnInfos[i])
 		if err != nil {
-			return fmt.Errorf("error getting create type for column %v :: %v", columnInfos[i].Name, err)
+			return fmt.Errorf("error getting create type for column %v :: %v", transferInfo.ColumnInfos[i].Name, err)
 		}
 
 		queryBuilder.WriteString(createType)
@@ -265,15 +184,14 @@ type PipeFileInfo struct {
 }
 
 func createPipeFiles(
-	columnInfos []ColumnInfo,
-	transfer data.TransferInfo,
+	transferInfo *data.TransferInfo,
 	rows *sql.Rows,
 	source System,
 ) <-chan PipeFileInfo {
 
 	pipeFileInfoChannel := make(chan PipeFileInfo)
 
-	pipeFileInfoChannel, overridden := source.createPipeFilesOverride(pipeFileInfoChannel, columnInfos, transfer, rows)
+	pipeFileInfoChannel, overridden := source.createPipeFilesOverride(pipeFileInfoChannel, transferInfo, rows)
 	if overridden {
 		return pipeFileInfoChannel
 	}
@@ -287,15 +205,15 @@ func createPipeFiles(
 		pipeFileNum := 0
 
 		pipeFile, err := os.Create(
-			filepath.Join(transfer.PipeFileDir, fmt.Sprintf("%032b.pipe", pipeFileNum)))
+			filepath.Join(transferInfo.PipeFileDir, fmt.Sprintf("%032b.pipe", pipeFileNum)))
 		if err != nil {
-			transfer.Error = fmt.Sprintf("error creating temp file :: %v", err)
-			logger.Error(transfer.Error)
+			transferInfo.Error = fmt.Sprintf("error creating temp file :: %v", err)
+			logger.Error(transferInfo.Error)
 			return
 		}
 		defer pipeFile.Close()
 
-		numCols := len(columnInfos)
+		numCols := len(transferInfo.ColumnInfos)
 
 		csvWriter := csv.NewWriter(pipeFile)
 		csvLength := 0
@@ -315,22 +233,22 @@ func createPipeFiles(
 
 			err := rows.Scan(valuePtrs...)
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error scanning row :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error scanning row :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
 			eg.Go(func() error {
 				for i := 0; i < numCols; i++ {
 					if values[i] == nil {
-						csvRow[i] = transfer.Null
-						csvLength += len(transfer.Null)
+						csvRow[i] = transferInfo.Null
+						csvLength += len(transferInfo.Null)
 					} else {
-						csvRow[i], err = pipeFileFormatters[columnInfos[i].PipeType](values[i])
+						csvRow[i], err = pipeFileFormatters[transferInfo.ColumnInfos[i].PipeType](values[i])
 						if err != nil {
 							err = fmt.Errorf("error formatting pipe file :: %v", err)
-							transfer.Error = err.Error()
-							logger.Error(transfer.Error)
+							transferInfo.Error = err.Error()
+							logger.Error(transferInfo.Error)
 							return err
 						}
 						csvLength += len(csvRow[i])
@@ -341,8 +259,8 @@ func createPipeFiles(
 
 			err = eg.Wait()
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error formatting pipe file :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error formatting pipe file :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
@@ -350,8 +268,8 @@ func createPipeFiles(
 				err = csvWriter.Write(csvRow)
 				if err != nil {
 					err = fmt.Errorf("error writing csv row :: %v", err)
-					transfer.Error = err.Error()
-					logger.Error(transfer.Error)
+					transferInfo.Error = err.Error()
+					logger.Error(transferInfo.Error)
 					return err
 				}
 				return nil
@@ -359,8 +277,8 @@ func createPipeFiles(
 
 			err = eg.Wait()
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error writing pipe file :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error writing pipe file :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
@@ -374,8 +292,8 @@ func createPipeFiles(
 					err = pipeFile.Close()
 					if err != nil {
 						err = fmt.Errorf("error closing pipe file :: %v", err)
-						transfer.Error = err.Error()
-						logger.Error(transfer.Error)
+						transferInfo.Error = err.Error()
+						logger.Error(transferInfo.Error)
 						return err
 					}
 					return nil
@@ -383,13 +301,13 @@ func createPipeFiles(
 
 				err = eg.Wait()
 				if err != nil {
-					transfer.Error = fmt.Sprintf("error writing pipe file :: %v", err)
-					logger.Error(transfer.Error)
+					transferInfo.Error = fmt.Sprintf("error writing pipe file :: %v", err)
+					logger.Error(transferInfo.Error)
 					return
 				}
 
 				select {
-				case <-transfer.Context.Done():
+				case <-transferInfo.Context.Done():
 					return
 				default:
 				}
@@ -407,13 +325,13 @@ func createPipeFiles(
 
 				eg.Go(func() error {
 					pipeFileName := filepath.Join(
-						transfer.PipeFileDir, fmt.Sprintf("%032b.pipe", pipeFileNum))
+						transferInfo.PipeFileDir, fmt.Sprintf("%032b.pipe", pipeFileNum))
 
 					pipeFile, err = os.Create(pipeFileName)
 					if err != nil {
 						err = fmt.Errorf("error creating temp file :: %v", err)
-						transfer.Error = err.Error()
-						logger.Error(transfer.Error)
+						transferInfo.Error = err.Error()
+						logger.Error(transferInfo.Error)
 						return err
 					}
 					csvWriter = csv.NewWriter(pipeFile)
@@ -426,8 +344,8 @@ func createPipeFiles(
 
 				err = eg.Wait()
 				if err != nil {
-					transfer.Error = fmt.Sprintf("error writing pipe file :: %v", err)
-					logger.Error(transfer.Error)
+					transferInfo.Error = fmt.Sprintf("error writing pipe file :: %v", err)
+					logger.Error(transferInfo.Error)
 					return
 				}
 
@@ -435,7 +353,7 @@ func createPipeFiles(
 		}
 
 		if err := rows.Err(); err != nil {
-			transfer.Error = fmt.Sprintf("error iterating rows :: %v", err)
+			transferInfo.Error = fmt.Sprintf("error iterating rows :: %v", err)
 			return
 		}
 
@@ -447,8 +365,8 @@ func createPipeFiles(
 				err = pipeFile.Close()
 				if err != nil {
 					err = fmt.Errorf("error closing pipe file :: %v", err)
-					transfer.Error = err.Error()
-					logger.Error(transfer.Error)
+					transferInfo.Error = err.Error()
+					logger.Error(transferInfo.Error)
 					return err
 				}
 				return nil
@@ -456,8 +374,8 @@ func createPipeFiles(
 
 			err = eg.Wait()
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error writing pipe file :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error writing pipe file :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
@@ -471,24 +389,24 @@ func createPipeFiles(
 			pipeFileInfoChannel <- pipeFileInfo
 		}
 
-		logger.Info(fmt.Sprintf("transfer %v finished writing pipe files", transfer.ID))
+		logger.Info(fmt.Sprintf("transfer %v finished writing pipe files", transferInfo.ID))
 	}()
 
 	return pipeFileInfoChannel
 }
 
-func insertPipeFiles(pipeFileChannel <-chan PipeFileInfo, transfer data.TransferInfo, columnInfos []ColumnInfo, target System, vacuumTable string) (err error) {
+func insertPipeFiles(pipeFileChannel <-chan PipeFileInfo, transferInfo *data.TransferInfo, target System) (err error) {
 
-	overridden, err := target.insertPipeFilesOverride(columnInfos, transfer, pipeFileChannel, vacuumTable)
+	overridden, err := target.insertPipeFilesOverride(transferInfo, pipeFileChannel)
 	if overridden {
 		return err
 	}
 
-	finalCsvChannel := convertPipeFiles(pipeFileChannel, columnInfos, transfer, target)
+	finalCsvChannel := convertPipeFiles(pipeFileChannel, transferInfo, target)
 
-	table := transfer.TargetTable
+	table := transferInfo.TargetTable
 
-	err = insertFinalCsvs(finalCsvChannel, transfer, target, transfer.TargetSchema, table)
+	err = insertFinalCsvs(finalCsvChannel, transferInfo, target, transferInfo.TargetSchema, table)
 	if err != nil {
 		return fmt.Errorf("error inserting final csvs :: %v", err)
 	}
@@ -498,14 +416,13 @@ func insertPipeFiles(pipeFileChannel <-chan PipeFileInfo, transfer data.Transfer
 
 func convertPipeFiles(
 	pipeFileInfoChannel <-chan PipeFileInfo,
-	columnInfos []ColumnInfo,
-	transfer data.TransferInfo,
+	transferInfo *data.TransferInfo,
 	target System,
 ) <-chan FinalCsvInfo {
 
 	finalCsvInfoChannel := make(chan FinalCsvInfo)
 
-	finalCsvInfoChannel, overridden := target.convertPipeFilesOverride(pipeFileInfoChannel, finalCsvInfoChannel, transfer, columnInfos)
+	finalCsvInfoChannel, overridden := target.convertPipeFilesOverride(pipeFileInfoChannel, finalCsvInfoChannel, transferInfo)
 	if overridden {
 		return finalCsvInfoChannel
 	}
@@ -525,23 +442,23 @@ func convertPipeFiles(
 
 			pipeFile, err := os.Open(pipeFilePath)
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error opening pipeFile :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error opening pipeFile :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
 			fileNum, err := getFileNum(pipeFilePath)
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error getting fileNum :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error getting fileNum :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
-			csvFileName := filepath.Join(transfer.FinalCsvDir, fmt.Sprintf("%032v.csv", fileNum))
+			csvFileName := filepath.Join(transferInfo.FinalCsvDir, fmt.Sprintf("%032v.csv", fileNum))
 			csvFile, err := os.Create(csvFileName)
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error creating csv file :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error creating csv file :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
@@ -554,17 +471,17 @@ func convertPipeFiles(
 					if errors.Is(err, io.EOF) {
 						break
 					}
-					transfer.Error = fmt.Sprintf("error reading csv row :: %v", err)
-					logger.Error(transfer.Error)
+					transferInfo.Error = fmt.Sprintf("error reading csv row :: %v", err)
+					logger.Error(transferInfo.Error)
 					return
 				}
 
 				for i := range row {
-					if row[i] != transfer.Null {
-						row[i], err = finalCsvFormatters[columnInfos[i].PipeType](row[i])
+					if row[i] != transferInfo.Null {
+						row[i], err = finalCsvFormatters[transferInfo.ColumnInfos[i].PipeType](row[i])
 						if err != nil {
-							transfer.Error = fmt.Sprintf("error formatting final csv :: %v", err)
-							logger.Error(transfer.Error)
+							transferInfo.Error = fmt.Sprintf("error formatting final csv :: %v", err)
+							logger.Error(transferInfo.Error)
 							return
 						}
 					}
@@ -572,16 +489,16 @@ func convertPipeFiles(
 
 				err = csvWriter.Write(row)
 				if err != nil {
-					transfer.Error = fmt.Sprintf("error writing csv row :: %v", err)
-					logger.Error(transfer.Error)
+					transferInfo.Error = fmt.Sprintf("error writing csv row :: %v", err)
+					logger.Error(transferInfo.Error)
 					return
 				}
 			}
 
 			err = pipeFile.Close()
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error closing pipeFile :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error closing pipeFile :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
@@ -589,13 +506,13 @@ func convertPipeFiles(
 
 			err = csvFile.Close()
 			if err != nil {
-				transfer.Error = fmt.Sprintf("error closing csvFile :: %v", err)
-				logger.Error(transfer.Error)
+				transferInfo.Error = fmt.Sprintf("error closing csvFile :: %v", err)
+				logger.Error(transferInfo.Error)
 				return
 			}
 
 			select {
-			case <-transfer.Context.Done():
+			case <-transferInfo.Context.Done():
 				return
 			default:
 			}
@@ -607,16 +524,16 @@ func convertPipeFiles(
 
 			finalCsvInfoChannel <- finalCsvInfo
 
-			if !transfer.KeepFiles {
+			if !transferInfo.KeepFiles {
 				err = os.Remove(pipeFilePath)
 				if err != nil {
-					transfer.Error = fmt.Sprintf("error removing pipeFile :: %v", err)
+					transferInfo.Error = fmt.Sprintf("error removing pipeFile :: %v", err)
 					return
 				}
 			}
 		}
 
-		logger.Info(fmt.Sprintf("transfer %v finished converting pipe files to final csvs", transfer.ID))
+		logger.Info(fmt.Sprintf("transfer %v finished converting pipe files to final csvs", transferInfo.ID))
 	}()
 
 	return finalCsvInfoChannel
@@ -624,7 +541,7 @@ func convertPipeFiles(
 
 func insertFinalCsvs(
 	finalCsvChannel <-chan FinalCsvInfo,
-	transfer data.TransferInfo,
+	transferInfo *data.TransferInfo,
 	target System,
 	schema, table string,
 ) (
@@ -635,17 +552,17 @@ func insertFinalCsvs(
 	for finalCsvinfo := range finalCsvChannel {
 
 		select {
-		case <-transfer.Context.Done():
+		case <-transferInfo.Context.Done():
 			return errors.New("context cancelled")
 		default:
 		}
 
-		err = target.runInsertCmd(finalCsvinfo, transfer, schema, table)
+		err = target.runInsertCmd(finalCsvinfo, transferInfo, schema, table)
 		if err != nil {
 			return fmt.Errorf("error inserting final csv :: %v", err)
 		}
 
-		if !transfer.KeepFiles {
+		if !transferInfo.KeepFiles {
 			err = os.Remove(finalCsvinfo.FilePath)
 			if err != nil {
 				return fmt.Errorf("error removing final csv :: %v", err)
@@ -653,7 +570,7 @@ func insertFinalCsvs(
 		}
 	}
 
-	logger.Info(fmt.Sprintf("transfer %v finished inserting final csvs", transfer.ID))
+	logger.Info(fmt.Sprintf("transfer %v finished inserting final csvs", transferInfo.ID))
 
 	return nil
 }
@@ -707,7 +624,7 @@ func escapeIfNeeded(objectName string, system System) (objectNameOut string) {
 	return objectName
 }
 
-func createDbIfNotExists(transferInfo data.TransferInfo, system System) (err error) {
+func createDbIfNotExists(transferInfo *data.TransferInfo, system System) (err error) {
 
 	database := transferInfo.TargetDatabase
 
@@ -727,7 +644,7 @@ func createDbIfNotExists(transferInfo data.TransferInfo, system System) (err err
 	return nil
 }
 
-func createStagingDbIfNotExists(transferInfo data.TransferInfo, system System) (err error) {
+func createStagingDbIfNotExists(transferInfo *data.TransferInfo, system System) (err error) {
 
 	database := transferInfo.StagingDbName
 
@@ -747,7 +664,7 @@ func createStagingDbIfNotExists(transferInfo data.TransferInfo, system System) (
 	return nil
 }
 
-func createSchemaIfNotExists(transferInfo data.TransferInfo, system System) (err error) {
+func createSchemaIfNotExists(transferInfo *data.TransferInfo, system System) (err error) {
 	overridden, err := system.createSchemaIfNotExistsOverride(transferInfo.TargetSchema)
 	if overridden {
 		return err
@@ -765,7 +682,7 @@ func createSchemaIfNotExists(transferInfo data.TransferInfo, system System) (err
 	return nil
 }
 
-func dropTableIfExists(transferInfo data.TransferInfo, system System) (err error) {
+func dropTableIfExists(transferInfo *data.TransferInfo, system System) (err error) {
 	overridden, err := system.dropTableIfExistsOverride(transferInfo.TargetSchema, transferInfo.TargetTable)
 	if overridden {
 		return err
@@ -784,14 +701,14 @@ func dropTableIfExists(transferInfo data.TransferInfo, system System) (err error
 	return nil
 }
 
-func getTableColumnInfos(schema, table string, system System) (columnInfos []ColumnInfo, err error) {
+func getTableColumnInfos(transferInfo *data.TransferInfo, system System) (err error) {
+
+	schema, table := transferInfo.TargetSchema, transferInfo.TargetTable
 
 	rows, err := system.getTableColumnInfosRows(schema, table)
 	if err != nil {
-		return nil, fmt.Errorf("error getting table column infos rows :: %v", err)
+		return fmt.Errorf("error getting table column infos rows :: %v", err)
 	}
-
-	columnInfos = []ColumnInfo{}
 
 	var columnName string
 	var columnType string
@@ -803,12 +720,12 @@ func getTableColumnInfos(schema, table string, system System) (columnInfos []Col
 	for rows.Next() {
 		err := rows.Scan(&columnName, &columnType, &columnPrecision, &columnScale, &columnLength, &columnIsPrimary)
 		if err != nil {
-			return nil, fmt.Errorf("error scanning table column infos rows :: %v", err)
+			return fmt.Errorf("error scanning table column infos rows :: %v", err)
 		}
 
 		pipeType, err := system.dbTypeToPipeType(columnType)
 		if err != nil {
-			return nil, fmt.Errorf("error getting pipe type for column %v :: %v", columnName, err)
+			return fmt.Errorf("error getting pipe type for column %v :: %v", columnName, err)
 		}
 
 		decimalOk := false
@@ -821,7 +738,7 @@ func getTableColumnInfos(schema, table string, system System) (columnInfos []Col
 			lengthOk = true
 		}
 
-		columnInfo := ColumnInfo{
+		columnInfo := &data.ColumnInfo{
 			Name:         columnName,
 			PipeType:     pipeType,
 			DecimalOk:    decimalOk,
@@ -832,12 +749,16 @@ func getTableColumnInfos(schema, table string, system System) (columnInfos []Col
 			IsPrimaryKey: columnIsPrimary,
 		}
 
-		columnInfos = append(columnInfos, columnInfo)
+		transferInfo.ColumnInfos = append(transferInfo.ColumnInfos, columnInfo)
+
+		columnTreeID := fmt.Sprintf("%v_%v", transferInfo.TableNode.ID, columnName)
+
+		transferInfo.TableNode.AddChild(columnTreeID, columnName)
 	}
 
-	if len(columnInfos) == 0 {
-		return nil, fmt.Errorf("no columns found for table %v.%v", schema, table)
+	if len(transferInfo.ColumnInfos) == 0 {
+		return fmt.Errorf("no columns found for table %v.%v", schema, table)
 	}
 
-	return columnInfos, nil
+	return nil
 }

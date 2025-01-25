@@ -128,6 +128,14 @@ docker/build/transferInstance:
 	@echo 'Building docker image...'
 	docker buildx build --platform linux/amd64 -t sqlpipe/transfer-instance:latest -f transferInstance.dockerfile . --load
 
+## docker/build/transferInstance: build the cmd/sqlpipe docker image and push
+.PHONY: docker/build/transferInstance/arm64
+docker/build/transferInstance/arm64:
+	@echo 'Building cmd/transferInstance...'
+	GOOS=linux GOARCH=arm64 go build -ldflags="-w -s" -o=./bin/transferInstance ./cmd/transferInstance
+	@echo 'Building docker image...'
+	docker buildx build --platform linux/arm64 -t sqlpipe/transfer-instance:latest -f transferInstance.dockerfile . --load
+
 ## docker/push/transfer: build the cmd/sqlpipe docker image and push
 .PHONY: docker/push/transferInstance
 docker/push/transfer: docker/build/transferInstance

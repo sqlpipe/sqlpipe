@@ -74,7 +74,7 @@ func (system Snowflake) isReservedKeyword(keyword string) bool {
 	return false
 }
 
-func (system Snowflake) createTableIfNotExistsOverride(schema, table string, columnInfos []ColumnInfo) (overridden bool, err error) {
+func (system Snowflake) createTableIfNotExistsOverride(schema, table string, transferInfo *data.TransferInfo) (overridden bool, err error) {
 	return false, nil
 }
 
@@ -118,7 +118,7 @@ func (system Snowflake) driverTypeToPipeType(
 }
 
 func (system Snowflake) pipeTypeToCreateType(
-	columnInfo ColumnInfo,
+	columnInfo *data.ColumnInfo,
 ) (
 	createType string,
 	err error,
@@ -173,7 +173,7 @@ func (system Snowflake) pipeTypeToCreateType(
 	}
 }
 
-func (system Snowflake) createPipeFilesOverride(pipeFileChannelIn chan PipeFileInfo, columnInfo []ColumnInfo, transferInfo data.TransferInfo, rows *sql.Rows,
+func (system Snowflake) createPipeFilesOverride(pipeFileChannelIn chan PipeFileInfo, transferInfo *data.TransferInfo, rows *sql.Rows,
 ) (pipeFileInfoChannel chan PipeFileInfo, overridden bool) {
 	return pipeFileChannelIn, false
 }
@@ -271,7 +271,7 @@ func (system Snowflake) getPipeFileFormatters() (
 	}
 }
 
-func (system Snowflake) insertPipeFilesOverride(columnInfos []ColumnInfo, transferInfo data.TransferInfo, pipeFileInfoChannel <-chan PipeFileInfo, vacuumTable string) (overridden bool, err error) {
+func (system Snowflake) insertPipeFilesOverride(transferInfo *data.TransferInfo, pipeFileInfoChannel <-chan PipeFileInfo) (overridden bool, err error) {
 
 	table := transferInfo.TargetTable
 
@@ -296,7 +296,7 @@ func (system Snowflake) insertPipeFilesOverride(columnInfos []ColumnInfo, transf
 	}
 	logger.Info(fmt.Sprintf("created %v.sqlpipe_stage if not exists in snowflake", escapedSchemaName))
 
-	finalCsvChannel := convertPipeFiles(pipeFileInfoChannel, columnInfos, transferInfo, system)
+	finalCsvChannel := convertPipeFiles(pipeFileInfoChannel, transferInfo, system)
 
 	putCsvsChannel := system.putCsvs(finalCsvChannel, transferInfo)
 
@@ -308,18 +308,18 @@ func (system Snowflake) insertPipeFilesOverride(columnInfos []ColumnInfo, transf
 	return true, nil
 }
 
-func (system Snowflake) insertFinalCsvsOverride(transferInfo data.TransferInfo) (overridden bool, err error) {
+func (system Snowflake) insertFinalCsvsOverride(transferInfo *data.TransferInfo) (overridden bool, err error) {
 	return false, nil
 }
 
-func (system Snowflake) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInfo, finalCsvInfoChannelIn chan FinalCsvInfo, transferInfo data.TransferInfo, columnInfos []ColumnInfo,
+func (system Snowflake) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInfo, finalCsvInfoChannelIn chan FinalCsvInfo, transferInfo *data.TransferInfo,
 ) (finalCsvInfoChannel chan FinalCsvInfo, overridden bool) {
 	return finalCsvInfoChannelIn, false
 }
 
 func (system Snowflake) putCsvs(
 	finalCsvChannelIn <-chan FinalCsvInfo,
-	transferInfo data.TransferInfo,
+	transferInfo *data.TransferInfo,
 ) <-chan FinalCsvInfo {
 
 	finalCsvChannelOut := make(chan FinalCsvInfo)
@@ -436,7 +436,7 @@ func (system Snowflake) getFinalCsvFormatters() (
 
 func (system Snowflake) runInsertCmd(
 	finalCsvInfo FinalCsvInfo,
-	transferInfo data.TransferInfo,
+	transferInfo *data.TransferInfo,
 	schema, table string,
 ) (
 	err error,

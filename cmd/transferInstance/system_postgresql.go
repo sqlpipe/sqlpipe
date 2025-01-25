@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,7 +18,6 @@ import (
 type Postgresql struct {
 	Connection     *sql.DB
 	ConnectionInfo ConnectionInfo
-	SchemaTree     *data.SchemaTree
 }
 
 func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err error) {
@@ -251,7 +251,7 @@ func (system Postgresql) dbTypeToPipeType(
 }
 
 func (system Postgresql) pipeTypeToCreateType(
-	columnInfo ColumnInfo,
+	columnInfo *data.ColumnInfo,
 ) (
 	createType string,
 	err error,
@@ -323,7 +323,7 @@ func (system Postgresql) pipeTypeToCreateType(
 	}
 }
 
-func (system Postgresql) createPipeFilesOverride(pipeFileChannelIn chan PipeFileInfo, columnInfo []ColumnInfo, transferInfo data.TransferInfo, rows *sql.Rows,
+func (system Postgresql) createPipeFilesOverride(pipeFileChannelIn chan PipeFileInfo, transferInfo *data.TransferInfo, rows *sql.Rows,
 ) (pipeFileInfoChannel chan PipeFileInfo, overridden bool) {
 	return pipeFileChannelIn, false
 }
@@ -517,11 +517,11 @@ func (system Postgresql) getSqlFormatters() (
 	}
 }
 
-func (system Postgresql) insertPipeFilesOverride(columnInfo []ColumnInfo, transferInfo data.TransferInfo, pipeFileInfoChannel <-chan PipeFileInfo, vacuumTable string) (overridden bool, err error) {
+func (system Postgresql) insertPipeFilesOverride(transferInfo *data.TransferInfo, pipeFileInfoChannel <-chan PipeFileInfo) (overridden bool, err error) {
 	return false, nil
 }
 
-func (system Postgresql) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInfo, finalCsvInfoChannelIn chan FinalCsvInfo, transferInfo data.TransferInfo, columnInfos []ColumnInfo,
+func (system Postgresql) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInfo, finalCsvInfoChannelIn chan FinalCsvInfo, transferInfo *data.TransferInfo,
 ) (finalCsvInfoChannel chan FinalCsvInfo, overridden bool) {
 	return finalCsvInfoChannelIn, false
 }
@@ -608,13 +608,13 @@ func (system Postgresql) getFinalCsvFormatters() (
 	}
 }
 
-func (system Postgresql) insertFinalCsvsOverride(transferInfo data.TransferInfo) (overridden bool, err error) {
+func (system Postgresql) insertFinalCsvsOverride(transferInfo *data.TransferInfo) (overridden bool, err error) {
 	return false, nil
 }
 
 func (system Postgresql) runInsertCmd(
 	finalCsvInfo FinalCsvInfo,
-	transferInfo data.TransferInfo,
+	transferInfo *data.TransferInfo,
 	schema, table string,
 ) (
 	err error,
@@ -880,7 +880,7 @@ func (system Postgresql) createSchemaIfNotExistsOverride(schema string) (overrid
 	return false, nil
 }
 
-func (system Postgresql) createTableIfNotExistsOverride(schema, table string, columnInfos []ColumnInfo) (overridden bool, err error) {
+func (system Postgresql) createTableIfNotExistsOverride(schema, table string, transferInfo *data.TransferInfo) (overridden bool, err error) {
 	return false, nil
 }
 
@@ -893,7 +893,15 @@ func (system Postgresql) IsTableNotFoundError(err error) bool {
 }
 
 func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransfer) (*data.InstanceTransfer, error) {
-	instanceTransfer.SchemaRootNode = &data.SchemaTree{Name: system.ConnectionInfo.Hostname}
+
+	treeNodeInstanceID := fmt.Sprintf("%v_%v_%v_%v", instanceTransfer.SourceInstance.CloudProvider, instanceTransfer.SourceInstance.CloudAccountID, instanceTransfer.SourceInstance.Region, instanceTransfer.SourceInstance.ID)
+
+	instanceTransfer.SchemaTree = &data.SafeTreeNode{
+		ID:          treeNodeInstanceID,
+		Name:        instanceTransfer.SourceInstance.ID,
+		ContainsPII: false,
+		Mu:          &sync.Mutex{},
+	}
 
 	databases, err := system.listAllDatabases()
 	if err != nil {
@@ -901,7 +909,6 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 	}
 
 	dbConnInfo := system.ConnectionInfo
-	transferInfos := make([]*data.TransferInfo, 0)
 
 	for _, database := range databases {
 
@@ -910,7 +917,9 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 			continue
 		}
 
-		dbNode := instanceTransfer.SchemaRootNode.AddChild(database)
+		treeNodeDBID := fmt.Sprintf("%v_%v", treeNodeInstanceID, database)
+
+		dbNode := instanceTransfer.SchemaTree.AddChild(treeNodeDBID, database)
 
 		dbConnInfo.Database = database
 
@@ -936,14 +945,18 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 		targetTableTemplate := instanceTransfer.NamingConvention.TableNameInSnowflake
 
 		for _, schema := range schemas {
-			schemaNode := dbNode.AddChild(schema)
+			treeNodeSchemaID := fmt.Sprintf("%v_%v", treeNodeDBID, schema)
+
+			schemaNode := dbNode.AddChild(treeNodeSchemaID, schema)
 
 			tables, err := dbSystem.listAllTablesInSchema(schema)
 			if err != nil {
 				return nil, fmt.Errorf("error listing all tables in schema %v :: %v", schema, err)
 			}
 			for _, table := range tables {
-				schemaNode.AddChild(table)
+				treeNodeTableID := fmt.Sprintf("%v_%v", treeNodeSchemaID, table)
+
+				tableNode := schemaNode.AddChild(treeNodeTableID, table)
 
 				id := uuid.New().String()
 				ctx, cancel := context.WithCancel(context.Background())
@@ -1024,15 +1037,12 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 					BcpAvailable:                  instanceTransfer.BcpAvailable,
 					SqlLdrAvailable:               instanceTransfer.SqlLdrAvailable,
 					StagingDbName:                 stagingDbName,
+					TableNode:                     tableNode,
 				}
-				transferInfos = append(instanceTransfer.TransferInfos, transferInfo)
-
-				fmt.Printf("TransferInfo: %v\n", transferInfo)
+				instanceTransfer.TransferInfos = append(instanceTransfer.TransferInfos, transferInfo)
 			}
 		}
 	}
-
-	instanceTransfer.TransferInfos = transferInfos
 
 	return instanceTransfer, nil
 }

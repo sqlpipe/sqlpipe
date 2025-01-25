@@ -110,7 +110,7 @@ func transferInstance() error {
 		logger.Info("starting transfer", OriginalDatabaseName, transferInfo.SourceDatabase, "schema", transferInfo.SourceSchema, "table", transferInfo.SourceTable)
 
 		transferErrG.Go(func() error {
-			err = runTransfer(*transferInfo)
+			err = runTransfer(transferInfo)
 			if err != nil {
 				logger.Error("error running transfer", "error", err, "database", transferInfo.SourceDatabase, "schema", transferInfo.SourceSchema, "table", transferInfo.SourceTable)
 				return err
