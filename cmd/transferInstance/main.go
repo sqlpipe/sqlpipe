@@ -50,6 +50,7 @@ func main() {
 	flag.StringVar(&instanceTransfer.SourceInstance.Host, "source-instance-host", "", "source host")
 	flag.IntVar(&instanceTransfer.SourceInstance.Port, "source-instance-port", 0, "source port")
 	flag.StringVar(&instanceTransfer.SourceInstance.Username, "source-instance-username", "", "source username")
+	flag.StringVar(&instanceTransfer.SourceInstance.Password, "source-instance-password", "", "source password (if blank, a random password will be generated and applied to the instance)")
 	flag.StringVar(&instanceTransfer.RestoredInstanceID, "restored-instance-id", "", "backup id")
 	flag.StringVar(&instanceTransfer.TargetType, "target-type", "", "target type")
 	flag.StringVar(&instanceTransfer.TargetHost, "target-host", "", "target host")
@@ -57,6 +58,8 @@ func main() {
 	flag.StringVar(&instanceTransfer.TargetPassword, "target-password", "", "target password")
 	flag.StringVar(&instanceTransfer.CloudUsername, "cloud-username", "", "account username")
 	flag.StringVar(&instanceTransfer.CloudPassword, "cloud-password", "", "account password")
+	flag.BoolVar(&instanceTransfer.ScanForPII, "scan-for-pii", false, "scan for pii")
+	flag.BoolVar(&instanceTransfer.DeleteRestoredInstanceAfterTransfer, "delete-restored-instance-after-transfer", true, "delete restored instance after transfer")
 	flag.StringVar(&instanceTransfer.Delimiter, "delimiter", "{dlm}", "delimiter")
 	flag.StringVar(&instanceTransfer.Newline, "newline", "{nwln}", "newline")
 	flag.StringVar(&instanceTransfer.Null, "null", "{nll}", "null")
@@ -74,34 +77,37 @@ func main() {
 
 	var err error
 
-	deleteCredentials := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
-		instanceTransfer.CloudUsername,
-		instanceTransfer.CloudPassword,
-		"",
-	))
+	if instanceTransfer.DeleteRestoredInstanceAfterTransfer {
 
-	deleteCfg, err := awsConfig.LoadDefaultConfig(context.Background(), awsConfig.WithRegion(instanceTransfer.SourceInstance.Region), awsConfig.WithCredentialsProvider(deleteCredentials))
-	if err != nil {
-		logger.Error("failed to load AWS configuration", "error", err)
-		os.Exit(1)
-	}
+		deleteCredentials := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
+			instanceTransfer.CloudUsername,
+			instanceTransfer.CloudPassword,
+			"",
+		))
 
-	deleteClient := rds.NewFromConfig(deleteCfg)
-
-	// Input parameters for deletion
-	input := &rds.DeleteDBInstanceInput{
-		DBInstanceIdentifier:   aws.String(instanceTransfer.RestoredInstanceID),
-		SkipFinalSnapshot:      aws.Bool(true),
-		DeleteAutomatedBackups: aws.Bool(true),
-	}
-
-	defer func() {
-		_, err = deleteClient.DeleteDBInstance(context.Background(), input)
+		deleteCfg, err := awsConfig.LoadDefaultConfig(context.Background(), awsConfig.WithRegion(instanceTransfer.SourceInstance.Region), awsConfig.WithCredentialsProvider(deleteCredentials))
 		if err != nil {
-			logger.Error("failed to terminate RDS instance", BackupInstanceId, instanceTransfer.RestoredInstanceID, "error", err)
+			logger.Error("failed to load AWS configuration", "error", err)
 			os.Exit(1)
 		}
-	}()
+
+		deleteClient := rds.NewFromConfig(deleteCfg)
+
+		// Input parameters for deletion
+		input := &rds.DeleteDBInstanceInput{
+			DBInstanceIdentifier:   aws.String(instanceTransfer.RestoredInstanceID),
+			SkipFinalSnapshot:      aws.Bool(true),
+			DeleteAutomatedBackups: aws.Bool(true),
+		}
+
+		defer func() {
+			_, err = deleteClient.DeleteDBInstance(context.Background(), input)
+			if err != nil {
+				logger.Error("failed to terminate RDS instance", BackupInstanceId, instanceTransfer.RestoredInstanceID, "error", err)
+				os.Exit(1)
+			}
+		}()
+	}
 
 	checkDeps(instanceTransfer)
 

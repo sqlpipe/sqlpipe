@@ -15,13 +15,18 @@ WORKDIR /presidio/presidio-structured
 RUN /root/.local/bin/poetry install --all-extras
 RUN /root/.local/bin/poetry run python -m spacy download en_core_web_lg
 RUN echo "export PATH=$(/root/.local/bin/poetry env info --path)/bin:$PATH" >> /root/.bashrc
+RUN echo -n "$(/root/.local/bin/poetry env info --path)/bin/python" >> /python_location.txt
 
 WORKDIR /
-COPY ./bin/transferInstance /usr/local/bin/transferInstance
 COPY ./LICENSE.MD /SQLPIPE-LICENSE.MD
+COPY ./pii_scan.py /pii_scan.py
+COPY ./bin/transferInstance /usr/local/bin/transferInstance
 ENV DELIMITER="{dlm}"
 ENV NEWLINE="{nwln}"
 ENV NULL="{nll}"
+
+
+# CMD ["/bin/bash"]
 
 ENTRYPOINT update-ca-certificates && /usr/local/bin/transferInstance \
     -instance-transfer-id="${INSTANCE_TRANSFER_ID}" \
@@ -37,6 +42,7 @@ ENTRYPOINT update-ca-certificates && /usr/local/bin/transferInstance \
     -source-instance-host="${SOURCE_INSTANCE_HOST}" \
     -source-instance-port="${SOURCE_INSTANCE_PORT}" \
     -source-instance-username="${SOURCE_INSTANCE_USERNAME}" \
+    -source-instance-password="${SOURCE_INSTANCE_PASSWORD}" \
     -restored-instance-id="${RESTORED_INSTANCE_ID}" \
     -target-type="${TARGET_TYPE}" \
     -target-host="${TARGET_HOST}" \
@@ -46,5 +52,7 @@ ENTRYPOINT update-ca-certificates && /usr/local/bin/transferInstance \
     -cloud-password="${CLOUD_PASSWORD}" \
     -delimiter="${DELIMITER}" \
     -newline="${NEWLINE}" \
-    -null="${NULL}"
+    -null="${NULL}" \
+    -scan-for-pii="${SCAN_FOR_PII}" \
+    -delete-restored-instance-after-transfer="${DELETE_RESTORED_INSTANCE_AFTER_TRANSFER}"
 

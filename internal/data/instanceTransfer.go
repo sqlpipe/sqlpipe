@@ -5,24 +5,27 @@ import (
 )
 
 type InstanceTransfer struct {
-	ID                 string
-	NamingConvention   *NamingConvention
-	SourceInstance     *Instance
-	RestoredInstanceID string
-	TargetType         string
-	TargetHost         string
-	TargetUsername     string
-	TargetPassword     string
-	CloudUsername      string
-	CloudPassword      string
-	Delimiter          string
-	Newline            string
-	Null               string
-	PsqlAvailable      bool
-	BcpAvailable       bool
-	SqlLdrAvailable    bool
-	TransferInfos      []*TransferInfo
-	SchemaTree         *SafeTreeNode
+	ID                                  string
+	NamingConvention                    *NamingConvention
+	SourceInstance                      *Instance
+	RestoredInstanceID                  string
+	TargetType                          string
+	TargetHost                          string
+	TargetUsername                      string
+	TargetPassword                      string
+	CloudUsername                       string
+	CloudPassword                       string
+	Delimiter                           string
+	Newline                             string
+	Null                                string
+	PsqlAvailable                       bool
+	BcpAvailable                        bool
+	SqlLdrAvailable                     bool
+	TransferInfos                       []*TransferInfo
+	SchemaTree                          *SafeTreeNode
+	ScanForPII                          bool
+	StagingDbNames                      []string
+	DeleteRestoredInstanceAfterTransfer bool
 }
 
 var (

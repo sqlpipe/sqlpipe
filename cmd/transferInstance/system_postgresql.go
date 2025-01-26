@@ -1038,6 +1038,7 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 					SqlLdrAvailable:               instanceTransfer.SqlLdrAvailable,
 					StagingDbName:                 stagingDbName,
 					TableNode:                     tableNode,
+					ScanForPII:                    instanceTransfer.ScanForPII,
 				}
 				instanceTransfer.TransferInfos = append(instanceTransfer.TransferInfos, transferInfo)
 			}

@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -412,6 +414,131 @@ func insertPipeFiles(pipeFileChannel <-chan PipeFileInfo, transferInfo *data.Tra
 	}
 
 	return nil
+}
+
+func scanPipeFilesForPii(pipeFileInfoChannel <-chan PipeFileInfo, transferInfo *data.TransferInfo) <-chan PipeFileInfo {
+	scannedPipeFileChannel := make(chan PipeFileInfo)
+
+	go func() {
+		defer close(scannedPipeFileChannel)
+
+		for pipeFileInfo := range pipeFileInfoChannel {
+
+			select {
+			case <-transferInfo.Context.Done():
+				return
+			default:
+			}
+
+			if !transferInfo.ScannedForPII {
+
+				// Create a new pipe file with column names as the first row
+				columnNamesFile, err := os.Create(filepath.Join(transferInfo.PipeFileDir, "column_names.pipe"))
+				if err != nil {
+					transferInfo.Error = fmt.Sprintf("error creating column names file :: %v", err)
+					logger.Error(transferInfo.Error)
+					return
+				}
+
+				columnNamesWriter := csv.NewWriter(columnNamesFile)
+				columnNames := make([]string, len(transferInfo.ColumnInfos))
+				for i, colInfo := range transferInfo.ColumnInfos {
+					columnNames[i] = colInfo.Name
+				}
+
+				err = columnNamesWriter.Write(columnNames)
+				if err != nil {
+					transferInfo.Error = fmt.Sprintf("error writing column names to file :: %v", err)
+					logger.Error(transferInfo.Error)
+					return
+				}
+
+				// Write the contents of the current pipe file to the columnNamesFile
+				pipeFile, err := os.Open(pipeFileInfo.FilePath)
+				if err != nil {
+					transferInfo.Error = fmt.Sprintf("error opening pipe file :: %v", err)
+					logger.Error(transferInfo.Error)
+					return
+				}
+
+				pipeReader := csv.NewReader(pipeFile)
+				for {
+					record, err := pipeReader.Read()
+					if err == io.EOF {
+						break
+					}
+					if err != nil {
+						transferInfo.Error = fmt.Sprintf("error reading pipe file :: %v", err)
+						logger.Error(transferInfo.Error)
+						return
+					}
+
+					err = columnNamesWriter.Write(record)
+					if err != nil {
+						transferInfo.Error = fmt.Sprintf("error writing to column names file :: %v", err)
+						logger.Error(transferInfo.Error)
+						return
+					}
+				}
+
+				columnNamesWriter.Flush()
+				columnNamesFile.Close()
+				pipeFile.Close()
+
+				custom_strategy_threshold := .4
+				custom_strategy_percentile := .5
+
+				// find python binary location by getting text written at /python_location.txt
+				pythonLocationBytes, err := os.ReadFile("/python_location.txt")
+				if err != nil {
+					transferInfo.Error = fmt.Sprintf("error reading python location :: %v", err)
+					logger.Error(transferInfo.Error)
+					return
+				}
+
+				// Command to run the Python script
+				cmd := exec.Command(string(pythonLocationBytes), "/pii_scan.py", columnNamesFile.Name(), fmt.Sprintf("%f", custom_strategy_threshold), fmt.Sprintf("%f", custom_strategy_percentile))
+
+				// Capture standard output and error
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					transferInfo.Error = fmt.Sprintf("error scanning for PII :: %v", string(output))
+					logger.Error("error scanning for PII", "output", string(output), "error", err)
+					return
+				}
+
+				// Parse the JSON output
+				var result map[string]interface{}
+				if err := json.Unmarshal(output, &result); err != nil {
+					transferInfo.Error = fmt.Sprintf("error parsing JSON output :: %v", err)
+					logger.Error(transferInfo.Error)
+					return
+				}
+
+				os.Remove(columnNamesFile.Name())
+
+				// Output the result
+				// fmt.Printf("Analysis Result: %+v\n", result)
+
+				for columnName := range result {
+					columnNode, exists := transferInfo.TableNode.FindChildNodeByName(columnName)
+					if !exists {
+						logger.Error("column not found in tree", "column", columnName)
+						return
+					} else {
+						// logger.Info("found node", "node", node.Name)
+						columnNode.ChangeContainsPII(true, result[columnName].(string))
+					}
+				}
+			}
+
+			transferInfo.ScannedForPII = true
+
+			scannedPipeFileChannel <- pipeFileInfo
+		}
+	}()
+
+	return scannedPipeFileChannel
 }
 
 func convertPipeFiles(

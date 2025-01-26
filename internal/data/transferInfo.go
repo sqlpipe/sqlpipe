@@ -38,6 +38,8 @@ type TransferInfo struct {
 	SqlLdrAvailable               bool     `json:"-"`
 	StagingDbName                 string   `json:"staging-db-name"`
 	TableNode                     *SafeTreeNode
+	ScanForPII                    bool `json:"scan-for-pii"`
+	ScannedForPII                 bool `json:"scanned-for-pii"`
 	ColumnInfos                   []*ColumnInfo
 	Context                       context.Context
 	Cancel                        context.CancelFunc

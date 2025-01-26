@@ -55,13 +55,7 @@ func runTransfer(transferInfo *data.TransferInfo) error {
 		return fmt.Errorf("error creating staging database :: %v", err)
 	}
 
-	defer func() {
-		dropStagingDbQuery := fmt.Sprintf(`DROP DATABASE IF EXISTS %v`, transferInfo.StagingDbName)
-		err = target.exec(dropStagingDbQuery)
-		if err != nil {
-			logger.Error("error dropping staging database", "error", err)
-		}
-	}()
+	instanceTransfer.StagingDbNames = append(instanceTransfer.StagingDbNames, transferInfo.StagingDbName)
 
 	targetConnectionInfo.Database = transferInfo.StagingDbName
 
@@ -92,8 +86,6 @@ func runTransfer(transferInfo *data.TransferInfo) error {
 		return fmt.Errorf("error getting source table column infos :: %v", err)
 	}
 
-	instanceTransfer.SchemaTree.PrettyPrint("  ")
-
 	rows, err := source.query(fmt.Sprintf(`SELECT * FROM %v`, escapedSourceSchemaPeriodTable))
 	if err != nil {
 		return fmt.Errorf("error querying source :: %v", err)
@@ -107,9 +99,13 @@ func runTransfer(transferInfo *data.TransferInfo) error {
 		}
 	}
 
-	newPipeFiles := createPipeFiles(transferInfo, rows, source)
+	pipeFiles := createPipeFiles(transferInfo, rows, source)
 
-	err = insertPipeFiles(newPipeFiles, transferInfo, target)
+	if transferInfo.ScanForPII {
+		pipeFiles = scanPipeFilesForPii(pipeFiles, transferInfo)
+	}
+
+	err = insertPipeFiles(pipeFiles, transferInfo, target)
 	if err != nil {
 		return fmt.Errorf("error inserting pipe files :: %v", err)
 	}

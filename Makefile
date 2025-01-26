@@ -138,7 +138,7 @@ docker/build/transferInstance/arm64:
 
 ## docker/push/transfer: build the cmd/sqlpipe docker image and push
 .PHONY: docker/push/transferInstance
-docker/push/transfer: docker/build/transferInstance
+docker/push/transferInstance: docker/build/transferInstance
 	@echo 'Pushing docker image...'
 	docker push sqlpipe/transfer-instance:latest
 
