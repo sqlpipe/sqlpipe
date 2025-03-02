@@ -521,8 +521,7 @@ func (system Postgresql) insertPipeFilesOverride(transferInfo *data.TransferInfo
 	return false, nil
 }
 
-func (system Postgresql) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInfo, finalCsvInfoChannelIn chan FinalCsvInfo, transferInfo *data.TransferInfo,
-) (finalCsvInfoChannel chan FinalCsvInfo, overridden bool) {
+func (system Postgresql) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInfo, finalCsvInfoChannelIn chan FinalCsvInfo, transferInfo *data.TransferInfo) (finalCsvInfoChannel chan FinalCsvInfo, overridden bool) {
 	return finalCsvInfoChannelIn, false
 }
 
@@ -918,7 +917,6 @@ func (system Postgresql) discoverStructure(instanceTransfer *data.InstanceTransf
 		}
 
 		treeNodeDBID := fmt.Sprintf("%v_%v", treeNodeInstanceID, database)
-
 		dbNode := instanceTransfer.SchemaTree.AddChild(treeNodeDBID, database)
 
 		dbConnInfo.Database = database

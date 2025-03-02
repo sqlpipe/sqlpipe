@@ -99,12 +99,12 @@ func newSystem(connectionInfo ConnectionInfo) (system System, err error) {
 	switch connectionInfo.Type {
 	case "postgresql":
 		return newPostgresql(connectionInfo)
-	// case "mssql":
-	// 	return newMssql(connectionInfo)
+	case "mssql":
+		return newMssql(connectionInfo)
 	// case "mysql":
 	// 	return newMysql(connectionInfo)
-	// case "oracle":
-	// 	return newOracle(connectionInfo)
+	case "oracle":
+		return newOracle(connectionInfo)
 	case "snowflake":
 		return newSnowflake(connectionInfo)
 	default:
@@ -485,9 +485,6 @@ func scanPipeFilesForPii(pipeFileInfoChannel <-chan PipeFileInfo, transferInfo *
 				columnNamesFile.Close()
 				pipeFile.Close()
 
-				custom_strategy_threshold := .4
-				custom_strategy_percentile := .5
-
 				// find python binary location by getting text written at /python_location.txt
 				pythonLocationBytes, err := os.ReadFile("/python_location.txt")
 				if err != nil {
@@ -496,8 +493,10 @@ func scanPipeFilesForPii(pipeFileInfoChannel <-chan PipeFileInfo, transferInfo *
 					return
 				}
 
+				logger.Info("running pii_scan.py", "python_file", columnNamesFile.Name(), "custom_strategry_threshold", instanceTransfer.CustomStrategyThreshold, "custom_strategy_percentile", instanceTransfer.CustomStrategyPercentile, "num_ros_to_scan_for_pii", instanceTransfer.NumRowsToScannForPII)
+
 				// Command to run the Python script
-				cmd := exec.Command(string(pythonLocationBytes), "/pii_scan.py", columnNamesFile.Name(), fmt.Sprintf("%f", custom_strategy_threshold), fmt.Sprintf("%f", custom_strategy_percentile))
+				cmd := exec.Command(string(pythonLocationBytes), "/pii_scan.py", columnNamesFile.Name(), fmt.Sprintf("%f", instanceTransfer.CustomStrategyThreshold), fmt.Sprintf("%f", instanceTransfer.CustomStrategyPercentile), fmt.Sprintf("%d", instanceTransfer.NumRowsToScannForPII))
 
 				// Capture standard output and error
 				output, err := cmd.CombinedOutput()
@@ -518,7 +517,7 @@ func scanPipeFilesForPii(pipeFileInfoChannel <-chan PipeFileInfo, transferInfo *
 				os.Remove(columnNamesFile.Name())
 
 				// Output the result
-				// fmt.Printf("Analysis Result: %+v\n", result)
+				fmt.Printf("Analysis Result: %+v\n", result)
 
 				for columnName := range result {
 					columnNode, exists := transferInfo.TableNode.FindChildNodeByName(columnName)

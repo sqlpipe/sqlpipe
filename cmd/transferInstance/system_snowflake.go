@@ -312,8 +312,7 @@ func (system Snowflake) insertFinalCsvsOverride(transferInfo *data.TransferInfo)
 	return false, nil
 }
 
-func (system Snowflake) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInfo, finalCsvInfoChannelIn chan FinalCsvInfo, transferInfo *data.TransferInfo,
-) (finalCsvInfoChannel chan FinalCsvInfo, overridden bool) {
+func (system Snowflake) convertPipeFilesOverride(pipeFilePath <-chan PipeFileInfo, finalCsvInfoChannelIn chan FinalCsvInfo, transferInfo *data.TransferInfo) (finalCsvInfoChannel chan FinalCsvInfo, overridden bool) {
 	return finalCsvInfoChannelIn, false
 }
 

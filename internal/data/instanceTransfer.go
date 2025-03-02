@@ -26,6 +26,9 @@ type InstanceTransfer struct {
 	ScanForPII                          bool
 	StagingDbNames                      []string
 	DeleteRestoredInstanceAfterTransfer bool
+	CustomStrategyThreshold             float64
+	CustomStrategyPercentile            float64
+	NumRowsToScannForPII                int
 }
 
 var (

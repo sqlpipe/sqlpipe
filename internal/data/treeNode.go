@@ -74,17 +74,16 @@ func (n *SafeTreeNode) FindChildNodeByName(name string) (*SafeTreeNode, bool) {
 func (n *SafeTreeNode) RecursivelySearchForPII() bool {
 
 	if n.ContainsPII {
-		return true
+		n.ContainsPII = true
 	}
 
 	for _, child := range n.Children {
 		if child.RecursivelySearchForPII() {
 			n.ContainsPII = true
-			return true
 		}
 	}
 
-	return false
+	return n.ContainsPII
 }
 
 func (n *SafeTreeNode) CloneWithoutParents() *SafeTreeNode {

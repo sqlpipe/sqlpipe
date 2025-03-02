@@ -54,5 +54,8 @@ ENTRYPOINT update-ca-certificates && /usr/local/bin/transferInstance \
     -newline="${NEWLINE}" \
     -null="${NULL}" \
     -scan-for-pii="${SCAN_FOR_PII}" \
-    -delete-restored-instance-after-transfer="${DELETE_RESTORED_INSTANCE_AFTER_TRANSFER}"
+    -delete-restored-instance-after-transfer="${DELETE_RESTORED_INSTANCE_AFTER_TRANSFER}" \
+    -custom-strategy-threshold="${CUSTOM_STRATEGY_THRESHOLD}" \
+    -custom-strategy-percentile="${CUSTOM_STRATEGY_PERCENTILE}" \
+    -num-rows-to-scan-for-pii="${NUM_ROWS_TO_SCAN_FOR_PII}"
 

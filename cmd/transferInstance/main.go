@@ -63,6 +63,9 @@ func main() {
 	flag.StringVar(&instanceTransfer.Delimiter, "delimiter", "{dlm}", "delimiter")
 	flag.StringVar(&instanceTransfer.Newline, "newline", "{nwln}", "newline")
 	flag.StringVar(&instanceTransfer.Null, "null", "{nll}", "null")
+	flag.Float64Var(&instanceTransfer.CustomStrategyThreshold, "custom-strategy-threshold", 0.4, "custom strategy threshold")
+	flag.Float64Var(&instanceTransfer.CustomStrategyPercentile, "custom-strategy-percentile", 0.5, "custom strategy percentile")
+	flag.IntVar(&instanceTransfer.NumRowsToScannForPII, "num-rows-to-scan-for-pii", 1000, "num rows to scan for pii")
 
 	displayVersion := flag.Bool("version", false, "display version and exit")
 

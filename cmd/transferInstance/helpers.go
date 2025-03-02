@@ -2,8 +2,10 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/csv"
 	"fmt"
 	"math/big"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
@@ -80,34 +82,34 @@ func ProgramVersion() string {
 	return revision
 }
 
-// func maxColumnByteLength(filename, null string, columnIndex int) (int, error) {
-// 	file, err := os.Open(filename)
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	defer file.Close()
+func maxColumnByteLength(filename, null string, columnIndex int) (int, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
 
-// 	r := csv.NewReader(file)
-// 	maxLength := 0
+	r := csv.NewReader(file)
+	maxLength := 0
 
-// 	for {
-// 		record, err := r.Read()
-// 		if err != nil {
-// 			break
-// 		}
+	for {
+		record, err := r.Read()
+		if err != nil {
+			break
+		}
 
-// 		if columnIndex < 0 || columnIndex >= len(record) {
-// 			return 0, fmt.Errorf("invalid column index %d", columnIndex)
-// 		}
+		if columnIndex < 0 || columnIndex >= len(record) {
+			return 0, fmt.Errorf("invalid column index %d", columnIndex)
+		}
 
-// 		length := len(record[columnIndex])
-// 		if length > maxLength {
-// 			maxLength = length
-// 		}
-// 	}
+		length := len(record[columnIndex])
+		if length > maxLength {
+			maxLength = length
+		}
+	}
 
-// 	return maxLength + len(null), nil
-// }
+	return maxLength + len(null), nil
+}
 
 func checkDeps(instanceTransfer *data.InstanceTransfer) {
 	checkPsql(instanceTransfer)
