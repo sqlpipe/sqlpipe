@@ -22,8 +22,8 @@ type Postgresql struct {
 
 func newPostgresql(connectionInfo ConnectionInfo) (postgresql Postgresql, err error) {
 
+	// connectionString := fmt.Sprintf("postgresql://%v:%v@%v:%v/%v?sslmode=verify-full", connectionInfo.Username,
 	connectionString := fmt.Sprintf("postgresql://%v:%v@%v:%v/%v", connectionInfo.Username,
-		// connectionString := fmt.Sprintf("postgresql://%v:%v@%v:%v/%v?sslmode=verify-full", connectionInfo.Username,
 		connectionInfo.Password, connectionInfo.Hostname, connectionInfo.Port, connectionInfo.Database)
 
 	db, err := openConnectionPool(connectionString, DriverPostgreSQL)
@@ -60,7 +60,7 @@ func (system Postgresql) queryRow(query string) (row *sql.Row) {
 func (system Postgresql) exec(query string) (err error) {
 	_, err = system.Connection.Exec(query)
 	if err != nil {
-		return fmt.Errorf("error running ddl/dml on :: %v :: %v", query, err)
+		return fmt.Errorf("error running ddl/dml :: %v :: %v", query, err)
 	}
 	return nil
 }

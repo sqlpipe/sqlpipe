@@ -16,73 +16,80 @@ func transferInstance() error {
 
 	var err error
 
-	awsConfig := aws.Config{
-		Credentials: credentials.NewStaticCredentialsProvider(instanceTransfer.CloudUsername, instanceTransfer.CloudPassword, ""),
-		Region:      instanceTransfer.SourceInstance.Region,
-	}
-
-	rdsClient := rds.NewFromConfig(awsConfig)
-
-	instanceTransfer.SourceInstance.Password, err = generateRandomString(20)
-	if err != nil {
-		return fmt.Errorf("error generating random password :: %v", err)
-	}
-
-	changePasswordInput := &rds.ModifyDBInstanceInput{
-		DBInstanceIdentifier: aws.String(instanceTransfer.RestoredInstanceID),
-		MasterUserPassword:   aws.String(instanceTransfer.SourceInstance.Password),
-		ApplyImmediately:     aws.Bool(true),
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	logger.Info("changing backup instances password", BackupInstanceId, instanceTransfer.RestoredInstanceID)
-
-	_, err = rdsClient.ModifyDBInstance(ctx, changePasswordInput)
-	if err != nil {
-		return fmt.Errorf("error changing source password :: %v", err)
-	}
-
-	// it takes a few seconds for the password change process to start
-	time.Sleep(30 * time.Second)
-
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-
-	for {
-
-		if ctx.Err() != nil {
-			return fmt.Errorf("timeout waiting for instance to be available")
+	if instanceTransfer.SourceInstance.Password == "" {
+		awsConfig := aws.Config{
+			Credentials: credentials.NewStaticCredentialsProvider(instanceTransfer.CloudUsername, instanceTransfer.CloudPassword, ""),
+			Region:      instanceTransfer.SourceInstance.Region,
 		}
 
-		time.Sleep(5 * time.Second)
+		rdsClient := rds.NewFromConfig(awsConfig)
+		instanceTransfer.SourceInstance.Password, err = generateRandomString(20)
+		if err != nil {
+			return fmt.Errorf("error generating random password :: %v", err)
+		}
 
+		changePasswordInput := &rds.ModifyDBInstanceInput{
+			DBInstanceIdentifier: aws.String(instanceTransfer.RestoredInstanceID),
+			MasterUserPassword:   aws.String(instanceTransfer.SourceInstance.Password),
+			ApplyImmediately:     aws.Bool(true),
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		dbInstances, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
-			DBInstanceIdentifier: aws.String(instanceTransfer.RestoredInstanceID),
-		})
+		logger.Info("changing backup instances password", BackupInstanceId, instanceTransfer.RestoredInstanceID)
+
+		_, err = rdsClient.ModifyDBInstance(ctx, changePasswordInput)
 		if err != nil {
-			return fmt.Errorf("error describing backup instance :: %v", err)
+			return fmt.Errorf("error changing source password :: %v", err)
 		}
 
-		if len(dbInstances.DBInstances) == 0 {
-			return fmt.Errorf("backup instance id %v not found", instanceTransfer.RestoredInstanceID)
+		// it takes a few seconds for the password change process to start
+		time.Sleep(30 * time.Second)
+
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+
+		for {
+
+			if ctx.Err() != nil {
+				return fmt.Errorf("timeout waiting for instance to be available")
+			}
+
+			time.Sleep(5 * time.Second)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			dbInstances, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
+				DBInstanceIdentifier: aws.String(instanceTransfer.RestoredInstanceID),
+			})
+			if err != nil {
+				return fmt.Errorf("error describing backup instance :: %v", err)
+			}
+
+			if len(dbInstances.DBInstances) == 0 {
+				return fmt.Errorf("backup instance id %v not found", instanceTransfer.RestoredInstanceID)
+			}
+
+			logger.Info("now checking instance", "instance status", fmt.Sprintf("%v", *dbInstances.DBInstances[0].DBInstanceStatus))
+
+			if *dbInstances.DBInstances[0].DBInstanceStatus == "available" {
+				break
+			}
 		}
 
-		logger.Info("now checking instance", "instance status", fmt.Sprintf("%v", *dbInstances.DBInstances[0].DBInstanceStatus))
-
-		if *dbInstances.DBInstances[0].DBInstanceStatus == "available" {
-			break
-		}
+		logger.Info("source instance password has changed, starting transfer", BackupInstanceId, instanceTransfer.RestoredInstanceID)
 	}
-
-	logger.Info("source instance password has changed, starting transfer", BackupInstanceId, instanceTransfer.RestoredInstanceID)
-
 	var dbName string
 
 	if instanceTransfer.SourceInstance.Type == "oracle" {
+
+		awsConfig := aws.Config{
+			Credentials: credentials.NewStaticCredentialsProvider(instanceTransfer.CloudUsername, instanceTransfer.CloudPassword, ""),
+			Region:      instanceTransfer.SourceInstance.Region,
+		}
+
+		rdsClient := rds.NewFromConfig(awsConfig)
 
 		describeDBInstancesInput := &rds.DescribeDBInstancesInput{
 			DBInstanceIdentifier: aws.String(instanceTransfer.RestoredInstanceID),

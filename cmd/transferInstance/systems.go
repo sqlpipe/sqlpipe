@@ -101,8 +101,8 @@ func newSystem(connectionInfo ConnectionInfo) (system System, err error) {
 		return newPostgresql(connectionInfo)
 	case "mssql":
 		return newMssql(connectionInfo)
-	// case "mysql":
-	// 	return newMysql(connectionInfo)
+	case "mysql":
+		return newMysql(connectionInfo)
 	case "oracle":
 		return newOracle(connectionInfo)
 	case "snowflake":
