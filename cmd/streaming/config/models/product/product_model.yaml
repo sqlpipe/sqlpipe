@@ -1,0 +1,123 @@
+---
+"$schema": https://json-schema.org/draft/2020-12/schema
+title: Product
+type: object
+properties:
+
+  ### ID ###
+  id:
+    type: integer # Use valid JSON Schema types: https://json-schema.org/understanding-json-schema/reference/type
+
+    ProdDB: # Name of the system. Must match a name in systems.yaml
+      search_key: true # Can we use this field to search for this object, in this system?
+      receive_from: true # Receive this field from the system? False if blank
+      location:
+        database: prod
+        schema: public
+        table: products
+        column: id
+    
+    DataWarehouse:
+      search_key: true
+      push_to: true # Push this field to the system? False if blank
+      location: 
+        database: analytics
+        schema: public
+        table: products
+        column: id
+      required_for: # Is this field required for certain operations? create, update, delete
+        - create
+
+  ### Stripe ID ###
+  stripe_id:
+    type: string
+
+    ProdDB:
+      search_key: true
+      push_to: true
+      location:
+        database: prod
+        schema: public
+        table: products
+        column: stripe_id
+      required_for:
+        - create
+
+    PaymentGateway:
+      search_key: true
+      receive_from: true
+      location:
+        object: product
+        field: id
+
+    DataWarehouse:
+      search_key: true
+      push_to: true
+      location:
+        database: analytics
+        schema: public
+        table: products
+        column: stripe_id
+      required_for:
+        - create
+      
+  ### Name ###
+  name:
+    type: string
+
+    ProdDB:
+      push_to: true
+      receive_from: true
+      location:
+        database: prod
+        schema: public
+        table: products
+        column: name
+      required_for:
+        - create
+
+    PaymentGateway:
+      push_to: true
+      receive_from: true
+      location:
+        object: product
+        field: name
+      required_for:
+        - create
+
+    DataWarehouse:
+      push_to: true
+      location:
+        database: analytics
+        schema: public
+        table: products
+        column: name
+      required_for:
+        - create
+
+  ### Price ###
+  default_price:
+    type: string
+    ProdDB:
+      push_to: true
+      location: 
+        database: prod
+        schema: public
+        table: products
+        column: default_price
+      required_for:
+        - create
+
+    PaymentGateway:
+      receive_from: true
+      location:
+        object: product
+        field: default_price
+
+    DataWarehouse:
+      push_to: true
+      location:
+        database: analytics
+        schema: public
+        table: products
+        column: default_price

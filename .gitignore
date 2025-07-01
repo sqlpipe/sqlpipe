@@ -4,3 +4,4 @@ bin/*
 /hidden
 .hidden
 */.DS_Store
+cmd/streaming/sample.yaml

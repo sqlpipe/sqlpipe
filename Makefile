@@ -112,3 +112,9 @@ build/docker:
 	docker buildx build --platform linux/amd64 -t sqlpipe/sqlpipe:latest -f sqlpipe.dockerfile . --load
 	@echo 'Pushing docker image...'
 	docker push sqlpipe/sqlpipe:latest
+
+## test: run tests in the /test directory
+.PHONY: test
+test:
+	@echo 'Running tests in the /test directory...'
+	go test -v -count=1 ./cmd/streaming/...
