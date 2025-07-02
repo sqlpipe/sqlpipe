@@ -1,6 +1,0 @@
-PaymentGateway:
-  type: "stripe"
-  route: "stripe-test-account-webhooks"
-  api_key: "XXX"
-  endpoint_secret: "XXX"
-  push_frequency: 5s
