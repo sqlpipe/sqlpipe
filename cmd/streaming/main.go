@@ -42,7 +42,7 @@ type application struct {
 func main() {
 
 	var cfg config
-	flag.IntVar(&cfg.port, "port", 4000, "API server port")
+	flag.IntVar(&cfg.port, "port", 4000, "API port")
 	flag.StringVar(&cfg.systemsYamlDir, "systems-yaml-dir", "./systems", "Directory for systems YAML configuration")
 	flag.StringVar(&cfg.modelsYamlDir, "models-yaml-dir", "./models", "Directory for models YAML configuration")
 	flag.StringVar(&cfg.queueDir, "queue-dir", "/tmp", "Directory for queue files")
