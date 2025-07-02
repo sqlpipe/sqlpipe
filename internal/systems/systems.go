@@ -27,7 +27,7 @@ var (
 	DriverSnowflake  = "snowflake"
 )
 
-type ConnectionInfo struct {
+type SystemInfo struct {
 	Name               string        `yaml:"name" json:"name"`
 	Type               string        `yaml:"type" json:"type"`
 	ConnectionString   string        `yaml:"dsn" json:"dsn"`
@@ -38,19 +38,24 @@ type ConnectionInfo struct {
 	Port               int           `yaml:"port,omitempty" json:"port,omitempty"`
 	Database           string        `yaml:"database,omitempty" json:"database,omitempty"`
 	Username           string        `yaml:"username,omitempty" json:"username,omitempty"`
-	Password           string        `yaml:"password,omitempty" json:"password,omitempty"`
+	Password           string        `yaml:"-" json:"-"`
+	Dsn                string        `yaml:"-" json:"-"`
+	Route              string        `yaml:"route,omitempty" json:"route,omitempty"`
+	ApiKey             string        `yaml:"-" json:"-"`
+	EndpointSecret     string        `yaml:"-" json:"-"`
+	PushFrequency      time.Duration `yaml:"push_frequency" json:"push_frequency"`
 }
 
 type System interface {
 }
 
-func NewSystem(connectionInfo ConnectionInfo) (system System, err error) {
+func NewSystem(systemInfo SystemInfo) (system System, err error) {
 	// creates a new system
 
-	switch connectionInfo.Type {
+	switch systemInfo.Type {
 	case TypePostgreSQL:
-		return newPostgresql(connectionInfo)
+		return newPostgresql(systemInfo)
 	default:
-		return system, fmt.Errorf("unsupported system type %v", connectionInfo.Type)
+		return system, fmt.Errorf("unsupported system type %v", systemInfo.Type)
 	}
 }

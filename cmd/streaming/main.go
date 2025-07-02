@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/sqlpipe/sqlpipe/internal/systems"
@@ -22,29 +22,26 @@ var (
 	version = vcs.Version()
 )
 
-type yamlConfig struct {
-	Systems []*systems.ConnectionInfo `yaml:"systems"`
-}
-
 type config struct {
-	port        int
-	yamlFile    string
-	queueDir    string
-	segmentSize int
+	port           int
+	systemsYamlDir string
+	modelsYamlDir  string
+	queueDir       string
+	segmentSize    int
 }
 
 type application struct {
 	config    config
 	logger    *slog.Logger
-	wg        sync.WaitGroup
 	systemMap map[string]systems.System
-	decoder   *yaml.Decoder
 }
 
 func main() {
+
 	var cfg config
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
-	flag.StringVar(&cfg.yamlFile, "config", "config.yaml", "Path to configuration file")
+	flag.StringVar(&cfg.systemsYamlDir, "systems-yaml-dir", "./systems", "Directory for systems YAML configuration")
+	flag.StringVar(&cfg.modelsYamlDir, "models-yaml-dir", "./models", "Directory for models YAML configuration")
 	flag.StringVar(&cfg.queueDir, "queue-dir", "/tmp", "Directory for queue files")
 	flag.IntVar(&cfg.segmentSize, "segment-size", 100, "Size of each segment in the queue")
 	displayVersion := flag.Bool("version", false, "Display version and exit")
@@ -66,43 +63,73 @@ func main() {
 		return time.Now().Unix()
 	}))
 
-	q, err := dque.New(qName, qDir, segmentSize, ItemBuilder)
-	if err != nil {
-		logger.Error("failed to create queue", "error", err)
-		os.Exit(1)
-	}
+	systemInfoMap := make(map[string]systems.SystemInfo)
 
-	yamlFile, err := os.Open(cfg.yamlFile)
-	if err != nil {
-		logger.Error("failed to open configuration file", "error", err)
-		os.Exit(1)
-	}
-	defer yamlFile.Close()
+	fmt.Println("Loading system configurations from:", cfg.systemsYamlDir)
 
-	parsedYamlConfig := yamlConfig{}
-	decoder := yaml.NewDecoder(yamlFile)
-	err = decoder.Decode(&parsedYamlConfig)
-	if err != nil {
-		logger.Error("failed to decode configuration file", "error", err)
-		os.Exit(1)
-	}
-
-	systemMap := make(map[string]systems.System)
-
-	for _, systemInfo := range parsedYamlConfig.Systems {
-		system, err := systems.NewSystem(*systemInfo)
+	err := filepath.Walk(cfg.systemsYamlDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			logger.Error("failed to connect to system", "error", err, "system", systemInfo.Name)
-		} else {
-			systemMap[systemInfo.Name] = system
+			logger.Error("failed to access path", "error", err, "path", path)
+			return err
 		}
+		if !info.IsDir() && (filepath.Ext(path) == ".yaml" || filepath.Ext(path) == ".yml") {
+			f, err := os.Open(path)
+			if err != nil {
+				logger.Error("failed to open system yaml file", "error", err, "file", path)
+				return err
+			}
+			defer f.Close()
+
+			var infos map[string]systems.SystemInfo
+			decoder := yaml.NewDecoder(f)
+			err = decoder.Decode(&infos)
+			if err != nil {
+				logger.Error("failed to decode system configuration file", "error", err, "file", path)
+				return err
+			}
+			for name, info := range infos {
+				info.Name = name
+				systemInfoMap[info.Name] = info
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		logger.Error("failed to walk systems yaml dir", "error", err)
+		os.Exit(1)
 	}
 
-	app := &application{
-		config:    cfg,
-		logger:    logger,
-		systemMap: systemMap,
-		decoder:   decoder,
+	// systemMap := make(map[string]systems.System)
+
+	yamlData, err := yaml.Marshal(systemInfoMap)
+	if err != nil {
+		logger.Error("failed to marshal systemInfoMap", "error", err)
+	} else {
+		fmt.Println("systemInfoMap:")
+		fmt.Println(string(yamlData))
 	}
+
+	// for systemName, systemInfo := range systemInfoMap {
+	// 	system, err := systems.NewSystem(systemInfo)
+	// 	if err != nil {
+	// 		logger.Error("failed to connect to system", "error", err, "system", systemName)
+	// 	} else {
+	// 		systemMap[systemInfo.Name] = system
+	// 	}
+	// }
+
+	// app := &application{
+	// 	config:    cfg,
+	// 	logger:    logger,
+	// 	systemMap: systemMap,
+	// }
+
+	// for name := range app.systemMap {
+	// 	fmt.Println("Connected to system:", name)
+	// }
+
+	// fmt.Println(
+	// 	"heeeere",
+	// )
 
 }
