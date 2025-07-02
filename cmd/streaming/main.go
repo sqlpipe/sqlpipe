@@ -4,10 +4,12 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/sqlpipe/sqlpipe/internal/systems"
@@ -30,11 +32,12 @@ type config struct {
 	segmentSize    int
 }
 
-// type application struct {
-// 	config    config
-// 	logger    *slog.Logger
-// 	systemMap map[string]systems.System
-// }
+type application struct {
+	config    config
+	logger    *slog.Logger
+	systemMap map[string]systems.System
+	wg        sync.WaitGroup
+}
 
 func main() {
 
@@ -82,6 +85,10 @@ func main() {
 			decoder := yaml.NewDecoder(f)
 			err = decoder.Decode(&infos)
 			if err != nil {
+				if err == io.EOF {
+					// Empty YAML file, skip it gracefully
+					return nil
+				}
 				logger.Error("failed to decode system configuration file", "error", err, "file", path)
 				return err
 			}
@@ -99,33 +106,47 @@ func main() {
 
 	systemMap := make(map[string]systems.System)
 
-	var system systems.System
+	var systemMapMu sync.Mutex
+	errCh := make(chan error, len(systemInfoMap))
+	doneCh := make(chan struct{}, len(systemInfoMap))
+
 	for systemName, systemInfo := range systemInfoMap {
-		system, err = systems.NewSystem(systemInfo)
-		if err != nil {
-			logger.Error("failed to connect to system", "system", systemName, "error", err)
-		} else {
-			systemMap[systemInfo.Name] = system
-		}
+		go func(systemName string, systemInfo systems.SystemInfo) {
+			system, err := systems.NewSystem(systemInfo)
+			if err != nil {
+				logger.Error("failed to connect to system", "system", systemName, "error", err)
+				errCh <- err
+			} else {
+				systemMapMu.Lock()
+				systemMap[systemInfo.Name] = system
+				systemMapMu.Unlock()
+			}
+			doneCh <- struct{}{}
+		}(systemName, systemInfo)
 	}
+
+	// Wait for all goroutines to finish
+	for i := 0; i < len(systemInfoMap); i++ {
+		<-doneCh
+	}
+
+	close(errCh)
+	close(doneCh)
 
 	if err != nil {
 		logger.Error("failed to initialize systems")
 		os.Exit(1)
 	}
 
-	// app := &application{
-	// 	config:    cfg,
-	// 	logger:    logger,
-	// 	systemMap: systemMap,
-	// }
+	app := &application{
+		config:    cfg,
+		logger:    logger,
+		systemMap: systemMap,
+	}
 
-	// for name := range app.systemMap {
-	// 	fmt.Println("Connected to system:", name)
-	// }
-
-	// fmt.Println(
-	// 	"heeeere",
-	// )
-
+	err = app.serve()
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
 }

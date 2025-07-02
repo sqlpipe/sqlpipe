@@ -19,6 +19,7 @@ var (
 	TypeMSSQL      = "mssql"
 	TypeOracle     = "oracle"
 	TypeSnowflake  = "snowflake"
+	TypeStripe     = "stripe"
 
 	DriverPostgreSQL = "pgx"
 	DriverMySQL      = "mysql"
@@ -41,7 +42,7 @@ type SystemInfo struct {
 	Password           string        `yaml:"-" json:"-"`
 	Dsn                string        `yaml:"-" json:"-"`
 	Route              string        `yaml:"route,omitempty" json:"route,omitempty"`
-	ApiKey             string        `yaml:"-" json:"-"`
+	ApiKey             string        `yaml:"api_key" json:"-"`
 	EndpointSecret     string        `yaml:"-" json:"-"`
 	PushFrequency      time.Duration `yaml:"push_frequency" json:"push_frequency"`
 }
@@ -55,6 +56,10 @@ func NewSystem(systemInfo SystemInfo) (system System, err error) {
 	switch systemInfo.Type {
 	case TypePostgreSQL:
 		return newPostgresql(systemInfo)
+	case TypeSnowflake:
+		return newSnowflake(systemInfo)
+	case TypeStripe:
+		return newStripe(systemInfo)
 	default:
 		return system, fmt.Errorf("unsupported system type %v", systemInfo.Type)
 	}

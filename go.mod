@@ -11,6 +11,7 @@ require (
 	github.com/ory/dockertest/v3 v3.12.0
 	github.com/sijms/go-ora/v2 v2.7.19
 	github.com/snowflakedb/gosnowflake v1.6.25
+	github.com/stripe/stripe-go/v82 v82.3.0
 	golang.org/x/sync v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )

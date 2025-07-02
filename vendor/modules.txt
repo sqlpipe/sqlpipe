@@ -268,8 +268,6 @@ github.com/goccy/go-json/internal/runtime
 # github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2
 ## explicit; go 1.12
 github.com/godbus/dbus
-# github.com/gofrs/flock v0.7.1
-## explicit
 # github.com/gogo/protobuf v1.3.2
 ## explicit; go 1.15
 github.com/gogo/protobuf/proto
@@ -322,8 +320,6 @@ github.com/jackc/puddle/v2/internal/genstack
 # github.com/jmespath/go-jmespath v0.4.0
 ## explicit; go 1.14
 github.com/jmespath/go-jmespath
-# github.com/joncrlsn/dque v0.0.0-20241024143830-7723fd131a64
-## explicit; go 1.13
 # github.com/julienschmidt/httprouter v1.3.0
 ## explicit; go 1.7
 github.com/julienschmidt/httprouter
@@ -446,6 +442,10 @@ github.com/sirupsen/logrus
 github.com/snowflakedb/gosnowflake
 # github.com/stretchr/objx v0.5.2
 ## explicit; go 1.20
+# github.com/stripe/stripe-go/v82 v82.3.0
+## explicit; go 1.18
+github.com/stripe/stripe-go/v82
+github.com/stripe/stripe-go/v82/form
 # github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb
 ## explicit
 github.com/xeipuuv/gojsonpointer

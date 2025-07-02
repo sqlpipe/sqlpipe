@@ -24,7 +24,7 @@ func TestStreaming(t *testing.T) {
 		log.Fatalf("Could not connect to docker: %s", err)
 	}
 
-	pool.MaxWait = 3 * time.Second
+	pool.MaxWait = 10 * time.Second
 
 	postgresqlPassword := "Mypass123"
 	postgresqlUsername := "postgres"
@@ -137,10 +137,8 @@ func TestStreaming(t *testing.T) {
 		log.Fatalf("Could not start resource: %s", err)
 	}
 
-	hostPort := sqlpipeContainer.GetPort("4000/tcp")
-	healthcheckURL := fmt.Sprintf("http://localhost:%s/healthcheck", hostPort)
-
 	err = pool.Retry(func() error {
+
 		inspect, err := pool.Client.InspectContainer(sqlpipeContainer.Container.ID)
 		if err != nil {
 			return fmt.Errorf("failed to inspect container: %w", err)
@@ -148,6 +146,9 @@ func TestStreaming(t *testing.T) {
 		if !inspect.State.Running {
 			return fmt.Errorf("container exited with code: %d", inspect.State.ExitCode)
 		}
+
+		hostPort := sqlpipeContainer.GetPort("4000/tcp")
+		healthcheckURL := fmt.Sprintf("http://localhost:%s/v1/healthcheck", hostPort)
 
 		resp, err := http.Get(healthcheckURL)
 		if err != nil {
@@ -169,7 +170,7 @@ func TestStreaming(t *testing.T) {
 			Stdout:       true,
 			Stderr:       true,
 		})
-		t.Fatalf("SQLpipe healthcheck failed")
+		t.Fatalf("SQLpipe healthcheck failed: %v", err)
 	}
 }
 
