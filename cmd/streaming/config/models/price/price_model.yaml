@@ -1,0 +1,91 @@
+---
+"$schema": https://json-schema.org/draft/2020-12/schema
+title: Price
+type: object
+properties:
+
+  ### ID ###
+  id:
+    type: string
+
+    ProdDB:
+      search_key: true
+      push_to: true
+      require_for_create: true
+      location:
+        database: prod
+        schema: public
+        table: prices
+        column: id
+
+    PaymentGateway:
+      search_key: true
+      receive_from: true
+      location:
+        object: price
+        field: id
+    
+    DataWarehouse:
+      search_key: true
+      push_to: true
+      require_for_create: true
+      location: 
+        database: analytics
+        schema: public
+        table: prices
+        column: id
+
+  ### Unit Amount ###
+  unit_amount:
+    type: string
+
+    ProdDB:
+      push_to: true
+      require_for_create: true
+      location:
+        database: prod
+        schema: public
+        table: prices
+        column: unit_amount
+
+    PaymentGateway:
+      receive_from: true
+      location:
+        object: price
+        field: unit_amount
+      
+    DataWarehouse:
+      push_to: true
+      require_for_create: true
+      location:
+        database: analytics
+        schema: public
+        table: prices
+        column: unit_amount
+
+  ### Currency ###
+  currency:
+    type: string
+    ProdDB:
+      push_to: true
+      require_for_create: true
+      location:
+        database: prod
+        schema: public
+        table: prices
+        column: currency
+
+    PaymentGateway:
+      receive_from: true
+      location:
+        object: price
+        field: currency
+
+    DataWarehouse:
+      push_to: true
+      require_for_create: true
+      location:
+        database: analytics
+        schema: public
+        table: prices
+        column: currency
