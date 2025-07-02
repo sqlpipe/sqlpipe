@@ -8,7 +8,7 @@ DataWarehouse:
 
 ProdDB:
   type: "postgresql"
-  dsn: "postgres://postgres:Mypass123@localhost:5432?sslmode=disable"
+  dsn: "postgres://postgres:Mypass123@test-postgres:5432/postgres?sslmode=disable"
   max_open_connections: 10
   max_idle_connections: 10
   max_connection_idle_time: 30s

@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/ory/dockertest/v3"
@@ -22,28 +24,61 @@ func TestStreaming(t *testing.T) {
 		log.Fatalf("Could not connect to docker: %s", err)
 	}
 
-	postgresqlContainer, db := postgresqlSetup(t, pool)
+	pool.MaxWait = 3 * time.Second
 
-	sqlpipeContainer := sqlpipeSetup(t, pool)
+	postgresqlPassword := "Mypass123"
+	postgresqlUsername := "postgres"
+	postgresqlDatabase := "postgres"
 
+	// Create a network for both containers
+	network, err := pool.CreateNetwork("sqlpipe-test-network")
+	if err != nil {
+		log.Fatalf("Could not create docker network: %s", err)
+	}
 	defer func() {
-		if err := pool.Purge(sqlpipeContainer); err != nil {
-			log.Fatalf("Could not purge sqlpipe resource: %s", err)
+		if err := pool.RemoveNetwork(network); err != nil {
+			log.Printf("Could not remove docker network: %s", err)
 		}
 	}()
 
-	// Clean up container at the end
+	postgresqlContainer, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "debezium/postgres",
+		Tag:        "15",
+		Name:       "test-postgres",
+		Env: []string{
+			fmt.Sprintf("POSTGRES_USER=%v", postgresqlUsername),
+			fmt.Sprintf("POSTGRES_PASSWORD=%v", postgresqlPassword),
+			fmt.Sprintf("POSTGRES_DB=%v", postgresqlDatabase),
+		},
+		NetworkID: network.Network.ID,
+	}, func(config *docker.HostConfig) {
+		config.AutoRemove = true
+		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
+	})
 	defer func() {
 		if err := pool.Purge(postgresqlContainer); err != nil {
 			log.Fatalf("Could not purge resource: %s", err)
 		}
 	}()
+	if err != nil {
+		log.Fatalf("Could not start PostgreSQL: %s", err)
+	}
 
-	createProductsTable(t, db)
-}
+	var db *sql.DB
+	if err := pool.Retry(func() error {
+		var err error
+		port := postgresqlContainer.GetPort("5432/tcp")
+		dsn := fmt.Sprintf("postgres://%v:%v@localhost:%s/%v?sslmode=disable", postgresqlUsername, postgresqlPassword, port, postgresqlDatabase)
+		db, err = sql.Open("pgx", dsn)
+		if err != nil {
+			return err
+		}
+		return db.Ping()
+	}); err != nil {
+		log.Fatalf("Could not connect to database: %s", err)
+	}
 
-// sqlpipeSetup builds and runs the SQLPipe container and streams logs to stdout.
-func sqlpipeSetup(t *testing.T, pool *dockertest.Pool) *dockertest.Resource {
+	createPostgresqlProductsTable(t, db)
 
 	cmd := "go"
 	args := []string{"build", "-o", "../../bin/streaming", "../../cmd/streaming"}
@@ -91,28 +126,54 @@ func sqlpipeSetup(t *testing.T, pool *dockertest.Pool) *dockertest.Resource {
 			fmt.Sprintf("%s:/config/systems", systemsHostDir),
 			fmt.Sprintf("%s:/config/models", modelsHostDir),
 		},
+		NetworkID: network.Network.ID,
 	})
+	defer func() {
+		if err := pool.Purge(sqlpipeContainer); err != nil {
+			log.Fatalf("Could not purge sqlpipe resource: %s", err)
+		}
+	}()
 	if err != nil {
 		log.Fatalf("Could not start resource: %s", err)
 	}
 
-	// Stream logs to stdout
-	err = pool.Client.Logs(docker.LogsOptions{
-		Container:    sqlpipeContainer.Container.ID,
-		OutputStream: os.Stdout,
-		Stdout:       true,
-		Stderr:       true,
-		Follow:       true,
-	})
-	if err != nil {
-		t.Fatalf("Failed to get container logs: %v", err)
-	}
+	hostPort := sqlpipeContainer.GetPort("4000/tcp")
+	healthcheckURL := fmt.Sprintf("http://localhost:%s/healthcheck", hostPort)
 
-	return sqlpipeContainer
+	err = pool.Retry(func() error {
+		inspect, err := pool.Client.InspectContainer(sqlpipeContainer.Container.ID)
+		if err != nil {
+			return fmt.Errorf("failed to inspect container: %w", err)
+		}
+		if !inspect.State.Running {
+			return fmt.Errorf("container exited with code: %d", inspect.State.ExitCode)
+		}
+
+		resp, err := http.Get(healthcheckURL)
+		if err != nil {
+			return fmt.Errorf("healthcheck error: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("healthcheck returned status %d", resp.StatusCode)
+		}
+		return nil // success!
+	})
+
+	if err != nil {
+		pool.Client.Logs(docker.LogsOptions{
+			Container:    sqlpipeContainer.Container.ID,
+			OutputStream: os.Stdout,
+			ErrorStream:  os.Stderr,
+			Follow:       false,
+			Stdout:       true,
+			Stderr:       true,
+		})
+		t.Fatalf("SQLpipe healthcheck failed")
+	}
 }
 
-// createProductsTable creates the products table in the given database.
-func createProductsTable(t *testing.T, db *sql.DB) {
+func createPostgresqlProductsTable(t *testing.T, db *sql.DB) {
 	_, err := db.Exec(`
 			   CREATE TABLE products (
 					   id TEXT PRIMARY KEY,
@@ -131,40 +192,4 @@ func createProductsTable(t *testing.T, db *sql.DB) {
 	if err != nil {
 		t.Fatalf("Failed to create table: %v", err)
 	}
-}
-
-// postgresqlSetup sets up a PostgreSQL container and returns the pool, container, and db connection.
-func postgresqlSetup(t *testing.T, pool *dockertest.Pool) (*dockertest.Resource, *sql.DB) {
-
-	postgresqlContainer, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "debezium/postgres",
-		Tag:        "15",
-		Env: []string{
-			// "POSTGRES_USER=postgres",
-			"POSTGRES_PASSWORD=Mypass123",
-			// "POSTGRES_DB=postgres",
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
-	if err != nil {
-		log.Fatalf("Could not start PostgreSQL: %s", err)
-	}
-
-	var db *sql.DB
-	if err := pool.Retry(func() error {
-		var err error
-		port := postgresqlContainer.GetPort("5432/tcp")
-		dsn := fmt.Sprintf("postgres://postgres:Mypass123@localhost:%s/postgres?sslmode=disable", port)
-		db, err = sql.Open("pgx", dsn)
-		if err != nil {
-			return err
-		}
-		return db.Ping()
-	}); err != nil {
-		log.Fatalf("Could not connect to database: %s", err)
-	}
-
-	return postgresqlContainer, db
 }

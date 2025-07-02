@@ -30,11 +30,11 @@ type config struct {
 	segmentSize    int
 }
 
-type application struct {
-	config    config
-	logger    *slog.Logger
-	systemMap map[string]systems.System
-}
+// type application struct {
+// 	config    config
+// 	logger    *slog.Logger
+// 	systemMap map[string]systems.System
+// }
 
 func main() {
 
@@ -64,8 +64,6 @@ func main() {
 	}))
 
 	systemInfoMap := make(map[string]systems.SystemInfo)
-
-	fmt.Println("Loading system configurations from:", cfg.systemsYamlDir)
 
 	err := filepath.Walk(cfg.systemsYamlDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -99,24 +97,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// systemMap := make(map[string]systems.System)
+	systemMap := make(map[string]systems.System)
 
-	yamlData, err := yaml.Marshal(systemInfoMap)
-	if err != nil {
-		logger.Error("failed to marshal systemInfoMap", "error", err)
-	} else {
-		fmt.Println("systemInfoMap:")
-		fmt.Println(string(yamlData))
+	var system systems.System
+	for systemName, systemInfo := range systemInfoMap {
+		system, err = systems.NewSystem(systemInfo)
+		if err != nil {
+			logger.Error("failed to connect to system", "system", systemName, "error", err)
+		} else {
+			systemMap[systemInfo.Name] = system
+		}
 	}
 
-	// for systemName, systemInfo := range systemInfoMap {
-	// 	system, err := systems.NewSystem(systemInfo)
-	// 	if err != nil {
-	// 		logger.Error("failed to connect to system", "error", err, "system", systemName)
-	// 	} else {
-	// 		systemMap[systemInfo.Name] = system
-	// 	}
-	// }
+	if err != nil {
+		logger.Error("failed to initialize systems")
+		os.Exit(1)
+	}
 
 	// app := &application{
 	// 	config:    cfg,
