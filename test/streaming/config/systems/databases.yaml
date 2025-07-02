@@ -1,6 +1,6 @@
 DataWarehouse:
   type: "snowflake"
-  dsn: "snowflake://test:password@account/warehouse"
+  dsn: "snowflake://test2:password@account/warehouse"
   max_open_connections: 2
   max_idle_connections: 2
   max_connection_idle_time: 60s

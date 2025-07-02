@@ -5,4 +5,4 @@ bin/*
 .hidden
 */.DS_Store
 cmd/streaming/sample.yaml
-/test/config/*
+/test/config/
