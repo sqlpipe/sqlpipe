@@ -9,15 +9,16 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/stripe/stripe-go/v82"
 )
+
+var receiverWebhookCh = make(chan struct{})
 
 type Stripe struct {
 	Client *stripe.Client
 }
 
-func newStripe(systemInfo SystemInfo, port int, router *httprouter.Router) (system System, err error) {
+func newStripe(systemInfo SystemInfo, port int, receiveHandlers *map[string]func(http.ResponseWriter, *http.Request)) (system System, err error) {
 
 	stripeClient := stripe.NewClient(systemInfo.ApiKey)
 
@@ -36,30 +37,49 @@ func newStripe(systemInfo SystemInfo, port int, router *httprouter.Router) (syst
 	}
 
 	if systemInfo.UseCliListener {
+
 		if _, err := exec.LookPath("stripe"); err != nil {
 			return nil, fmt.Errorf("Stripe CLI not found in PATH. Please install it to use Stripe listening mode: %w", err)
 		}
 
-		// define a new route for the Stripe listener
-		if router != nil {
-			router.HandlerFunc(http.MethodPost, systemInfo.Route, handleStripeWebhook)
-		}
+		(*receiveHandlers)[systemInfo.Route] = stripeWebhookHealthcheck
+
+		// Forward Stripe events to our local endpoint
+		forwardURL := fmt.Sprintf("http://localhost:%d%v", port, systemInfo.Route)
+		cmd := exec.Command("stripe", "listen", "--forward-to", forwardURL)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+
+		// Set the STRIPE_API_KEY environment variable from systemInfo
+		cmd.Env = append(os.Environ(), fmt.Sprintf("STRIPE_API_KEY=%s", systemInfo.ApiKey))
 
 		go func() {
-			// Forward Stripe events to our local endpoint
-			forwardURL := fmt.Sprintf("http://localhost:%d%v", port, systemInfo.Route)
-			cmd := exec.Command("stripe", "listen", "--forward-to", forwardURL)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Stdin = os.Stdin
-
-			// Set the STRIPE_API_KEY environment variable from systemInfo
-			cmd.Env = append(os.Environ(), fmt.Sprintf("STRIPE_API_KEY=%s", systemInfo.ApiKey))
-
-			if err := cmd.Run(); err != nil {
+			fmt.Println("Starting Stripe CLI listener")
+			err := cmd.Run()
+			if err != nil {
 				return
 			}
 		}()
+
+		stripeCmd := exec.Command("stripe", "trigger", "payment_intent.succeeded")
+		// stripeCmd.Stdout = os.Stdout
+		// stripeCmd.Stderr = os.Stderr
+		stripeCmd.Env = append(os.Environ(), fmt.Sprintf("STRIPE_API_KEY=%s", systemInfo.ApiKey))
+		err := stripeCmd.Run()
+		if err != nil {
+			return nil, fmt.Errorf("failed to run stripe trigger: %w", err)
+		}
+	}
+
+	// Block until we receive something on receiverWebhookCh or timeout after 5 seconds
+	select {
+	case <-receiverWebhookCh:
+		// Received signal, proceed with Stripe system initialization
+		fmt.Println("Stripe webhook healthcheck received, proceeding with Stripe system initialization.")
+	case <-time.After(5 * time.Second):
+		// Timeout after 5 seconds
+		return nil, fmt.Errorf("timeout waiting for Stripe webhook healthcheck")
 	}
 
 	stripeSystem := &Stripe{
@@ -69,13 +89,18 @@ func newStripe(systemInfo SystemInfo, port int, router *httprouter.Router) (syst
 	return stripeSystem, nil
 }
 
-func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
+func stripeWebhookHealthcheck(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("YOOOOO")
 	route := r.URL.Path
-	payload, err := io.ReadAll(r.Body)
+	_, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusInternalServerError)
 		return
 	}
-	fmt.Printf("Received Stripe webhook on route: %s\nPayload: %s\n", route, string(payload))
+	fmt.Printf("Received Stripe webhook on route: %s\n", route)
+	select {
+	case receiverWebhookCh <- struct{}{}:
+	default:
+	}
 	w.WriteHeader(http.StatusOK)
 }

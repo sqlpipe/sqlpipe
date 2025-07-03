@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -38,10 +39,11 @@ type config struct {
 }
 
 type application struct {
-	config    config
-	logger    *slog.Logger
-	systemMap map[string]systems.System
-	wg        sync.WaitGroup
+	config          config
+	logger          *slog.Logger
+	systemMap       map[string]systems.System
+	wg              sync.WaitGroup
+	receiveHandlers map[string]func(w http.ResponseWriter, r *http.Request)
 }
 
 func main() {
@@ -112,12 +114,23 @@ func main() {
 	}
 
 	app := &application{
-		config:    cfg,
-		logger:    logger,
-		systemMap: make(map[string]systems.System),
+		config:          cfg,
+		logger:          logger,
+		systemMap:       make(map[string]systems.System),
+		receiveHandlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
 	}
 
-	handler, router := app.routes()
+	serveQuitCh := make(chan struct{})
+
+	go func() {
+		err = app.serve()
+		if err != nil {
+			logger.Error(err.Error())
+			os.Exit(1)
+		}
+		// send to serveQuitCh to signal that the server has stopped
+		close(serveQuitCh)
+	}()
 
 	var systemMapMu sync.Mutex
 	errCh := make(chan error, len(systemInfoMap))
@@ -125,7 +138,7 @@ func main() {
 
 	for systemName, systemInfo := range systemInfoMap {
 		go func(systemName string, systemInfo systems.SystemInfo) {
-			system, err := systems.NewSystem(systemInfo, cfg.port, router)
+			system, err := systems.NewSystem(systemInfo, cfg.port, &app.receiveHandlers)
 			if err != nil {
 				logger.Error("failed to connect to system", "system", systemName, "error", err)
 				errCh <- err
@@ -156,9 +169,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = app.serve(handler)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
+	// Wait for the server to finish
+	<-serveQuitCh
+	app.logger.Info("shutting down server")
 }

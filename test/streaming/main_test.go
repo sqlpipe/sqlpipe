@@ -47,7 +47,7 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("Could not connect to docker: %s", err)
 	}
 
-	pool.MaxWait = 10 * time.Second
+	pool.MaxWait = 20 * time.Second
 
 	postgresqlPassword := "Mypass123"
 	postgresqlUsername := "postgres"
@@ -230,13 +230,13 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("SQLpipe healthcheck failed: %v", err)
 	}
 
-	stripeCmd := exec.Command("stripe", "trigger", "payment_intent.succeeded")
-	stripeCmd.Stdout = os.Stdout
-	stripeCmd.Stderr = os.Stderr
-	stripeCmd.Env = append(os.Environ(), "STRIPE_API_KEY="+os.Getenv("STRIPE_API_KEY"))
-	if err := stripeCmd.Run(); err != nil {
-		t.Fatalf("Failed to run stripe trigger: %v", err)
-	}
+	// stripeCmd := exec.Command("stripe", "trigger", "payment_intent.succeeded")
+	// stripeCmd.Stdout = os.Stdout
+	// stripeCmd.Stderr = os.Stderr
+	// stripeCmd.Env = append(os.Environ(), "STRIPE_API_KEY="+os.Getenv("STRIPE_API_KEY"))
+	// if err := stripeCmd.Run(); err != nil {
+	// 	t.Fatalf("Failed to run stripe trigger: %v", err)
+	// }
 
 	pool.Client.Logs(docker.LogsOptions{
 		Container:    sqlpipeContainer.Container.ID,

@@ -2,9 +2,8 @@ package systems
 
 import (
 	"fmt"
+	"net/http"
 	"time"
-
-	"github.com/julienschmidt/httprouter"
 )
 
 var (
@@ -53,7 +52,7 @@ type SystemInfo struct {
 type System interface {
 }
 
-func NewSystem(systemInfo SystemInfo, port int, router *httprouter.Router) (system System, err error) {
+func NewSystem(systemInfo SystemInfo, port int, receiveHandlers *map[string]func(http.ResponseWriter, *http.Request)) (system System, err error) {
 	// creates a new system
 
 	switch systemInfo.Type {
@@ -62,7 +61,7 @@ func NewSystem(systemInfo SystemInfo, port int, router *httprouter.Router) (syst
 	case TypeSnowflake:
 		return newSnowflake(systemInfo)
 	case TypeStripe:
-		return newStripe(systemInfo, port, router)
+		return newStripe(systemInfo, port, receiveHandlers)
 	default:
 		return system, fmt.Errorf("unsupported system type %v", systemInfo.Type)
 	}
