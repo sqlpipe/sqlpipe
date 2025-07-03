@@ -230,13 +230,16 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("SQLpipe healthcheck failed: %v", err)
 	}
 
-	// stripeCmd := exec.Command("stripe", "trigger", "payment_intent.succeeded")
-	// stripeCmd.Stdout = os.Stdout
-	// stripeCmd.Stderr = os.Stderr
-	// stripeCmd.Env = append(os.Environ(), "STRIPE_API_KEY="+os.Getenv("STRIPE_API_KEY"))
-	// if err := stripeCmd.Run(); err != nil {
-	// 	t.Fatalf("Failed to run stripe trigger: %v", err)
-	// }
+	time.Sleep(2 * time.Second)
+
+	stripeCmd := exec.Command("stripe", "trigger", "price.created")
+	stripeCmd.Stdout = os.Stdout
+	stripeCmd.Stderr = os.Stderr
+	stripeCmd.Env = append(os.Environ(), fmt.Sprintf("STRIPE_API_KEY=%s", os.Getenv("STRIPE_API_KEY")))
+	err = stripeCmd.Run()
+	if err != nil {
+		t.Fatalf("Failed to run stripe trigger: %v", err)
+	}
 
 	pool.Client.Logs(docker.LogsOptions{
 		Container:    sqlpipeContainer.Container.ID,

@@ -1,4 +1,4 @@
-package systems
+package main
 
 import (
 	"fmt"
@@ -52,7 +52,7 @@ type SystemInfo struct {
 type System interface {
 }
 
-func NewSystem(systemInfo SystemInfo, port int, receiveHandlers *map[string]func(http.ResponseWriter, *http.Request)) (system System, err error) {
+func (app *application) NewSystem(systemInfo SystemInfo, port int, receiveHandlers *map[string]func(http.ResponseWriter, *http.Request)) (system System, err error) {
 	// creates a new system
 
 	switch systemInfo.Type {
@@ -61,7 +61,7 @@ func NewSystem(systemInfo SystemInfo, port int, receiveHandlers *map[string]func
 	case TypeSnowflake:
 		return newSnowflake(systemInfo)
 	case TypeStripe:
-		return newStripe(systemInfo, port, receiveHandlers)
+		return app.newStripe(systemInfo)
 	default:
 		return system, fmt.Errorf("unsupported system type %v", systemInfo.Type)
 	}

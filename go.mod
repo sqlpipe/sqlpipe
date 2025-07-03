@@ -6,9 +6,11 @@ require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/google/uuid v1.4.0
 	github.com/jackc/pgx/v5 v5.5.0
+	github.com/joncrlsn/dque v0.0.0-20241024143830-7723fd131a64
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/microsoft/go-mssqldb v1.6.0
 	github.com/ory/dockertest/v3 v3.12.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/sijms/go-ora/v2 v2.7.19
 	github.com/snowflakedb/gosnowflake v1.6.25
 	github.com/stripe/stripe-go/v82 v82.3.0
@@ -57,6 +59,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.1.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
+	github.com/gofrs/flock v0.7.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect

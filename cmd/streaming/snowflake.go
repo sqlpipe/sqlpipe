@@ -1,4 +1,4 @@
-package systems
+package main
 
 import (
 	"database/sql"

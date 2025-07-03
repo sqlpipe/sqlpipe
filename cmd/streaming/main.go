@@ -13,7 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sqlpipe/sqlpipe/internal/systems"
+	"github.com/joncrlsn/dque"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 
 	"gopkg.in/yaml.v3"
@@ -41,9 +42,15 @@ type config struct {
 type application struct {
 	config          config
 	logger          *slog.Logger
-	systemMap       map[string]systems.System
+	systemMap       map[string]System
 	wg              sync.WaitGroup
 	receiveHandlers map[string]func(w http.ResponseWriter, r *http.Request)
+	compiledSchemas map[string]*jsonschema.Schema
+	queueMap        map[string]*dque.DQue
+}
+
+type SchemaYAML struct {
+	Schemas map[string]interface{} `yaml:"schemas"`
 }
 
 func main() {
@@ -75,9 +82,22 @@ func main() {
 		return time.Now().Unix()
 	}))
 
-	systemInfoMap := make(map[string]systems.SystemInfo)
+	queueMap := make(map[string]*dque.DQue)
 
-	err := filepath.Walk(cfg.systemsYamlDir, func(path string, info os.FileInfo, err error) error {
+	compiledSchemas, err := LoadSchemasDir(cfg.modelsYamlDir, queueMap, cfg.segmentSize, cfg.queueDir)
+	if err != nil {
+		logger.Error("failed to load model schemas", "error", err)
+		os.Exit(1)
+	}
+
+	logger.Info("compiled schemas:")
+	for name, schema := range compiledSchemas {
+		fmt.Printf("%v properties: %v\n", name, schema.Properties)
+	}
+
+	systemInfoMap := make(map[string]SystemInfo)
+
+	err = filepath.Walk(cfg.systemsYamlDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logger.Error("failed to access path", "error", err, "path", path)
 			return err
@@ -90,7 +110,7 @@ func main() {
 			}
 			defer f.Close()
 
-			var infos map[string]systems.SystemInfo
+			var infos map[string]SystemInfo
 			decoder := yaml.NewDecoder(f)
 			err = decoder.Decode(&infos)
 			if err != nil {
@@ -116,8 +136,10 @@ func main() {
 	app := &application{
 		config:          cfg,
 		logger:          logger,
-		systemMap:       make(map[string]systems.System),
+		systemMap:       make(map[string]System),
 		receiveHandlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
+		compiledSchemas: compiledSchemas,
+		queueMap:        queueMap,
 	}
 
 	serveQuitCh := make(chan struct{})
@@ -137,8 +159,8 @@ func main() {
 	doneCh := make(chan struct{}, len(systemInfoMap))
 
 	for systemName, systemInfo := range systemInfoMap {
-		go func(systemName string, systemInfo systems.SystemInfo) {
-			system, err := systems.NewSystem(systemInfo, cfg.port, &app.receiveHandlers)
+		go func(systemName string, systemInfo SystemInfo) {
+			system, err := app.NewSystem(systemInfo, cfg.port, &app.receiveHandlers)
 			if err != nil {
 				logger.Error("failed to connect to system", "system", systemName, "error", err)
 				errCh <- err
