@@ -11,10 +11,11 @@ import (
 	"time"
 )
 
-func (app *application) serve() error {
+func (app *application) serve(handler http.Handler) error {
+
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", app.config.port),
-		Handler:      app.routes(),
+		Handler:      handler,
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,

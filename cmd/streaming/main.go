@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -53,7 +52,6 @@ func main() {
 	flag.StringVar(&cfg.modelsYamlDir, "models-yaml-dir", "./models", "Directory for models YAML configuration")
 	flag.StringVar(&cfg.queueDir, "queue-dir", "/tmp", "Directory for queue files")
 	flag.IntVar(&cfg.segmentSize, "segment-size", 100, "Size of each segment in the queue")
-	flag.BoolVar(&cfg.stripe.listen, "stripe-listen", false, "Enable Stripe listening mode")
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 
 	flag.Parse()
@@ -113,37 +111,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if cfg.stripe.listen {
-		logger.Info("Stripe listening mode enabled")
-
-		if cfg.stripe.apiKey == "" {
-			logger.Error("Stripe API key is required for listening mode")
-			os.Exit(1)
-		}
-
-		if _, err := exec.LookPath("stripe"); err != nil {
-			logger.Error("Stripe CLI not found in PATH. Please install it to use Stripe listening mode.", "error", err)
-			os.Exit(1)
-		}
-
-		go func() {
-			// Forward Stripe events to our local endpoint
-			forwardURL := fmt.Sprintf("http://localhost:%d/stripe-listener", cfg.port)
-			cmd := exec.Command("stripe", "listen", "--forward-to", forwardURL)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Stdin = os.Stdin
-
-			logger.Info("Starting Stripe CLI listener...", "forward_to", forwardURL)
-			if err := cmd.Run(); err != nil {
-				logger.Error("Stripe CLI listener failed", "error", err)
-				os.Exit(1)
-			}
-			logger.Info("Stripe CLI listener stopped")
-		}()
+	app := &application{
+		config:    cfg,
+		logger:    logger,
+		systemMap: make(map[string]systems.System),
 	}
 
-	systemMap := make(map[string]systems.System)
+	handler, router := app.routes()
 
 	var systemMapMu sync.Mutex
 	errCh := make(chan error, len(systemInfoMap))
@@ -151,13 +125,13 @@ func main() {
 
 	for systemName, systemInfo := range systemInfoMap {
 		go func(systemName string, systemInfo systems.SystemInfo) {
-			system, err := systems.NewSystem(systemInfo)
+			system, err := systems.NewSystem(systemInfo, cfg.port, router)
 			if err != nil {
 				logger.Error("failed to connect to system", "system", systemName, "error", err)
 				errCh <- err
 			} else {
 				systemMapMu.Lock()
-				systemMap[systemInfo.Name] = system
+				app.systemMap[systemInfo.Name] = system
 				systemMapMu.Unlock()
 			}
 			doneCh <- struct{}{}
@@ -182,13 +156,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	app := &application{
-		config:    cfg,
-		logger:    logger,
-		systemMap: systemMap,
-	}
-
-	err = app.serve()
+	err = app.serve(handler)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

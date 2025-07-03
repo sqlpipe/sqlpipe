@@ -3,6 +3,8 @@ package systems
 import (
 	"fmt"
 	"time"
+
+	"github.com/julienschmidt/httprouter"
 )
 
 var (
@@ -45,12 +47,13 @@ type SystemInfo struct {
 	ApiKey             string        `yaml:"api_key" json:"-"`
 	EndpointSecret     string        `yaml:"-" json:"-"`
 	PushFrequency      time.Duration `yaml:"push_frequency" json:"push_frequency"`
+	UseCliListener     bool          `yaml:"use_cli_listener,omitempty" json:"use_cli_listener,omitempty"`
 }
 
 type System interface {
 }
 
-func NewSystem(systemInfo SystemInfo) (system System, err error) {
+func NewSystem(systemInfo SystemInfo, port int, router *httprouter.Router) (system System, err error) {
 	// creates a new system
 
 	switch systemInfo.Type {
@@ -59,7 +62,7 @@ func NewSystem(systemInfo SystemInfo) (system System, err error) {
 	case TypeSnowflake:
 		return newSnowflake(systemInfo)
 	case TypeStripe:
-		return newStripe(systemInfo)
+		return newStripe(systemInfo, port, router)
 	default:
 		return system, fmt.Errorf("unsupported system type %v", systemInfo.Type)
 	}

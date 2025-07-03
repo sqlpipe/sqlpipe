@@ -184,8 +184,6 @@ func TestStreaming(t *testing.T) {
 			"MODELS_YAML_DIR=/config/models",
 			"QUEUE_DIR=/tmp/sqlpipe/queue",
 			"SEGMENT_SIZE=1000",
-			"STRIPE_LISTEN=true",
-			fmt.Sprintf("STRIPE_API_KEY=%s", os.Getenv("STRIPE_API_KEY")),
 		},
 		Mounts: []string{
 			fmt.Sprintf("%s:/config/systems", systemsHostDir),
