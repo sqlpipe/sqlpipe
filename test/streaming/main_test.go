@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,18 +53,67 @@ func TestStreaming(t *testing.T) {
 	postgresqlUsername := "postgres"
 	postgresqlDatabase := "postgres"
 
-	// Create a network for both containers
-	network, err := pool.CreateNetwork("sqlpipe-test-network")
-	defer func() {
-		if err := pool.RemoveNetwork(network); err != nil {
-			log.Printf("Could not remove docker network: %s", err)
+	// Resource handles for cleanup
+	var (
+		network             *dockertest.Network
+		postgresqlContainer *dockertest.Resource
+		sqlpipeContainer    *dockertest.Resource
+	)
+
+	// Setup signal handler for cleanup with improved error handling
+	cleanup := func() {
+		// Helper to check for specific Docker errors
+		isAlreadyRemoving := func(err error) bool {
+			return err != nil && (strings.Contains(err.Error(), "removal of container") && strings.Contains(err.Error(), "is already in progress"))
 		}
+		isNetworkActive := func(err error) bool {
+			return err != nil && (strings.Contains(err.Error(), "network") && strings.Contains(err.Error(), "has active endpoints"))
+		}
+
+		if sqlpipeContainer != nil {
+			if err := pool.Purge(sqlpipeContainer); err != nil && !isAlreadyRemoving(err) {
+				log.Printf("Could not purge sqlpipe resource: %s", err)
+			}
+		}
+		if postgresqlContainer != nil {
+			if err := pool.Purge(postgresqlContainer); err != nil && !isAlreadyRemoving(err) {
+				log.Printf("Could not purge resource: %s", err)
+			}
+		}
+		if network != nil {
+			// Retry network removal if it has active endpoints
+			for i := 0; i < 5; i++ {
+				if err := pool.RemoveNetwork(network); err != nil {
+					if isNetworkActive(err) {
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					log.Printf("Could not remove docker network: %s", err)
+					break
+				}
+				break // success
+			}
+		}
+	}
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+	go func() {
+		<-sigs
+		log.Println("Interrupt received, cleaning up Docker resources...")
+		cleanup()
+		os.Exit(1)
 	}()
+
+	defer cleanup()
+
+	// Create a network for both containers
+	network, err = pool.CreateNetwork("sqlpipe-test-network")
 	if err != nil {
 		t.Fatalf("Could not create docker network: %s", err)
 	}
 
-	postgresqlContainer, err := pool.RunWithOptions(&dockertest.RunOptions{
+	postgresqlContainer, err = pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "debezium/postgres",
 		Tag:        "15",
 		Name:       "test-postgres",
@@ -76,13 +127,6 @@ func TestStreaming(t *testing.T) {
 		config.AutoRemove = true
 		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
 	})
-	defer func() {
-		if postgresqlContainer != nil {
-			if err := pool.Purge(postgresqlContainer); err != nil {
-				t.Fatalf("Could not purge resource: %s", err)
-			}
-		}
-	}()
 	if err != nil {
 		t.Fatalf("Could not start PostgreSQL: %s", err)
 	}
@@ -132,7 +176,7 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("Models config directory does not exist: %s", modelsHostDir)
 	}
 
-	sqlpipeContainer, err := pool.BuildAndRunWithOptions("../../streaming.dockerfile", &dockertest.RunOptions{
+	sqlpipeContainer, err = pool.BuildAndRunWithOptions("../../streaming.dockerfile", &dockertest.RunOptions{
 		Name: "sqlpipe-streaming",
 		Env: []string{
 			"PORT=4000",
@@ -149,13 +193,6 @@ func TestStreaming(t *testing.T) {
 		},
 		NetworkID: network.Network.ID,
 	})
-	defer func() {
-		if sqlpipeContainer != nil {
-			if err := pool.Purge(sqlpipeContainer); err != nil {
-				t.Fatalf("Could not purge sqlpipe resource: %s", err)
-			}
-		}
-	}()
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)
 	}
