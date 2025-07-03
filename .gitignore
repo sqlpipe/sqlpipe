@@ -6,3 +6,4 @@ bin/*
 */.DS_Store
 cmd/streaming/sample.yaml
 /test/streaming/config/*
+gitleaks-report.json

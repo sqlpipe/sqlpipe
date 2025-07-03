@@ -14,6 +14,7 @@ func (app *application) routes() http.Handler {
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	router.HandlerFunc(http.MethodPost, "/stripe-listener", app.stripeListenerHandler)
 
 	router.Handler(http.MethodGet, "/debug/vars", expvar.Handler())
 

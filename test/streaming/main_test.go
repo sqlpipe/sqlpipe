@@ -17,11 +17,32 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 )
 
+func createPostgresqlProductsTable(t *testing.T, db *sql.DB) {
+	_, err := db.Exec(`
+			   CREATE TABLE products (
+					   id TEXT PRIMARY KEY,
+					   name TEXT NOT NULL,
+					   active BOOLEAN DEFAULT TRUE,
+					   created TIMESTAMPTZ,
+					   updated TIMESTAMPTZ,
+					   description TEXT,
+					   livemode BOOLEAN DEFAULT FALSE,
+					   statement_descriptor TEXT,
+					   unit_label TEXT,
+					   category TEXT,
+					   internal_notes TEXT
+			   );
+	   `)
+	if err != nil {
+		t.Fatalf("Failed to create table: %v", err)
+	}
+}
+
 func TestStreaming(t *testing.T) {
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
+		t.Fatalf("Could not connect to docker: %s", err)
 	}
 
 	pool.MaxWait = 10 * time.Second
@@ -32,14 +53,14 @@ func TestStreaming(t *testing.T) {
 
 	// Create a network for both containers
 	network, err := pool.CreateNetwork("sqlpipe-test-network")
-	if err != nil {
-		log.Fatalf("Could not create docker network: %s", err)
-	}
 	defer func() {
 		if err := pool.RemoveNetwork(network); err != nil {
 			log.Printf("Could not remove docker network: %s", err)
 		}
 	}()
+	if err != nil {
+		t.Fatalf("Could not create docker network: %s", err)
+	}
 
 	postgresqlContainer, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "debezium/postgres",
@@ -56,12 +77,14 @@ func TestStreaming(t *testing.T) {
 		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
 	})
 	defer func() {
-		if err := pool.Purge(postgresqlContainer); err != nil {
-			log.Fatalf("Could not purge resource: %s", err)
+		if postgresqlContainer != nil {
+			if err := pool.Purge(postgresqlContainer); err != nil {
+				t.Fatalf("Could not purge resource: %s", err)
+			}
 		}
 	}()
 	if err != nil {
-		log.Fatalf("Could not start PostgreSQL: %s", err)
+		t.Fatalf("Could not start PostgreSQL: %s", err)
 	}
 
 	var db *sql.DB
@@ -75,16 +98,12 @@ func TestStreaming(t *testing.T) {
 		}
 		return db.Ping()
 	}); err != nil {
-		log.Fatalf("Could not connect to database: %s", err)
+		t.Fatalf("Could not connect to database: %s", err)
 	}
 
 	createPostgresqlProductsTable(t, db)
 
-	cmd := "go"
-	args := []string{"build", "-o", "../../bin/streaming", "../../cmd/streaming"}
-
-	buildCmd := exec.Command(cmd, args...)
-
+	buildCmd := exec.Command("go", []string{"build", "-o", "../../bin/streaming", "../../cmd/streaming"}...)
 	buildCmd.Env = append(os.Environ(),
 		"GOOS=linux",
 		fmt.Sprintf("GOARCH=%v", runtime.GOARCH),
@@ -121,6 +140,8 @@ func TestStreaming(t *testing.T) {
 			"MODELS_YAML_DIR=/config/models",
 			"QUEUE_DIR=/tmp/sqlpipe/queue",
 			"SEGMENT_SIZE=1000",
+			"STRIPE_LISTEN=true",
+			fmt.Sprintf("STRIPE_API_KEY=%s", os.Getenv("STRIPE_API_KEY")),
 		},
 		Mounts: []string{
 			fmt.Sprintf("%s:/config/systems", systemsHostDir),
@@ -129,12 +150,14 @@ func TestStreaming(t *testing.T) {
 		NetworkID: network.Network.ID,
 	})
 	defer func() {
-		if err := pool.Purge(sqlpipeContainer); err != nil {
-			log.Fatalf("Could not purge sqlpipe resource: %s", err)
+		if sqlpipeContainer != nil {
+			if err := pool.Purge(sqlpipeContainer); err != nil {
+				t.Fatalf("Could not purge sqlpipe resource: %s", err)
+			}
 		}
 	}()
 	if err != nil {
-		log.Fatalf("Could not start resource: %s", err)
+		t.Fatalf("Could not start resource: %s", err)
 	}
 
 	err = pool.Retry(func() error {
@@ -160,7 +183,6 @@ func TestStreaming(t *testing.T) {
 		}
 		return nil // success!
 	})
-
 	if err != nil {
 		pool.Client.Logs(docker.LogsOptions{
 			Container:    sqlpipeContainer.Container.ID,
@@ -172,25 +194,22 @@ func TestStreaming(t *testing.T) {
 		})
 		t.Fatalf("SQLpipe healthcheck failed: %v", err)
 	}
-}
 
-func createPostgresqlProductsTable(t *testing.T, db *sql.DB) {
-	_, err := db.Exec(`
-			   CREATE TABLE products (
-					   id TEXT PRIMARY KEY,
-					   name TEXT NOT NULL,
-					   active BOOLEAN DEFAULT TRUE,
-					   created TIMESTAMPTZ,
-					   updated TIMESTAMPTZ,
-					   description TEXT,
-					   livemode BOOLEAN DEFAULT FALSE,
-					   statement_descriptor TEXT,
-					   unit_label TEXT,
-					   category TEXT,
-					   internal_notes TEXT
-			   );
-	   `)
-	if err != nil {
-		t.Fatalf("Failed to create table: %v", err)
+	stripeCmd := exec.Command("stripe", "trigger", "payment_intent.succeeded")
+	stripeCmd.Stdout = os.Stdout
+	stripeCmd.Stderr = os.Stderr
+	stripeCmd.Env = append(os.Environ(), "STRIPE_API_KEY="+os.Getenv("STRIPE_API_KEY"))
+	if err := stripeCmd.Run(); err != nil {
+		t.Fatalf("Failed to run stripe trigger: %v", err)
 	}
+
+	pool.Client.Logs(docker.LogsOptions{
+		Container:    sqlpipeContainer.Container.ID,
+		OutputStream: os.Stdout,
+		ErrorStream:  os.Stderr,
+		Follow:       true,
+		Stdout:       true,
+		Stderr:       true,
+	})
+
 }

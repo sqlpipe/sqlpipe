@@ -15,7 +15,7 @@ func newStripe(systemInfo SystemInfo) (system System, err error) {
 
 	stripeClient := stripe.NewClient(systemInfo.ApiKey)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	listParams := &stripe.CustomerListParams{}
