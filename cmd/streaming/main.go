@@ -201,11 +201,11 @@ type Location struct {
 }
 
 type PropertySystemConfig struct {
-	SearchKey        bool     `json:"search_key"`
-	ReceiveFrom      bool     `json:"receive_from"`
-	PushTo           bool     `json:"push_to"`
-	RequireForCreate bool     `json:"require_for_create"`
-	Location         Location `json:"location"`
+	SearchKey        bool       `json:"search_key"`
+	ReceiveFrom      bool       `json:"receive_from"`
+	PushTo           bool       `json:"push_to"`
+	RequireForCreate bool       `json:"require_for_create"`
+	Locations        []Location `json:"locations"`
 }
 
 type Property struct {
@@ -240,7 +240,7 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 	modelMap := make(map[string]*Model)
 	compiler := jsonschema.NewCompiler()
 
-	systemPropertyMap := make(map[string]map[string]map[string]string)
+	systemPropertyMap := make(map[string]map[string]map[string]map[string]string)
 
 	for _, path := range jsonFiles {
 
@@ -251,8 +251,8 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 		if err != nil {
 			return nil, fmt.Errorf("compile %s: %w", path, err)
 		}
-		key := schema.Title
-		if key == "" {
+		modelName := schema.Title
+		if modelName == "" {
 			return nil, fmt.Errorf("schema %s has no title", path)
 		}
 
@@ -260,12 +260,12 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 			return nil, fmt.Errorf("failed to create queue dir: %w", err)
 		}
 
-		q, err := dque.NewOrOpen(key, cfg.queueDir, cfg.segmentSize, func() interface{} { return &map[string]interface{}{} })
+		q, err := dque.NewOrOpen(modelName, cfg.queueDir, cfg.segmentSize, func() interface{} { return &map[string]interface{}{} })
 		if err != nil {
-			return nil, fmt.Errorf("failed to create/open queue %s: %w", key, err)
+			return nil, fmt.Errorf("failed to create/open queue %s: %w", modelName, err)
 		}
 
-		modelMap[key] = &Model{
+		modelMap[modelName] = &Model{
 			Schema: schema,
 			Queue:  q,
 		}
@@ -281,20 +281,28 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 			return nil, fmt.Errorf("failed to decode model file %s: %w", path, err)
 		}
 
+		// system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
+
 		for propertyNameInSchema, schemaProperty := range schemaRoot.Properties {
 
 			for systemName, system := range schemaProperty.Systems {
+
 				if _, ok := systemPropertyMap[systemName]; !ok {
-					systemPropertyMap[systemName] = make(map[string]map[string]string)
+					systemPropertyMap[systemName] = make(map[string]map[string]map[string]string)
 				}
 
-				if system.Location.Object != "" {
-					if _, ok := systemPropertyMap[systemName][system.Location.Object]; !ok {
-						systemPropertyMap[systemName][system.Location.Object] = map[string]string{
-							system.Location.Field: propertyNameInSchema,
+				for _, location := range system.Locations {
+
+					if location.Object != "" {
+						if _, ok := systemPropertyMap[systemName][location.Object]; !ok {
+							systemPropertyMap[systemName][location.Object] = make(map[string]map[string]string)
 						}
-					} else {
-						systemPropertyMap[systemName][system.Location.Object][system.Location.Field] = propertyNameInSchema
+
+						if _, ok := systemPropertyMap[systemName][location.Object][modelName]; !ok {
+							systemPropertyMap[systemName][location.Object][modelName] = make(map[string]string)
+						}
+
+						systemPropertyMap[systemName][location.Object][modelName][location.Field] = propertyNameInSchema
 					}
 				}
 			}
