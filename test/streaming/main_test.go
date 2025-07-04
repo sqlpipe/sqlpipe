@@ -154,7 +154,7 @@ func TestStreaming(t *testing.T) {
 		"CGO_ENABLED=0",
 	)
 
-	buildCmd.Stdout = os.Stdout
+	// buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("Failed to build streaming app: %v", err)
@@ -180,8 +180,8 @@ func TestStreaming(t *testing.T) {
 		Name: "sqlpipe-streaming",
 		Env: []string{
 			"PORT=4000",
-			"SYSTEMS_YAML_DIR=/config/systems",
-			"MODELS_YAML_DIR=/config/models",
+			"SYSTEMS_DIR=/config/systems",
+			"MODELS_DIR=/config/models",
 			"QUEUE_DIR=/tmp/sqlpipe/queue",
 			"SEGMENT_SIZE=1000",
 		},
@@ -233,7 +233,7 @@ func TestStreaming(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	stripeCmd := exec.Command("stripe", "trigger", "price.created")
-	stripeCmd.Stdout = os.Stdout
+	// stripeCmd.Stdout = os.Stdout
 	stripeCmd.Stderr = os.Stderr
 	stripeCmd.Env = append(os.Environ(), fmt.Sprintf("STRIPE_API_KEY=%s", os.Getenv("STRIPE_API_KEY")))
 	err = stripeCmd.Run()

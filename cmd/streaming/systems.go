@@ -42,7 +42,6 @@ type SystemInfo struct {
 	Username           string        `yaml:"username,omitempty" json:"username,omitempty"`
 	Password           string        `yaml:"-" json:"-"`
 	Dsn                string        `yaml:"-" json:"-"`
-	Route              string        `yaml:"route,omitempty" json:"route,omitempty"`
 	ApiKey             string        `yaml:"api_key" json:"-"`
 	EndpointSecret     string        `yaml:"-" json:"-"`
 	PushFrequency      time.Duration `yaml:"push_frequency" json:"push_frequency"`
@@ -50,11 +49,12 @@ type SystemInfo struct {
 }
 
 type System interface {
+	handleWebhook(w http.ResponseWriter, r *http.Request)
+	// getFieldMap() map[string]string
+	mapProperties(obj map[string]interface{}) (map[string]interface{}, error)
 }
 
-func (app *application) NewSystem(systemInfo SystemInfo, port int, receiveHandlers *map[string]func(http.ResponseWriter, *http.Request)) (system System, err error) {
-	// creates a new system
-
+func (app *application) NewSystem(systemInfo SystemInfo, port int) (system System, err error) {
 	switch systemInfo.Type {
 	case TypePostgreSQL:
 		return newPostgresql(systemInfo)
@@ -65,4 +65,13 @@ func (app *application) NewSystem(systemInfo SystemInfo, port int, receiveHandle
 	default:
 		return system, fmt.Errorf("unsupported system type %v", systemInfo.Type)
 	}
+}
+
+func mapProperties(obj map[string]interface{}, propertyMap map[string]string) (map[string]interface{}, error) {
+	for fieldName, fieldVal := range obj {
+		if mappedName, ok := propertyMap[fieldName]; ok {
+			obj[mappedName] = fieldVal
+		}
+	}
+	return obj, nil
 }

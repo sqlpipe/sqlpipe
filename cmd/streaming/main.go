@@ -1,15 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"expvar"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,46 +28,38 @@ var (
 	version = vcs.Version()
 )
 
+type Model struct {
+	Schema *jsonschema.Schema
+	Queue  *dque.DQue
+}
+
 type config struct {
-	port           int
-	systemsYamlDir string
-	modelsYamlDir  string
-	queueDir       string
-	segmentSize    int
-	stripe         struct {
-		listen         bool
-		apiKey         string
-		endpointSecret string
-	}
+	port        int
+	systemsDir  string
+	modelsDir   string
+	queueDir    string
+	segmentSize int
 }
 
 type application struct {
-	config          config
-	logger          *slog.Logger
-	systemMap       map[string]System
-	wg              sync.WaitGroup
-	receiveHandlers map[string]func(w http.ResponseWriter, r *http.Request)
-	compiledSchemas map[string]*jsonschema.Schema
-	queueMap        map[string]*dque.DQue
-}
-
-type SchemaYAML struct {
-	Schemas map[string]interface{} `yaml:"schemas"`
+	config    config
+	logger    *slog.Logger
+	wg        sync.WaitGroup
+	systemMap map[string]System
+	modelMap  map[string]*Model
 }
 
 func main() {
 
 	var cfg config
 	flag.IntVar(&cfg.port, "port", 4000, "API port")
-	flag.StringVar(&cfg.systemsYamlDir, "systems-yaml-dir", "./systems", "Directory for systems YAML configuration")
-	flag.StringVar(&cfg.modelsYamlDir, "models-yaml-dir", "./models", "Directory for models YAML configuration")
+	flag.StringVar(&cfg.systemsDir, "systems-dir", "./systems", "Directory for systems configuration")
+	flag.StringVar(&cfg.modelsDir, "models-dir", "./models", "Directory for models configuration")
 	flag.StringVar(&cfg.queueDir, "queue-dir", "/tmp", "Directory for queue files")
 	flag.IntVar(&cfg.segmentSize, "segment-size", 100, "Size of each segment in the queue")
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 
 	flag.Parse()
-
-	cfg.stripe.apiKey = os.Getenv("STRIPE_API_KEY")
 
 	if *displayVersion {
 		fmt.Printf("Version:\t%s\n", version)
@@ -82,30 +76,58 @@ func main() {
 		return time.Now().Unix()
 	}))
 
-	queueMap := make(map[string]*dque.DQue)
-
-	compiledSchemas, err := LoadSchemasDir(cfg.modelsYamlDir, queueMap, cfg.segmentSize, cfg.queueDir)
+	modelMap, err := createModelMap(cfg)
 	if err != nil {
 		logger.Error("failed to load model schemas", "error", err)
 		os.Exit(1)
 	}
 
-	logger.Info("compiled schemas:")
-	for name, schema := range compiledSchemas {
-		fmt.Printf("%v properties: %v\n", name, schema.Properties)
+	systemInfoMap, err := createSystemInfoMap(cfg)
+	if err != nil {
+		logger.Error("failed to load system configurations", "error", err)
+		os.Exit(1)
 	}
 
+	app := &application{
+		config:    cfg,
+		logger:    logger,
+		systemMap: make(map[string]System),
+		modelMap:  modelMap,
+	}
+
+	serveQuitCh := make(chan struct{})
+
+	// The server must be running to check that webhooks are valid (needed for system initialization)
+	go func() {
+		err = app.serve()
+		if err != nil {
+			logger.Error(err.Error())
+			os.Exit(1)
+		}
+		close(serveQuitCh)
+	}()
+
+	app.setSystemMap(systemInfoMap)
+	if err != nil {
+		logger.Error("failed to create system map", "error", err)
+		os.Exit(1)
+	}
+
+	<-serveQuitCh
+	app.logger.Info("shutting down server")
+}
+
+func createSystemInfoMap(cfg config) (map[string]SystemInfo, error) {
 	systemInfoMap := make(map[string]SystemInfo)
 
-	err = filepath.Walk(cfg.systemsYamlDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(cfg.systemsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			logger.Error("failed to access path", "error", err, "path", path)
-			return err
+			return fmt.Errorf("error walking path %s: %w", path, err)
 		}
+
 		if !info.IsDir() && (filepath.Ext(path) == ".yaml" || filepath.Ext(path) == ".yml") {
 			f, err := os.Open(path)
 			if err != nil {
-				logger.Error("failed to open system yaml file", "error", err, "file", path)
 				return err
 			}
 			defer f.Close()
@@ -115,10 +137,9 @@ func main() {
 			err = decoder.Decode(&infos)
 			if err != nil {
 				if err == io.EOF {
-					// Empty YAML file, skip it gracefully
+					// Empty YAML file, skip it
 					return nil
 				}
-				logger.Error("failed to decode system configuration file", "error", err, "file", path)
 				return err
 			}
 			for name, info := range infos {
@@ -129,40 +150,21 @@ func main() {
 		return nil
 	})
 	if err != nil {
-		logger.Error("failed to walk systems yaml dir", "error", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to walk systems dir: %w", err)
 	}
 
-	app := &application{
-		config:          cfg,
-		logger:          logger,
-		systemMap:       make(map[string]System),
-		receiveHandlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
-		compiledSchemas: compiledSchemas,
-		queueMap:        queueMap,
-	}
+	return systemInfoMap, nil
+}
 
-	serveQuitCh := make(chan struct{})
-
-	go func() {
-		err = app.serve()
-		if err != nil {
-			logger.Error(err.Error())
-			os.Exit(1)
-		}
-		// send to serveQuitCh to signal that the server has stopped
-		close(serveQuitCh)
-	}()
-
+func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo) {
 	var systemMapMu sync.Mutex
 	errCh := make(chan error, len(systemInfoMap))
 	doneCh := make(chan struct{}, len(systemInfoMap))
 
 	for systemName, systemInfo := range systemInfoMap {
 		go func(systemName string, systemInfo SystemInfo) {
-			system, err := app.NewSystem(systemInfo, cfg.port, &app.receiveHandlers)
+			system, err := app.NewSystem(systemInfo, app.config.port)
 			if err != nil {
-				logger.Error("failed to connect to system", "system", systemName, "error", err)
 				errCh <- err
 			} else {
 				systemMapMu.Lock()
@@ -178,20 +180,140 @@ func main() {
 		<-doneCh
 	}
 
-	close(errCh)
-	close(doneCh)
-
 	// Collect and handle errors from errCh
 	var systemInitErrs []error
 	for e := range errCh {
 		systemInitErrs = append(systemInitErrs, e)
 	}
 	if len(systemInitErrs) > 0 {
-		logger.Error("failed to initialize one or more systems", "errors", systemInitErrs)
+		app.logger.Error("failed to initialize one or more systems", "errors", systemInitErrs)
 		os.Exit(1)
 	}
+}
 
-	// Wait for the server to finish
-	<-serveQuitCh
-	app.logger.Info("shutting down server")
+type Location struct {
+	Database string `json:"database"`
+	Schema   string `json:"schema"`
+	Table    string `json:"table"`
+	Column   string `json:"column"`
+	Object   string `json:"object"`
+	Field    string `json:"field"`
+}
+
+type PropertySystemConfig struct {
+	SearchKey        bool     `json:"search_key"`
+	ReceiveFrom      bool     `json:"receive_from"`
+	PushTo           bool     `json:"push_to"`
+	RequireForCreate bool     `json:"require_for_create"`
+	Location         Location `json:"location"`
+}
+
+type Property struct {
+	Type    string                          `json:"type"`
+	Systems map[string]PropertySystemConfig `json:"systems"`
+}
+
+type SchemaRoot struct {
+	Title      string              `json:"title"`
+	Properties map[string]Property `json:"properties"`
+}
+
+func createModelMap(cfg config) (map[string]*Model, error) {
+
+	jsonFiles := []string{}
+
+	err := filepath.WalkDir(cfg.modelsDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// Skip directories and non-JSON files
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".json") {
+			return nil
+		}
+		jsonFiles = append(jsonFiles, path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	modelMap := make(map[string]*Model)
+	compiler := jsonschema.NewCompiler()
+
+	systemPropertyMap := make(map[string]map[string]map[string]string)
+
+	for _, path := range jsonFiles {
+
+		schemaRoot := &SchemaRoot{}
+
+		url := "file://" + filepath.ToSlash(path)
+		schema, err := compiler.Compile(url)
+		if err != nil {
+			return nil, fmt.Errorf("compile %s: %w", path, err)
+		}
+		key := schema.Title
+		if key == "" {
+			return nil, fmt.Errorf("schema %s has no title", path)
+		}
+
+		if err := os.MkdirAll(cfg.queueDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create queue dir: %w", err)
+		}
+
+		q, err := dque.NewOrOpen(key, cfg.queueDir, cfg.segmentSize, func() interface{} { return &map[string]interface{}{} })
+		if err != nil {
+			return nil, fmt.Errorf("failed to create/open queue %s: %w", key, err)
+		}
+
+		modelMap[key] = &Model{
+			Schema: schema,
+			Queue:  q,
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open model file %s: %w", path, err)
+		}
+		defer f.Close()
+
+		decoder := json.NewDecoder(f)
+		if err := decoder.Decode(&schemaRoot); err != nil {
+			return nil, fmt.Errorf("failed to decode model file %s: %w", path, err)
+		}
+
+		for propertyNameInSchema, schemaProperty := range schemaRoot.Properties {
+
+			for systemName, system := range schemaProperty.Systems {
+				if _, ok := systemPropertyMap[systemName]; !ok {
+					systemPropertyMap[systemName] = make(map[string]map[string]string)
+				}
+
+				if system.Location.Object != "" {
+					if _, ok := systemPropertyMap[systemName][system.Location.Object]; !ok {
+						systemPropertyMap[systemName][system.Location.Object] = map[string]string{
+							system.Location.Field: propertyNameInSchema,
+						}
+					} else {
+						systemPropertyMap[systemName][system.Location.Object][system.Location.Field] = propertyNameInSchema
+					}
+				}
+			}
+		}
+
+		// pretty, err := json.MarshalIndent(schemaRoot, "", "  ")
+		// if err != nil {
+		// 	fmt.Printf("failed to marshal schemaRoot: %v\n", err)
+		// } else {
+		// 	fmt.Println(string(pretty))
+		// }
+	}
+
+	pretty, err := json.MarshalIndent(systemPropertyMap, "", "  ")
+	if err != nil {
+		fmt.Printf("failed to marshal systemPropertyMap: %v\n", err)
+	} else {
+		fmt.Println(string(pretty))
+	}
+
+	return modelMap, nil
 }

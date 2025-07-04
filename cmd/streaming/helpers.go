@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 type envelope map[string]any
@@ -64,21 +62,12 @@ func openConnectionPool(name, connectionString, driverName string) (connectionPo
 	return connectionPool, nil
 }
 
-// ValidateWithSchema looks up schemas[name] and runs Validate on your payload.
-// Returns a *jsonschema.ValidationError if it fails.
-func ValidateSchema(
-	name string,
-	rawPayload []byte,
-	compiledSchemas map[string]*jsonschema.Schema,
-) error {
-	sch, ok := compiledSchemas[name]
-	if !ok {
-		return fmt.Errorf("no schema named %q loaded", name)
+func (app *application) receiveHandler(w http.ResponseWriter, r *http.Request) {
+
+	path := r.URL.Path
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
 	}
 
-	var v interface{}
-	if err := json.Unmarshal(rawPayload, &v); err != nil {
-		return fmt.Errorf("invalid JSON payload: %w", err)
-	}
-	return sch.Validate(v)
+	app.systemMap[path].handleWebhook(w, r)
 }
