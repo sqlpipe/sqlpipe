@@ -249,5 +249,4 @@ func TestStreaming(t *testing.T) {
 		Stdout:       true,
 		Stderr:       true,
 	})
-
 }

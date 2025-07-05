@@ -51,7 +51,7 @@ type SystemInfo struct {
 type System interface {
 	handleWebhook(w http.ResponseWriter, r *http.Request)
 	// getFieldMap() map[string]string
-	mapProperties(obj map[string]interface{}) (map[string]interface{}, error)
+	// createModels(obj map[string]interface{}) (map[string]interface{}, error)
 }
 
 func (app *application) NewSystem(systemInfo SystemInfo, port int) (system System, err error) {
@@ -65,13 +65,4 @@ func (app *application) NewSystem(systemInfo SystemInfo, port int) (system Syste
 	default:
 		return system, fmt.Errorf("unsupported system type %v", systemInfo.Type)
 	}
-}
-
-func mapProperties(obj map[string]interface{}, propertyMap map[string]string) (map[string]interface{}, error) {
-	for fieldName, fieldVal := range obj {
-		if mappedName, ok := propertyMap[fieldName]; ok {
-			obj[mappedName] = fieldVal
-		}
-	}
-	return obj, nil
 }

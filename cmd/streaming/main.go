@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"expvar"
 	"flag"
@@ -42,11 +43,18 @@ type config struct {
 }
 
 type application struct {
-	config    config
-	logger    *slog.Logger
-	wg        sync.WaitGroup
-	systemMap map[string]System
-	modelMap  map[string]*Model
+	config            config
+	logger            *slog.Logger
+	wg                sync.WaitGroup
+	systemMap         map[string]System
+	systemPropertyMap map[string]map[string]map[string]map[string]string // system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
+	modelMap          map[string]*Model
+}
+
+func init() {
+	gob.Register([]interface{}{})
+	gob.Register(map[string]interface{}{})
+
 }
 
 func main() {
@@ -76,7 +84,7 @@ func main() {
 		return time.Now().Unix()
 	}))
 
-	modelMap, err := createModelMap(cfg)
+	modelMap, systemPropertyMap, err := createModelMap(cfg)
 	if err != nil {
 		logger.Error("failed to load model schemas", "error", err)
 		os.Exit(1)
@@ -89,10 +97,11 @@ func main() {
 	}
 
 	app := &application{
-		config:    cfg,
-		logger:    logger,
-		systemMap: make(map[string]System),
-		modelMap:  modelMap,
+		config:            cfg,
+		logger:            logger,
+		systemMap:         make(map[string]System),
+		modelMap:          modelMap,
+		systemPropertyMap: systemPropertyMap,
 	}
 
 	serveQuitCh := make(chan struct{})
@@ -218,7 +227,7 @@ type SchemaRoot struct {
 	Properties map[string]Property `json:"properties"`
 }
 
-func createModelMap(cfg config) (map[string]*Model, error) {
+func createModelMap(cfg config) (map[string]*Model, map[string]map[string]map[string]map[string]string, error) {
 
 	jsonFiles := []string{}
 
@@ -234,7 +243,7 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	modelMap := make(map[string]*Model)
@@ -249,20 +258,20 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 		url := "file://" + filepath.ToSlash(path)
 		schema, err := compiler.Compile(url)
 		if err != nil {
-			return nil, fmt.Errorf("compile %s: %w", path, err)
+			return nil, nil, fmt.Errorf("compile %s: %w", path, err)
 		}
 		modelName := schema.Title
 		if modelName == "" {
-			return nil, fmt.Errorf("schema %s has no title", path)
+			return nil, nil, fmt.Errorf("schema %s has no title", path)
 		}
 
 		if err := os.MkdirAll(cfg.queueDir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create queue dir: %w", err)
+			return nil, nil, fmt.Errorf("failed to create queue dir: %w", err)
 		}
 
 		q, err := dque.NewOrOpen(modelName, cfg.queueDir, cfg.segmentSize, func() interface{} { return &map[string]interface{}{} })
 		if err != nil {
-			return nil, fmt.Errorf("failed to create/open queue %s: %w", modelName, err)
+			return nil, nil, fmt.Errorf("failed to create/open queue %s: %w", modelName, err)
 		}
 
 		modelMap[modelName] = &Model{
@@ -272,13 +281,13 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 
 		f, err := os.Open(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open model file %s: %w", path, err)
+			return nil, nil, fmt.Errorf("failed to open model file %s: %w", path, err)
 		}
 		defer f.Close()
 
 		decoder := json.NewDecoder(f)
 		if err := decoder.Decode(&schemaRoot); err != nil {
-			return nil, fmt.Errorf("failed to decode model file %s: %w", path, err)
+			return nil, nil, fmt.Errorf("failed to decode model file %s: %w", path, err)
 		}
 
 		// system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
@@ -294,6 +303,7 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 				for _, location := range system.Locations {
 
 					if location.Object != "" {
+
 						if _, ok := systemPropertyMap[systemName][location.Object]; !ok {
 							systemPropertyMap[systemName][location.Object] = make(map[string]map[string]string)
 						}
@@ -307,21 +317,14 @@ func createModelMap(cfg config) (map[string]*Model, error) {
 				}
 			}
 		}
-
-		// pretty, err := json.MarshalIndent(schemaRoot, "", "  ")
-		// if err != nil {
-		// 	fmt.Printf("failed to marshal schemaRoot: %v\n", err)
-		// } else {
-		// 	fmt.Println(string(pretty))
-		// }
 	}
 
-	pretty, err := json.MarshalIndent(systemPropertyMap, "", "  ")
-	if err != nil {
-		fmt.Printf("failed to marshal systemPropertyMap: %v\n", err)
-	} else {
-		fmt.Println(string(pretty))
-	}
+	// pretty, err := json.MarshalIndent(systemPropertyMap, "", "  ")
+	// if err != nil {
+	// 	fmt.Printf("failed to marshal systemPropertyMap: %v\n", err)
+	// } else {
+	// 	fmt.Println(string(pretty))
+	// }
 
-	return modelMap, nil
+	return modelMap, systemPropertyMap, nil
 }
