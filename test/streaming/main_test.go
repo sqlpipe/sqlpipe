@@ -230,7 +230,7 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("SQLpipe healthcheck failed: %v", err)
 	}
 
-	time.Sleep(2 * time.Second)
+	// time.Sleep(2 * time.Second)
 
 	stripeCmd := exec.Command("stripe", "trigger", "price.created")
 	// stripeCmd.Stdout = os.Stdout

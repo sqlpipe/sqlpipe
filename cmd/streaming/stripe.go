@@ -83,15 +83,12 @@ func (s Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.app.logger.Info("Received Stripe webhook", "type", event.Type)
+
 	objectName := string(event.Type)
 	// If the event type contains a period, we only want the part before it
 	if idx := indexOfPeriod(objectName); idx > 0 {
 		objectName = objectName[:idx]
-	}
-
-	if _, ok := s.app.modelMap[objectName]; !ok {
-		s.app.logger.Info("No model found for event type", "event_type", objectName)
-		return
 	}
 
 	var obj map[string]interface{}
@@ -101,79 +98,56 @@ func (s Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		s.app.logger.Error("Failed to marshal object", "error", err)
-		return
-	}
-	fmt.Println("obj:")
-	fmt.Println(string(b))
+	// b, err := json.MarshalIndent(obj, "", "  ")
+	// if err != nil {
+	// 	s.app.logger.Error("Failed to marshal object", "error", err)
+	// 	return
+	// }
+	// fmt.Println("obj:")
+	// fmt.Println(string(b))
 
-	modelsToCreate := s.systemPropertyMap[objectName]
+	// b, err = json.MarshalIndent(s.systemPropertyMap[objectName], "", "  ")
+	// if err != nil {
+	// 	s.app.logger.Error("Failed to marshal models to create", "error", err)
+	// 	return
+	// }
+	// fmt.Println("modelsToCreate:")
+	// fmt.Println(string(b))
 
-	b, err = json.MarshalIndent(modelsToCreate, "", "  ")
-	if err != nil {
-		s.app.logger.Error("Failed to marshal models to create", "error", err)
-		return
-	}
-	fmt.Println("modelsToCreate:")
-	fmt.Println(string(b))
+	newObjs := make(map[string]interface{})
 
-	newModels := make(map[string]interface{})
-
-	for modelName, fieldMap := range modelsToCreate {
+	for modelName, fieldMap := range s.systemPropertyMap[objectName] {
 		newModel := map[string]interface{}{}
 
 		for keyInObj, desiredKey := range fieldMap {
 			newModel[desiredKey] = obj[keyInObj]
 		}
 
-		newModels[modelName] = newModel
+		newObjs[modelName] = newModel
 	}
 
-	for modelName, model := range newModels {
-		fmt.Println("new model:", modelName)
-		b, err := json.MarshalIndent(model, "", "  ")
-		if err != nil {
-			s.app.logger.Error("Failed to marshal new model", "error", err)
+	for modelName, obj := range newObjs {
+
+		model, inMap := s.app.modelMap[modelName]
+		if !inMap {
+			fmt.Printf("No schema found for object: %s\n", objectName)
 			return
 		}
-		fmt.Println(string(b))
+
+		err = model.Schema.Validate(obj)
+		if err != nil {
+			fmt.Printf("Object failed schema validation for '%s': %v\n", objectName, err)
+			return
+		}
+
+		err = model.Queue.Enqueue(obj)
+		if err != nil {
+			fmt.Printf("Failed to enqueue object for '%s': %v\n", objectName, err)
+			return
+		}
+
+		fmt.Printf("Enqueued %v object: %+v\n", modelName, obj)
 	}
-
-	// if model, ok := s.app.modelMap[objectName]; ok {
-
-	// 	var obj map[string]interface{}
-	// 	err := json.Unmarshal(event.Data.Raw, &obj)
-	// 	if err != nil {
-	// 		s.app.logger.Error("Failed to unmarshal Stripe event data", "error", err)
-	// 		return
-	// 	}
-
-	// 	obj, err = s.mapProperties(obj, modelName, incomingObjectType)
-	// 	if err != nil {
-	// 		fmt.Printf("Failed to map properties for '%s': %v\n", objectName, err)
-	// 		return
-	// 	}
-
-	// 	err = model.Schema.Validate(obj)
-	// 	if err != nil {
-	// 		fmt.Printf("Object failed schema validation for '%s': %v\n", objectName, err)
-	// 		return
-	// 	}
-
-	// 	err = model.Queue.Enqueue(obj)
-	// 	if err != nil {
-	// 		fmt.Printf("Failed to enqueue object for '%s': %v\n", objectName, err)
-	// 		return
-	// 	}
-
-	// 	fmt.Printf("Enqueued object: %+v\n", obj)
-
-	// } else {
-	// 	fmt.Printf("No schema found for object: %s\n", objectName)
-	// 	return
-	// }
 }
 
 // indexOfPeriod returns the index of the first period in s, or -1 if not found
