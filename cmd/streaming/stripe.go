@@ -31,9 +31,7 @@ func (app *application) newStripe(systemInfo SystemInfo) (system SystemInterface
 		// Forward Stripe events to our local endpoint
 		forwardURL := fmt.Sprintf("http://localhost:%d/%v", app.config.port, systemInfo.Name)
 		cmd := exec.Command("stripe", "listen", "--forward-to", forwardURL)
-		// cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		// cmd.Stdin = os.Stdin
 
 		cmd.Env = append(os.Environ(), fmt.Sprintf("STRIPE_API_KEY=%s", systemInfo.ApiKey))
 
@@ -104,29 +102,15 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// b, err := json.MarshalIndent(obj, "", "  ")
-	// if err != nil {
-	// 	s.app.logger.Error("Failed to marshal object", "error", err)
-	// 	return
-	// }
-	// fmt.Println("obj:")
-	// fmt.Println(string(b))
-
-	// b, err = json.MarshalIndent(s.receiveFieldMap[objectName], "", "  ")
-	// if err != nil {
-	// 	s.app.logger.Error("Failed to marshal models to create", "error", err)
-	// 	return
-	// }
-	// fmt.Println("modelsToCreate:")
-	// fmt.Println(string(b))
-
-	newObjs := make(map[string]interface{})
+	newObjs := make(map[string]map[string]interface{})
 
 	for schemaName, fieldMap := range s.receiveFieldMap[objectName] {
 		newModel := map[string]interface{}{}
 
 		for keyInObj, desiredKey := range fieldMap {
-			newModel[desiredKey.Field] = obj[keyInObj]
+			if desiredKey.Pull {
+				newModel[desiredKey.Field] = obj[keyInObj]
+			}
 		}
 
 		newObjs[schemaName] = newModel
@@ -146,14 +130,6 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// b, err := json.MarshalIndent(obj, "", "  ")
-		// if err != nil {
-		// 	fmt.Printf("Failed to marshal object for pretty print: %v\n", err)
-		// } else {
-		// 	fmt.Printf("Storing object in schema '%s':\n%s\n", schemaName, string(b))
-		// }
-
-		// Add the object to the storage engine
 		s.app.storageEngine.addSafeObject(obj, schemaName)
 	}
 }

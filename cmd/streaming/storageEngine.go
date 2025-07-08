@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -66,6 +67,6 @@ func (s *storageEngine) printAllContents() {
 
 	println("safeObjects contents:")
 	for i, obj := range s.safeObjects {
-		println("  Index:", i, "Value:", obj)
+		println("  Index:", i, "Value:", fmt.Sprintf("%v", obj))
 	}
 }

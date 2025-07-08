@@ -28,9 +28,10 @@ var (
 )
 
 type config struct {
-	port       int
-	systemsDir string
-	modelsDir  string
+	port              int
+	systemsDir        string
+	modelsDir         string
+	keepDuplicatesFor time.Duration
 }
 
 type application struct {
@@ -39,7 +40,7 @@ type application struct {
 	wg              sync.WaitGroup
 	systemMap       map[string]SystemInterface
 	receiveFieldMap map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
-	pushFieldMap    map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_schema.key_name_for_obj
+	pushFieldMap    map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_schema.key_name_for_obj]
 	schemaMap       map[string]*jsonschema.Schema
 	storageEngine   *storageEngine
 	schemaRootMap   map[string]*SchemaRoot
@@ -51,6 +52,7 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 4000, "API port")
 	flag.StringVar(&cfg.systemsDir, "systems-dir", "./systems", "Directory for systems configuration")
 	flag.StringVar(&cfg.modelsDir, "models-dir", "./models", "Directory for models configuration")
+	flag.DurationVar(&cfg.keepDuplicatesFor, "keep-duplicates-for", 1*time.Hour, "Duration to keep duplicate entries")
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 
 	flag.Parse()
@@ -101,6 +103,12 @@ func main() {
 
 	serveQuitCh := make(chan struct{})
 
+	duplicateChecker := make(map[string][]ExpiringMapAny)
+
+	for schemaName := range app.schemaMap {
+		duplicateChecker[schemaName] = []ExpiringMapAny{}
+	}
+
 	// The server must be running to check that webhooks are valid (needed for system initialization)
 	go func() {
 		err = app.serve()
@@ -111,7 +119,7 @@ func main() {
 		close(serveQuitCh)
 	}()
 
-	app.setSystemMap(systemInfoMap)
+	app.setSystemMap(systemInfoMap, duplicateChecker)
 	if err != nil {
 		logger.Error("failed to create system map", "error", err)
 		os.Exit(1)
@@ -160,14 +168,14 @@ func createSystemInfoMap(cfg config) (map[string]SystemInfo, error) {
 	return systemInfoMap, nil
 }
 
-func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo) {
+func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo, duplicateChecker map[string][]ExpiringMapAny) {
 	var systemMapMu sync.Mutex
 	errCh := make(chan error, len(systemInfoMap))
 	doneCh := make(chan struct{}, len(systemInfoMap))
 
 	for systemName, systemInfo := range systemInfoMap {
 		go func(systemName string, systemInfo SystemInfo) {
-			system, err := app.NewSystem(systemInfo, app.config.port)
+			system, err := app.NewSystem(systemInfo, app.config.port, duplicateChecker)
 			if err != nil {
 				errCh <- err
 			} else {
@@ -199,6 +207,7 @@ type Location struct {
 	Object    string `json:"object,omitempty"`
 	Field     string `json:"field,omitempty"`
 	SearchKey bool   `json:"search_key,omitempty"`
+	Pull      bool   `json:"pull,omitempty"`
 }
 
 type PropertySystemConfig struct {
@@ -209,7 +218,7 @@ type PropertySystemConfig struct {
 }
 
 type Property struct {
-	Type    string                          `json:"type"`
+	Type    any                             `json:"type"`
 	Systems map[string]PropertySystemConfig `json:"systems"`
 }
 
@@ -315,6 +324,7 @@ func createModelMap(cfg config) (
 					receiveFieldMap[systemName][location.Object][schema.Title][location.Field] = Location{
 						Field:     propertyNameInSchema,
 						SearchKey: location.SearchKey,
+						Pull:      true,
 					}
 				}
 
@@ -331,11 +341,45 @@ func createModelMap(cfg config) (
 					receiveFieldMap[systemName][location.Object][schema.Title][location.Field] = Location{
 						Field:     propertyNameInSchema,
 						SearchKey: location.SearchKey,
+						Pull:      true,
+					}
+				}
+
+				for _, location := range system.Push {
+
+					if _, ok := receiveFieldMap[systemName][location.Object]; !ok {
+						receiveFieldMap[systemName][location.Object] = make(map[string]map[string]Location)
+					}
+
+					if _, ok := receiveFieldMap[systemName][location.Object][schema.Title]; !ok {
+						receiveFieldMap[systemName][location.Object][schema.Title] = make(map[string]Location)
+					}
+
+					receiveFieldMap[systemName][location.Object][schema.Title][location.Field] = Location{
+						Field:     propertyNameInSchema,
+						SearchKey: location.SearchKey,
+						Pull:      false,
 					}
 				}
 
 				if _, ok := pushFieldMap[systemName]; !ok {
 					pushFieldMap[systemName] = make(map[string]map[string]map[string]Location)
+				}
+
+				for _, location := range system.Receive {
+					if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
+						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
+					}
+
+					if _, ok := pushFieldMap[systemName][schema.Title][location.Object]; !ok {
+						pushFieldMap[systemName][schema.Title][location.Object] = make(map[string]Location)
+					}
+
+					pushFieldMap[systemName][schema.Title][location.Object][propertyNameInSchema] = Location{
+						Field:     location.Field,
+						SearchKey: location.SearchKey,
+						Pull:      false,
+					}
 				}
 
 				for _, location := range system.Push {
@@ -350,6 +394,7 @@ func createModelMap(cfg config) (
 					pushFieldMap[systemName][schema.Title][location.Object][propertyNameInSchema] = Location{
 						Field:     location.Field,
 						SearchKey: location.SearchKey,
+						Pull:      false,
 					}
 				}
 
@@ -365,25 +410,26 @@ func createModelMap(cfg config) (
 					pushFieldMap[systemName][schema.Title][location.Object][propertyNameInSchema] = Location{
 						Field:     location.Field,
 						SearchKey: location.SearchKey,
+						Pull:      false,
 					}
 				}
 			}
 		}
 	}
 
-	// b, err := json.MarshalIndent(receiveFieldMap, "", "  ")
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "failed to marshal receiveFieldMap: %v\n", err)
-	// } else {
-	// 	fmt.Printf("receiveFieldMap:\n%s\n", string(b))
-	// }
+	b, err := json.MarshalIndent(receiveFieldMap, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal receiveFieldMap: %v\n", err)
+	} else {
+		fmt.Printf("receiveFieldMap:\n%s\n", string(b))
+	}
 
-	// b, err = json.MarshalIndent(pushFieldMap, "", "  ")
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "failed to marshal pushFieldMap: %v\n", err)
-	// } else {
-	// 	fmt.Printf("pushFieldMap:\n%s\n", string(b))
-	// }
+	b, err = json.MarshalIndent(pushFieldMap, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal pushFieldMap: %v\n", err)
+	} else {
+		fmt.Printf("pushFieldMap:\n%s\n", string(b))
+	}
 
 	return schemaMap, receiveFieldMap, pushFieldMap, schemaRootMap, nil
 }

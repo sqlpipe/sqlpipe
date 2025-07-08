@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,21 +14,33 @@ import (
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/time/rate"
 )
 
-type Postgresql struct {
-	db              *sql.DB
-	replConn        *pgconn.PgConn
-	app             *application
-	systemInfo      SystemInfo
-	receiveFieldMap map[string]map[string]map[string]Location
-	pushFieldMap    map[string]map[string]map[string]Location
-	limiter         *rate.Limiter
+type ExpiringMapAny struct {
+	Object map[string]interface{} `json:"object"`
+	Expiry time.Time              `json:"expiry"`
 }
 
-func (app *application) newPostgresql(systemInfo SystemInfo) (postgresql Postgresql, err error) {
+func newExpiringMapAny(object map[string]any, timeFromNow time.Duration) ExpiringMapAny {
+	return ExpiringMapAny{
+		Object: object,
+		Expiry: time.Now().Add(timeFromNow),
+	}
+}
+
+type Postgresql struct {
+	db               *sql.DB
+	replConn         *pgconn.PgConn
+	app              *application
+	systemInfo       SystemInfo
+	receiveFieldMap  map[string]map[string]map[string]Location
+	pushFieldMap     map[string]map[string]map[string]Location
+	limiter          *rate.Limiter
+	duplicateChecker map[string][]ExpiringMapAny
+}
+
+func (app *application) newPostgresql(systemInfo SystemInfo, duplicateChecker map[string][]ExpiringMapAny) (postgresql Postgresql, err error) {
 	db, err := openConnectionPool(systemInfo.Name, systemInfo.ConnectionString, DriverPostgreSQL)
 	if err != nil {
 		return postgresql, fmt.Errorf("error opening postgresql db :: %v", err)
@@ -46,9 +59,7 @@ func (app *application) newPostgresql(systemInfo SystemInfo) (postgresql Postgre
 	postgresql.limiter = rate.NewLimiter(rate.Limit(systemInfo.RateLimit), systemInfo.RateBucketSize)
 	postgresql.receiveFieldMap = app.receiveFieldMap[systemInfo.Name]
 	postgresql.pushFieldMap = app.pushFieldMap[systemInfo.Name]
-
-	// fmt.Println("push field map in create new", app.pushFieldMap)
-	// fmt.Println("receive field map in create new", app.receiveFieldMap)
+	postgresql.duplicateChecker = duplicateChecker
 
 	var index int64 = 0
 	app.storageEngine.setSafeIndexMap(systemInfo.Name, index)
@@ -81,11 +92,7 @@ func (p Postgresql) watchQueue() {
 		if len(objects) > 0 {
 			// Process new objects as needed
 			index += int64(len(objects))
-			// Example: log or handle objects
-			// fmt.Printf("New safeObjects: %v\n", objects)
 		}
-
-		// newObjs := make(map[string]interface{})
 
 		for _, obj := range objects {
 			searchFields := []string{}
@@ -116,8 +123,7 @@ func (p Postgresql) watchQueue() {
 					}
 				}
 
-				// newObjs[locationInSystem] = newObj
-				err = p.upsertJSON(newObj, searchFields, locationInSystem)
+				err = p.upsertJSON(newObj, searchFields, locationInSystem, objectType)
 				if err != nil {
 					p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", objectType, "locationInSystem", locationInSystem, "data", newObj)
 				}
@@ -133,9 +139,8 @@ func (p Postgresql) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	p.app.logger.Error("PostgreSQL does not support webhooks", "system", p.systemInfo.Name)
 }
 
-func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []string, locationInSystem string) error {
+func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []string, locationInSystem string, objectType string) error {
 	// Find the first available search field in data
-	// fmt.Println("upserting:", data, "searchFields:", searchFields, "locationInSystem:", locationInSystem)
 	var conflictFields []string
 	for _, field := range searchFields {
 		if _, ok := data[field]; ok {
@@ -186,7 +191,16 @@ func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []strin
 
 	// Execute
 	_, err := p.db.Exec(query, values...)
-	return err
+	if err != nil {
+		p.app.logger.Error("error executing upsert query", "error", err, "query", query, "values", values)
+		return fmt.Errorf("error executing upsert query: %v", err)
+	}
+
+	expiringObj := newExpiringMapAny(data, p.app.config.keepDuplicatesFor)
+	// Add the expiring object to the duplicate checker
+	p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType], expiringObj)
+
+	return nil
 }
 
 // Start CDC for all tables in publication
@@ -229,8 +243,6 @@ func (p *Postgresql) watchCDC() {
 	clientXLogPos := sysident.XLogPos
 	standbyMessageTimeout := time.Second * 10
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
-	// relations := map[uint32]*pglogrepl.RelationMessage{}
-	// typeMap := pgtype.NewMap()
 
 	for {
 		if time.Now().After(nextStandbyMessageDeadline) {
@@ -238,7 +250,6 @@ func (p *Postgresql) watchCDC() {
 			if err != nil {
 				log.Fatalln("SendStandbyStatusUpdate failed:", err)
 			}
-			// log.Printf("Sent Standby status message at %s\n", clientXLogPos.String())
 			nextStandbyMessageDeadline = time.Now().Add(standbyMessageTimeout)
 		}
 
@@ -268,7 +279,6 @@ func (p *Postgresql) watchCDC() {
 			if err != nil {
 				log.Fatalln("ParsePrimaryKeepaliveMessage failed:", err)
 			}
-			// log.Println("Primary Keepalive Message =>", "ServerWALEnd:", pkm.ServerWALEnd, "ServerTime:", pkm.ServerTime, "ReplyRequested:", pkm.ReplyRequested)
 			if pkm.ServerWALEnd > clientXLogPos {
 				clientXLogPos = pkm.ServerWALEnd
 			}
@@ -282,17 +292,15 @@ func (p *Postgresql) watchCDC() {
 				log.Fatalln("ParseXLogData failed:", err)
 			}
 
-			if outputPlugin == "wal2json" {
-				log.Printf("wal2json data: %s\n", string(xld.WALData))
+			// if outputPlugin == "wal2json" {
+			// 	log.Printf("wal2json data: %s\n", string(xld.WALData))
+			// }
+
+			err = p.handleCdcEvent(string(xld.WALData))
+			if err != nil {
+				p.app.logger.Error("error handling CDC event", "error", err, "data", string(xld.WALData))
+				return
 			}
-			// else {
-			// log.Printf("XLogData => WALStart %s ServerWALEnd %s ServerTime %s WALData:\n", xld.WALStart, xld.ServerWALEnd, xld.ServerTime)
-			// if v2 {
-			// 	processV2(xld.WALData, relationsV2, typeMap, &inStream)
-			// } else {
-			// processV1(xld.WALData, relations, typeMap)
-			// }
-			// }
 
 			if xld.WALStart > clientXLogPos {
 				clientXLogPos = xld.WALStart
@@ -302,143 +310,113 @@ func (p *Postgresql) watchCDC() {
 	}
 }
 
-// func processV2(walData []byte, relations map[uint32]*pglogrepl.RelationMessageV2, typeMap *pgtype.Map, inStream *bool) {
-// 	logicalMsg, err := pglogrepl.ParseV2(walData, *inStream)
-// 	if err != nil {
-// 		log.Fatalf("Parse logical replication message: %s", err)
-// 	}
-// 	log.Printf("Receive a logical replication message: %s", logicalMsg.Type())
-// 	switch logicalMsg := logicalMsg.(type) {
-// 	case *pglogrepl.RelationMessageV2:
-// 		relations[logicalMsg.RelationID] = logicalMsg
-
-// 	case *pglogrepl.BeginMessage:
-// 		// Indicates the beginning of a group of changes in a transaction. This is only sent for committed transactions. You won't get any events from rolled back transactions.
-
-// 	case *pglogrepl.CommitMessage:
-
-// 	case *pglogrepl.InsertMessageV2:
-// 		rel, ok := relations[logicalMsg.RelationID]
-// 		if !ok {
-// 			log.Fatalf("unknown relation ID %d", logicalMsg.RelationID)
-// 		}
-// 		values := map[string]interface{}{}
-// 		for idx, col := range logicalMsg.Tuple.Columns {
-// 			colName := rel.Columns[idx].Name
-// 			switch col.DataType {
-// 			case 'n': // null
-// 				values[colName] = nil
-// 			case 'u': // unchanged toast
-// 				// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
-// 			case 't': //text
-// 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
-// 				if err != nil {
-// 					log.Fatalln("error decoding column data:", err)
-// 				}
-// 				values[colName] = val
-// 			}
-// 		}
-// 		log.Printf("insert for xid %d\n", logicalMsg.Xid)
-// 		log.Printf("INSERT INTO %s.%s: %v", rel.Namespace, rel.RelationName, values)
-
-// 	case *pglogrepl.UpdateMessageV2:
-// 		log.Printf("update for xid %d\n", logicalMsg.Xid)
-// 		// ...
-// 	case *pglogrepl.DeleteMessageV2:
-// 		log.Printf("delete for xid %d\n", logicalMsg.Xid)
-// 		// ...
-// 	case *pglogrepl.TruncateMessageV2:
-// 		log.Printf("truncate for xid %d\n", logicalMsg.Xid)
-// 		// ...
-
-// 	case *pglogrepl.TypeMessageV2:
-// 	case *pglogrepl.OriginMessage:
-
-// 	case *pglogrepl.LogicalDecodingMessageV2:
-// 		log.Printf("Logical decoding message: %q, %q, %d", logicalMsg.Prefix, logicalMsg.Content, logicalMsg.Xid)
-
-// 	case *pglogrepl.StreamStartMessageV2:
-// 		*inStream = true
-// 		log.Printf("Stream start message: xid %d, first segment? %d", logicalMsg.Xid, logicalMsg.FirstSegment)
-// 	case *pglogrepl.StreamStopMessageV2:
-// 		*inStream = false
-// 		log.Printf("Stream stop message")
-// 	case *pglogrepl.StreamCommitMessageV2:
-// 		log.Printf("Stream commit message: xid %d", logicalMsg.Xid)
-// 	case *pglogrepl.StreamAbortMessageV2:
-// 		log.Printf("Stream abort message: xid %d", logicalMsg.Xid)
-// 	default:
-// 		log.Printf("Unknown message type in pgoutput stream: %T", logicalMsg)
-// 	}
-// }
-
-func processV1(walData []byte, relations map[uint32]*pglogrepl.RelationMessage, typeMap *pgtype.Map) {
-	logicalMsg, err := pglogrepl.Parse(walData)
-	if err != nil {
-		log.Fatalf("Parse logical replication message: %s", err)
-	}
-	log.Printf("Receive a logical replication message: %s", logicalMsg.Type())
-	switch logicalMsg := logicalMsg.(type) {
-	case *pglogrepl.RelationMessage:
-		relations[logicalMsg.RelationID] = logicalMsg
-
-	case *pglogrepl.BeginMessage:
-		// Indicates the beginning of a group of changes in a transaction. This is only sent for committed transactions. You won't get any events from rolled back transactions.
-
-	case *pglogrepl.CommitMessage:
-
-	case *pglogrepl.InsertMessage:
-		rel, ok := relations[logicalMsg.RelationID]
-		if !ok {
-			log.Fatalf("unknown relation ID %d", logicalMsg.RelationID)
-		}
-		values := map[string]interface{}{}
-		for idx, col := range logicalMsg.Tuple.Columns {
-			colName := rel.Columns[idx].Name
-			switch col.DataType {
-			case 'n': // null
-				values[colName] = nil
-			case 'u': // unchanged toast
-				// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
-			case 't': //text
-				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
-				if err != nil {
-					log.Fatalln("error decoding column data:", err)
-				}
-				values[colName] = val
-			}
-		}
-		log.Printf("INSERT INTO %s.%s: %v", rel.Namespace, rel.RelationName, values)
-
-	case *pglogrepl.UpdateMessage:
-		// ...
-	case *pglogrepl.DeleteMessage:
-		// ...
-	case *pglogrepl.TruncateMessage:
-		// ...
-
-	case *pglogrepl.TypeMessage:
-	case *pglogrepl.OriginMessage:
-
-	case *pglogrepl.LogicalDecodingMessage:
-		log.Printf("Logical decoding message: %q, %q", logicalMsg.Prefix, logicalMsg.Content)
-
-	case *pglogrepl.StreamStartMessageV2:
-		log.Printf("Stream start message: xid %d, first segment? %d", logicalMsg.Xid, logicalMsg.FirstSegment)
-	case *pglogrepl.StreamStopMessageV2:
-		log.Printf("Stream stop message")
-	case *pglogrepl.StreamCommitMessageV2:
-		log.Printf("Stream commit message: xid %d", logicalMsg.Xid)
-	case *pglogrepl.StreamAbortMessageV2:
-		log.Printf("Stream abort message: xid %d", logicalMsg.Xid)
-	default:
-		log.Printf("Unknown message type in pgoutput stream: %T", logicalMsg)
-	}
+type CdcChange struct {
+	Kind         string        `json:"kind"`
+	Schema       string        `json:"schema"`
+	Table        string        `json:"table"`
+	ColumnNames  []string      `json:"columnnames"`
+	ColumnTypes  []string      `json:"columntypes"`
+	ColumnValues []interface{} `json:"columnvalues"`
 }
 
-func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interface{}, error) {
-	if dt, ok := mi.TypeForOID(dataType); ok {
-		return dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
+type CdcEvent struct {
+	Change []CdcChange `json:"change"`
+}
+
+func (p Postgresql) handleCdcEvent(jsonString string) error {
+
+	fmt.Println("receive field map: ", p.receiveFieldMap)
+
+	var event CdcEvent
+	err := json.Unmarshal([]byte(jsonString), &event)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling CDC event: %v", err)
 	}
-	return string(data), nil
+
+	// objs := []map[string]interface{}{}
+
+	for _, change := range event.Change {
+		objectName := change.Schema + "." + change.Table
+
+		// fmt.Println("Received CDC event", objectName)
+
+		// fmt.Println("Raw cdc data:", jsonString)
+
+		obj := map[string]interface{}{}
+
+		for i, colName := range change.ColumnNames {
+			if change.ColumnValues[i] != nil {
+				obj[colName] = change.ColumnValues[i]
+			}
+		}
+
+		// objs = append(objs, obj)
+
+		newObjs := make(map[string]map[string]interface{})
+
+		for schemaName, fieldMap := range p.receiveFieldMap[objectName] {
+			newModel := map[string]interface{}{}
+
+			for keyInObj, desiredKey := range fieldMap {
+				newModel[desiredKey.Field] = obj[keyInObj]
+			}
+
+			newObjs[schemaName] = newModel
+		}
+
+		for schemaName, obj := range newObjs {
+
+			schema, inMap := p.app.schemaMap[schemaName]
+			if !inMap {
+				return fmt.Errorf("no schema found for object: %s", objectName)
+			}
+
+			err = schema.Validate(obj)
+			if err != nil {
+				return fmt.Errorf("object failed schema validation for '%s': %v", objectName, err)
+			}
+
+			for k, v := range obj {
+				if v == nil {
+					delete(obj, k)
+				}
+			}
+
+			fmt.Println("Adding object to storage engine", obj)
+
+			var objectIsDuplicate bool
+			foundDuplicate := false
+			for i, expiringObj := range p.duplicateChecker[schemaName] {
+
+				objectIsDuplicate = true
+
+				for k, v := range expiringObj.Object {
+					if v != obj[k] {
+						objectIsDuplicate = false
+						break
+					}
+				}
+
+				if objectIsDuplicate {
+					// If we found a duplicate, we can remove it from the duplicate checker
+					p.duplicateChecker[schemaName] = append(p.duplicateChecker[schemaName][:i], p.duplicateChecker[schemaName][i+1:]...)
+					foundDuplicate = true
+					break
+				}
+			}
+
+			if !foundDuplicate {
+				// If we didn't find a duplicate, add the object to the duplicate checker
+				expiringObj := newExpiringMapAny(obj, p.app.config.keepDuplicatesFor)
+				p.duplicateChecker[schemaName] = append(p.duplicateChecker[schemaName], expiringObj)
+
+				// also add to storage engine
+				p.app.storageEngine.addSafeObject(obj, schemaName)
+			}
+		}
+	}
+
+	p.app.storageEngine.printAllContents()
+
+	return nil
 }
