@@ -21,17 +21,14 @@
 //	  return err
 //	}
 //
-//	db, err := stdlib.OpenDBFromPool(pool)
-//	if err != nil {
-//	  return err
-//	}
+//	db := stdlib.OpenDBFromPool(pool)
 //
 // Or a pgx.ConnConfig can be used to set configuration not accessible via connection string. In this case the
 // pgx.ConnConfig must first be registered with the driver. This registration returns a connection string which is used
 // with sql.Open.
 //
 //	connConfig, _ := pgx.ParseConfig(os.Getenv("DATABASE_URL"))
-//	connConfig.Logger = myLogger
+//	connConfig.Tracer = &tracelog.TraceLog{Logger: myLogger, LogLevel: tracelog.LogLevelInfo}
 //	connStr := stdlib.RegisterConnConfig(connConfig)
 //	db, _ := sql.Open("pgx", connStr)
 //
@@ -840,7 +837,7 @@ func (r *Rows) Next(dest []driver.Value) error {
 			var err error
 			dest[i], err = r.valueFuncs[i](rv)
 			if err != nil {
-				return fmt.Errorf("convert field %d failed: %v", i, err)
+				return fmt.Errorf("convert field %d failed: %w", i, err)
 			}
 		} else {
 			dest[i] = nil

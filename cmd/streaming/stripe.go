@@ -13,31 +13,14 @@ import (
 )
 
 type Stripe struct {
-	client            *stripe.Client
-	app               *application
-	systemPropertyMap map[string]map[string]map[string]string
-	systemInfo        SystemInfo
+	client          *stripe.Client
+	app             *application
+	receiveFieldMap map[string]map[string]map[string]Location
+	pushFieldMap    map[string]map[string]map[string]Location
+	systemInfo      SystemInfo
 }
 
-func (app *application) newStripe(systemInfo SystemInfo) (system System, err error) {
-
-	stripeClient := stripe.NewClient(systemInfo.ApiKey)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	listParams := &stripe.CouponListParams{}
-	listParams.Limit = stripe.Int64(1)
-
-	for _, err := range stripeClient.V1Coupons.List(ctx, listParams) {
-		// We are only testing the connection, so we don't want to do anything with
-		// the data. Do not read it, store it, print it, or log it. Nothing!
-		if err != nil {
-			return nil, err
-		}
-
-		break
-	}
+func (app *application) newStripe(systemInfo SystemInfo) (system SystemInterface, err error) {
 
 	if systemInfo.UseCliListener {
 
@@ -63,19 +46,42 @@ func (app *application) newStripe(systemInfo SystemInfo) (system System, err err
 		}()
 	}
 
+	stripeClient := stripe.NewClient(systemInfo.ApiKey)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	listParams := &stripe.CouponListParams{}
+	listParams.Limit = stripe.Int64(1)
+
+	for _, err := range stripeClient.V1Coupons.List(ctx, listParams) {
+		// We are only testing the connection, so we don't want to do anything with
+		// the data. Do not read it, store it, print it, or log it. Nothing!
+		if err != nil {
+			return nil, err
+		}
+
+		break
+	}
+
+	app.logger.Info("Stripe test api call was successful", "system", systemInfo.Name)
+
 	stripeSystem := &Stripe{
-		client:            stripeClient,
-		app:               app,
-		systemPropertyMap: app.systemPropertyMap[systemInfo.Name],
-		systemInfo:        systemInfo,
+		client:          stripeClient,
+		app:             app,
+		receiveFieldMap: app.receiveFieldMap[systemInfo.Name],
+		pushFieldMap:    app.pushFieldMap[systemInfo.Name],
+		systemInfo:      systemInfo,
 	}
 
 	return stripeSystem, nil
 }
 
-func (s Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
+func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Immediately acknowledge receipt to Stripe
 	w.WriteHeader(http.StatusOK)
+
+	fmt.Println("Received Stripe webhook")
 
 	var event stripe.Event
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
@@ -106,7 +112,7 @@ func (s Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// fmt.Println("obj:")
 	// fmt.Println(string(b))
 
-	// b, err = json.MarshalIndent(s.systemPropertyMap[objectName], "", "  ")
+	// b, err = json.MarshalIndent(s.receiveFieldMap[objectName], "", "  ")
 	// if err != nil {
 	// 	s.app.logger.Error("Failed to marshal models to create", "error", err)
 	// 	return
@@ -116,37 +122,39 @@ func (s Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	newObjs := make(map[string]interface{})
 
-	for modelName, fieldMap := range s.systemPropertyMap[objectName] {
+	for schemaName, fieldMap := range s.receiveFieldMap[objectName] {
 		newModel := map[string]interface{}{}
 
 		for keyInObj, desiredKey := range fieldMap {
-			newModel[desiredKey] = obj[keyInObj]
+			newModel[desiredKey.Field] = obj[keyInObj]
 		}
 
-		newObjs[modelName] = newModel
+		newObjs[schemaName] = newModel
 	}
 
-	for modelName, obj := range newObjs {
+	for schemaName, obj := range newObjs {
 
-		model, inMap := s.app.modelMap[modelName]
+		schema, inMap := s.app.schemaMap[schemaName]
 		if !inMap {
 			fmt.Printf("No schema found for object: %s\n", objectName)
 			return
 		}
 
-		err = model.Schema.Validate(obj)
+		err = schema.Validate(obj)
 		if err != nil {
 			fmt.Printf("Object failed schema validation for '%s': %v\n", objectName, err)
 			return
 		}
 
-		err = model.Queue.Enqueue(obj)
-		if err != nil {
-			fmt.Printf("Failed to enqueue object for '%s': %v\n", objectName, err)
-			return
-		}
+		// b, err := json.MarshalIndent(obj, "", "  ")
+		// if err != nil {
+		// 	fmt.Printf("Failed to marshal object for pretty print: %v\n", err)
+		// } else {
+		// 	fmt.Printf("Storing object in schema '%s':\n%s\n", schemaName, string(b))
+		// }
 
-		fmt.Printf("Enqueued %v object: %+v\n", modelName, obj)
+		// Add the object to the storage engine
+		s.app.storageEngine.addSafeObject(obj, schemaName)
 	}
 }
 

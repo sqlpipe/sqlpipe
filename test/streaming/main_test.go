@@ -22,9 +22,11 @@ import (
 func createPostgresqlProductsTable(t *testing.T, db *sql.DB) {
 	_, err := db.Exec(`
 			   CREATE TABLE products (
-					   id TEXT PRIMARY KEY,
+					   id bigserial PRIMARY KEY,
+					   stripe_id TEXT NOT NULL UNIQUE,
 					   name TEXT NOT NULL,
 					   active BOOLEAN DEFAULT TRUE,
+					   price decimal(10, 2),
 					   created TIMESTAMPTZ,
 					   updated TIMESTAMPTZ,
 					   description TEXT,
@@ -113,22 +115,57 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("Could not create docker network: %s", err)
 	}
 
-	postgresqlContainer, err = pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "debezium/postgres",
-		Tag:        "15",
-		Name:       "test-postgres",
+	// postgresqlContainer, err = pool.RunWithOptions(&dockertest.RunOptions{
+	// 	Repository: "postgres",
+	// 	Tag:        "17",
+	// 	Name:       "test-postgres",
+	// 	Env: []string{
+	// 		fmt.Sprintf("POSTGRES_USER=%v", postgresqlUsername),
+	// 		fmt.Sprintf("POSTGRES_PASSWORD=%v", postgresqlPassword),
+	// 		fmt.Sprintf("POSTGRES_DB=%v", postgresqlDatabase),
+	// 	},
+	// 	NetworkID:    network.Network.ID,
+	// 	ExposedPorts: []string{"5432/tcp"},
+	// 	PortBindings: map[docker.Port][]docker.PortBinding{
+	// 		"5432/tcp": {{HostIP: "0.0.0.0", HostPort: "5432"}},
+	// 	},
+	// 	Cmd: []string{
+	// 		"postgres",
+	// 		"-c", "wal_level=logical",
+	// 		"-c", "max_replication_slots=5",
+	// 		"-c", "max_wal_senders=5",
+	// 		"-c", "max_connections=100",
+	// 	},
+	// }, func(config *docker.HostConfig) {
+	// 	config.AutoRemove = true
+	// 	config.RestartPolicy = docker.RestartPolicy{Name: "no"}
+	// })
+	// if err != nil {
+	// 	t.Fatalf("Could not start PostgreSQL: %s", err)
+	// }
+
+	postgresqlContainer, err = pool.BuildAndRunWithOptions("../../postgresql.dockerfile", &dockertest.RunOptions{
+		Name: "test-postgres",
 		Env: []string{
 			fmt.Sprintf("POSTGRES_USER=%v", postgresqlUsername),
 			fmt.Sprintf("POSTGRES_PASSWORD=%v", postgresqlPassword),
 			fmt.Sprintf("POSTGRES_DB=%v", postgresqlDatabase),
 		},
-		NetworkID: network.Network.ID,
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
+		NetworkID:    network.Network.ID,
+		ExposedPorts: []string{"5432/tcp"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"5432/tcp": {{HostIP: "0.0.0.0", HostPort: "5432"}},
+		},
+		Cmd: []string{
+			"postgres",
+			"-c", "wal_level=logical",
+			"-c", "max_replication_slots=5",
+			"-c", "max_wal_senders=5",
+			"-c", "max_connections=100",
+		},
 	})
 	if err != nil {
-		t.Fatalf("Could not start PostgreSQL: %s", err)
+		t.Fatalf("Could not start resource: %s", err)
 	}
 
 	var db *sql.DB
@@ -146,6 +183,11 @@ func TestStreaming(t *testing.T) {
 	}
 
 	createPostgresqlProductsTable(t, db)
+
+	_, err = db.Exec(`CREATE PUBLICATION my_pub FOR ALL TABLES;`)
+	if err != nil {
+		t.Fatalf("Failed to create publication: %v", err)
+	}
 
 	buildCmd := exec.Command("go", []string{"build", "-o", "../../bin/streaming", "../../cmd/streaming"}...)
 	buildCmd.Env = append(os.Environ(),
@@ -182,8 +224,8 @@ func TestStreaming(t *testing.T) {
 			"PORT=4000",
 			"SYSTEMS_DIR=/config/systems",
 			"MODELS_DIR=/config/models",
-			"QUEUE_DIR=/tmp/sqlpipe/queue",
-			"SEGMENT_SIZE=1000",
+			// "QUEUE_DIR=/tmp/sqlpipe/queue",
+			// "SEGMENT_SIZE=1000",
 		},
 		Mounts: []string{
 			fmt.Sprintf("%s:/config/systems", systemsHostDir),
@@ -194,6 +236,17 @@ func TestStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not start resource: %s", err)
 	}
+
+	go func() {
+		pool.Client.Logs(docker.LogsOptions{
+			Container:    sqlpipeContainer.Container.ID,
+			OutputStream: os.Stdout,
+			ErrorStream:  os.Stderr,
+			Follow:       true,
+			Stdout:       true,
+			Stderr:       true,
+		})
+	}()
 
 	err = pool.Retry(func() error {
 
@@ -219,21 +272,18 @@ func TestStreaming(t *testing.T) {
 		return nil // success!
 	})
 	if err != nil {
-		pool.Client.Logs(docker.LogsOptions{
-			Container:    sqlpipeContainer.Container.ID,
-			OutputStream: os.Stdout,
-			ErrorStream:  os.Stderr,
-			Follow:       false,
-			Stdout:       true,
-			Stderr:       true,
-		})
 		t.Fatalf("SQLpipe healthcheck failed: %v", err)
 	}
 
-	// time.Sleep(2 * time.Second)
+	fmt.Println("SQLpipe is running and healthy!")
 
-	stripeCmd := exec.Command("stripe", "trigger", "price.created")
-	// stripeCmd.Stdout = os.Stdout
+	// stripeCmd := exec.Command("stripe", "trigger", "price.created")
+	// stripeCmd := exec.Command("stripe", "trigger", "tax_rate.created")
+
+	time.Sleep(5 * time.Second)
+
+	stripeCmd := exec.Command("stripe", "trigger", "product.created")
+	stripeCmd.Stdout = os.Stdout
 	stripeCmd.Stderr = os.Stderr
 	stripeCmd.Env = append(os.Environ(), fmt.Sprintf("STRIPE_API_KEY=%s", os.Getenv("STRIPE_API_KEY")))
 	err = stripeCmd.Run()
@@ -241,12 +291,7 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("Failed to run stripe trigger: %v", err)
 	}
 
-	pool.Client.Logs(docker.LogsOptions{
-		Container:    sqlpipeContainer.Container.ID,
-		OutputStream: os.Stdout,
-		ErrorStream:  os.Stderr,
-		Follow:       true,
-		Stdout:       true,
-		Stderr:       true,
-	})
+	fmt.Println("Test is running. Press Ctrl+C to exit.")
+	select {}
+
 }

@@ -385,7 +385,6 @@ func (system Postgresql) getPipeFileFormatters() (
 
 			timeVal, err := time.Parse("15:04:05.999999", timeString)
 			if err != nil {
-				fmt.Println(timeString)
 				return "", errors.New("error parsing time value in postgresqlPipeFileFormatters")
 			}
 

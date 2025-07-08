@@ -5,8 +5,8 @@ go 1.24
 require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/google/uuid v1.4.0
-	github.com/jackc/pgx/v5 v5.5.0
-	github.com/joncrlsn/dque v0.0.0-20241024143830-7723fd131a64
+	github.com/jackc/pglogrepl v0.0.0-20250509230407-a9884f6bd75a
+	github.com/jackc/pgx/v5 v5.5.4
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/microsoft/go-mssqldb v1.6.0
 	github.com/ory/dockertest/v3 v3.12.0
@@ -15,6 +15,7 @@ require (
 	github.com/snowflakedb/gosnowflake v1.6.25
 	github.com/stripe/stripe-go/v82 v82.3.0
 	golang.org/x/sync v0.8.0
+	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -59,7 +60,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.1.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
-	github.com/gofrs/flock v0.7.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
@@ -67,6 +67,7 @@ require (
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
+	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect

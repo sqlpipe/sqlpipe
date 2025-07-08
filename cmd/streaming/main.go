@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/gob"
 	"encoding/json"
 	"expvar"
 	"flag"
@@ -16,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joncrlsn/dque"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/sqlpipe/sqlpipe/internal/vcs"
 
@@ -29,32 +27,22 @@ var (
 	version = vcs.Version()
 )
 
-type Model struct {
-	Schema *jsonschema.Schema
-	Queue  *dque.DQue
-}
-
 type config struct {
-	port        int
-	systemsDir  string
-	modelsDir   string
-	queueDir    string
-	segmentSize int
+	port       int
+	systemsDir string
+	modelsDir  string
 }
 
 type application struct {
-	config            config
-	logger            *slog.Logger
-	wg                sync.WaitGroup
-	systemMap         map[string]System
-	systemPropertyMap map[string]map[string]map[string]map[string]string // system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
-	modelMap          map[string]*Model
-}
-
-func init() {
-	gob.Register([]interface{}{})
-	gob.Register(map[string]interface{}{})
-
+	config          config
+	logger          *slog.Logger
+	wg              sync.WaitGroup
+	systemMap       map[string]SystemInterface
+	receiveFieldMap map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
+	pushFieldMap    map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_schema.key_name_for_obj
+	schemaMap       map[string]*jsonschema.Schema
+	storageEngine   *storageEngine
+	schemaRootMap   map[string]*SchemaRoot
 }
 
 func main() {
@@ -63,8 +51,6 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 4000, "API port")
 	flag.StringVar(&cfg.systemsDir, "systems-dir", "./systems", "Directory for systems configuration")
 	flag.StringVar(&cfg.modelsDir, "models-dir", "./models", "Directory for models configuration")
-	flag.StringVar(&cfg.queueDir, "queue-dir", "/tmp", "Directory for queue files")
-	flag.IntVar(&cfg.segmentSize, "segment-size", 100, "Size of each segment in the queue")
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 
 	flag.Parse()
@@ -84,7 +70,7 @@ func main() {
 		return time.Now().Unix()
 	}))
 
-	modelMap, systemPropertyMap, err := createModelMap(cfg)
+	schemaMap, receiveFieldMap, pushFieldMap, schemaRootMap, err := createModelMap(cfg)
 	if err != nil {
 		logger.Error("failed to load model schemas", "error", err)
 		os.Exit(1)
@@ -96,12 +82,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	storageEngine, err := newStorageEngine()
+	if err != nil {
+		logger.Error("failed to create storage engine", "error", err)
+		os.Exit(1)
+	}
+
 	app := &application{
-		config:            cfg,
-		logger:            logger,
-		systemMap:         make(map[string]System),
-		modelMap:          modelMap,
-		systemPropertyMap: systemPropertyMap,
+		config:          cfg,
+		logger:          logger,
+		systemMap:       make(map[string]SystemInterface),
+		schemaMap:       schemaMap,
+		receiveFieldMap: receiveFieldMap,
+		pushFieldMap:    pushFieldMap,
+		storageEngine:   storageEngine,
+		schemaRootMap:   schemaRootMap,
 	}
 
 	serveQuitCh := make(chan struct{})
@@ -201,20 +196,16 @@ func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo) {
 }
 
 type Location struct {
-	Database string `json:"database"`
-	Schema   string `json:"schema"`
-	Table    string `json:"table"`
-	Column   string `json:"column"`
-	Object   string `json:"object"`
-	Field    string `json:"field"`
+	Object    string `json:"object,omitempty"`
+	Field     string `json:"field,omitempty"`
+	SearchKey bool   `json:"search_key,omitempty"`
 }
 
 type PropertySystemConfig struct {
-	SearchKey        bool       `json:"search_key"`
-	ReceiveFrom      bool       `json:"receive_from"`
-	PushTo           bool       `json:"push_to"`
 	RequireForCreate bool       `json:"require_for_create"`
-	Locations        []Location `json:"locations"`
+	Receive          []Location `json:"receive"`
+	Push             []Location `json:"push"`
+	Sync             []Location `json:"sync"`
 }
 
 type Property struct {
@@ -227,11 +218,31 @@ type SchemaRoot struct {
 	Properties map[string]Property `json:"properties"`
 }
 
-func createModelMap(cfg config) (map[string]*Model, map[string]map[string]map[string]map[string]string, error) {
+// type Field struct {
+// 	Name      string
+// 	SearchKey bool
+// }
+
+// type FieldRemaps struct {
+// 	Title  string
+// 	Fields map[string]Field
+// }
+
+// type FieldMapper struct {
+// 	Systems map[string]map[string][]Model
+// }
+
+func createModelMap(cfg config) (
+	schemaMap map[string]*jsonschema.Schema,
+	receiveFieldMap map[string]map[string]map[string]map[string]Location,
+	pushFieldMap map[string]map[string]map[string]map[string]Location,
+	schemaRoot map[string]*SchemaRoot,
+	err error,
+) {
 
 	jsonFiles := []string{}
 
-	err := filepath.WalkDir(cfg.modelsDir, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(cfg.modelsDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -243,13 +254,16 @@ func createModelMap(cfg config) (map[string]*Model, map[string]map[string]map[st
 		return nil
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	modelMap := make(map[string]*Model)
+	schemaMap = make(map[string]*jsonschema.Schema)
+	// fieldMapper = map[string]map[string][]FieldRemaps{}
+	receiveFieldMap = make(map[string]map[string]map[string]map[string]Location)
+	pushFieldMap = make(map[string]map[string]map[string]map[string]Location)
+	// searchFieldMap = make(map[string]map[string]map[string]bool)
+	schemaRootMap := map[string]*SchemaRoot{}
 	compiler := jsonschema.NewCompiler()
-
-	systemPropertyMap := make(map[string]map[string]map[string]map[string]string)
 
 	for _, path := range jsonFiles {
 
@@ -258,73 +272,118 @@ func createModelMap(cfg config) (map[string]*Model, map[string]map[string]map[st
 		url := "file://" + filepath.ToSlash(path)
 		schema, err := compiler.Compile(url)
 		if err != nil {
-			return nil, nil, fmt.Errorf("compile %s: %w", path, err)
-		}
-		modelName := schema.Title
-		if modelName == "" {
-			return nil, nil, fmt.Errorf("schema %s has no title", path)
+			return nil, nil, nil, nil, fmt.Errorf("compile %s: %w", path, err)
 		}
 
-		if err := os.MkdirAll(cfg.queueDir, 0755); err != nil {
-			return nil, nil, fmt.Errorf("failed to create queue dir: %w", err)
+		if schema.Title == "" {
+			return nil, nil, nil, nil, fmt.Errorf("schema %s has no title", path)
 		}
 
-		q, err := dque.NewOrOpen(modelName, cfg.queueDir, cfg.segmentSize, func() interface{} { return &map[string]interface{}{} })
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create/open queue %s: %w", modelName, err)
-		}
-
-		modelMap[modelName] = &Model{
-			Schema: schema,
-			Queue:  q,
-		}
+		schemaMap[schema.Title] = schema
 
 		f, err := os.Open(path)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to open model file %s: %w", path, err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to open model file %s: %w", path, err)
 		}
 		defer f.Close()
 
 		decoder := json.NewDecoder(f)
 		if err := decoder.Decode(&schemaRoot); err != nil {
-			return nil, nil, fmt.Errorf("failed to decode model file %s: %w", path, err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to decode model file %s: %w", path, err)
 		}
 
-		// system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
+		schemaRootMap[schema.Title] = schemaRoot
 
 		for propertyNameInSchema, schemaProperty := range schemaRoot.Properties {
 
 			for systemName, system := range schemaProperty.Systems {
 
-				if _, ok := systemPropertyMap[systemName]; !ok {
-					systemPropertyMap[systemName] = make(map[string]map[string]map[string]string)
+				if _, ok := receiveFieldMap[systemName]; !ok {
+					receiveFieldMap[systemName] = make(map[string]map[string]map[string]Location)
 				}
 
-				for _, location := range system.Locations {
+				for _, location := range system.Receive {
 
-					if location.Object != "" {
+					if _, ok := receiveFieldMap[systemName][location.Object]; !ok {
+						receiveFieldMap[systemName][location.Object] = make(map[string]map[string]Location)
+					}
 
-						if _, ok := systemPropertyMap[systemName][location.Object]; !ok {
-							systemPropertyMap[systemName][location.Object] = make(map[string]map[string]string)
-						}
+					if _, ok := receiveFieldMap[systemName][location.Object][schema.Title]; !ok {
+						receiveFieldMap[systemName][location.Object][schema.Title] = make(map[string]Location)
+					}
 
-						if _, ok := systemPropertyMap[systemName][location.Object][modelName]; !ok {
-							systemPropertyMap[systemName][location.Object][modelName] = make(map[string]string)
-						}
+					receiveFieldMap[systemName][location.Object][schema.Title][location.Field] = Location{
+						Field:     propertyNameInSchema,
+						SearchKey: location.SearchKey,
+					}
+				}
 
-						systemPropertyMap[systemName][location.Object][modelName][location.Field] = propertyNameInSchema
+				for _, location := range system.Sync {
+
+					if _, ok := receiveFieldMap[systemName][location.Object]; !ok {
+						receiveFieldMap[systemName][location.Object] = make(map[string]map[string]Location)
+					}
+
+					if _, ok := receiveFieldMap[systemName][location.Object][schema.Title]; !ok {
+						receiveFieldMap[systemName][location.Object][schema.Title] = make(map[string]Location)
+					}
+
+					receiveFieldMap[systemName][location.Object][schema.Title][location.Field] = Location{
+						Field:     propertyNameInSchema,
+						SearchKey: location.SearchKey,
+					}
+				}
+
+				if _, ok := pushFieldMap[systemName]; !ok {
+					pushFieldMap[systemName] = make(map[string]map[string]map[string]Location)
+				}
+
+				for _, location := range system.Push {
+					if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
+						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
+					}
+
+					if _, ok := pushFieldMap[systemName][schema.Title][location.Object]; !ok {
+						pushFieldMap[systemName][schema.Title][location.Object] = make(map[string]Location)
+					}
+
+					pushFieldMap[systemName][schema.Title][location.Object][propertyNameInSchema] = Location{
+						Field:     location.Field,
+						SearchKey: location.SearchKey,
+					}
+				}
+
+				for _, location := range system.Sync {
+					if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
+						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
+					}
+
+					if _, ok := pushFieldMap[systemName][schema.Title][location.Object]; !ok {
+						pushFieldMap[systemName][schema.Title][location.Object] = make(map[string]Location)
+					}
+
+					pushFieldMap[systemName][schema.Title][location.Object][propertyNameInSchema] = Location{
+						Field:     location.Field,
+						SearchKey: location.SearchKey,
 					}
 				}
 			}
 		}
 	}
 
-	// pretty, err := json.MarshalIndent(systemPropertyMap, "", "  ")
+	// b, err := json.MarshalIndent(receiveFieldMap, "", "  ")
 	// if err != nil {
-	// 	fmt.Printf("failed to marshal systemPropertyMap: %v\n", err)
+	// 	fmt.Fprintf(os.Stderr, "failed to marshal receiveFieldMap: %v\n", err)
 	// } else {
-	// 	fmt.Println(string(pretty))
+	// 	fmt.Printf("receiveFieldMap:\n%s\n", string(b))
 	// }
 
-	return modelMap, systemPropertyMap, nil
+	// b, err = json.MarshalIndent(pushFieldMap, "", "  ")
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "failed to marshal pushFieldMap: %v\n", err)
+	// } else {
+	// 	fmt.Printf("pushFieldMap:\n%s\n", string(b))
+	// }
+
+	return schemaMap, receiveFieldMap, pushFieldMap, schemaRootMap, nil
 }

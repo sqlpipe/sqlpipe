@@ -42,22 +42,24 @@ type SystemInfo struct {
 	Username           string        `yaml:"username,omitempty" json:"username,omitempty"`
 	Password           string        `yaml:"-" json:"-"`
 	Dsn                string        `yaml:"-" json:"-"`
+	ReplicationDsn     string        `yaml:"replication_dsn,omitempty" json:"replication_dsn,omitempty"`
 	ApiKey             string        `yaml:"api_key" json:"-"`
 	EndpointSecret     string        `yaml:"-" json:"-"`
-	PushFrequency      time.Duration `yaml:"push_frequency" json:"push_frequency"`
+	RateLimit          int           `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
+	RateBucketSize     int           `yaml:"rate_bucket_size,omitempty" json:"rate_bucket_size,omitempty"`
 	UseCliListener     bool          `yaml:"use_cli_listener,omitempty" json:"use_cli_listener,omitempty"`
 }
 
-type System interface {
+type SystemInterface interface {
 	handleWebhook(w http.ResponseWriter, r *http.Request)
 	// getFieldMap() map[string]string
 	// createModels(obj map[string]interface{}) (map[string]interface{}, error)
 }
 
-func (app *application) NewSystem(systemInfo SystemInfo, port int) (system System, err error) {
+func (app *application) NewSystem(systemInfo SystemInfo, port int) (system SystemInterface, err error) {
 	switch systemInfo.Type {
 	case TypePostgreSQL:
-		return newPostgresql(systemInfo)
+		return app.newPostgresql(systemInfo)
 	case TypeSnowflake:
 		return newSnowflake(systemInfo)
 	case TypeStripe:
