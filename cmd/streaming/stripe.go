@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/stripe/stripe-go/v82"
@@ -161,8 +162,8 @@ func (s Stripe) watchQueue() {
 			}
 
 			if !foundDuplicate {
-				newObj := map[string]interface{}{}
 				for locationInSystem, fieldMap := range s.pushFieldMap[objectType] {
+					newObj := map[string]interface{}{}
 					for keyInSchema, location := range fieldMap {
 						if _, ok := objectVal[keyInSchema]; ok {
 							if location.Push || location.SearchKey {
@@ -172,12 +173,12 @@ func (s Stripe) watchQueue() {
 							if location.SearchKey {
 								// If this is a search key, we need to set it as the search key for the object
 								searchKey = location.Field
-								searchValue = newObj[location.Field].(string)
+								searchValue = fmt.Sprint(newObj[location.Field])
 							}
 						}
 					}
 
-					fmt.Printf("Stripe is upserting object (route: %s): %v\n", locationInSystem, newObj)
+					fmt.Printf("Stripe is upserting object. Search key: %v, Search value: %v (route: %s): %v\n", searchKey, searchValue, locationInSystem, newObj)
 					// Upsert the object to Stripe
 					_, err := s.upsertObject(locationInSystem, newObj, objectType, searchKey, searchValue)
 					if err != nil {
@@ -186,7 +187,6 @@ func (s Stripe) watchQueue() {
 					}
 				}
 			}
-
 		}
 
 		// Update the safe index map for this system
@@ -220,15 +220,49 @@ func (s Stripe) upsertObject(endpoint string, object map[string]interface{}, obj
 		}
 	}
 
-	fmt.Println("stripe form:", form)
-	fmt.Println("stripe search key:", searchKey)
-	fmt.Println("stripe search value:", searchValue)
+	if len(form) == 0 {
+		return nil, nil
+	}
 
 	baseURL := "https://api.stripe.com/v1"
-	updateUrl := fmt.Sprintf("%s/%s/%s", baseURL, endpoint, searchValue)
 	encoded := form.Encode()
 
-	// try updating first
+	// If searchValue is empty, just create (insert) the object
+	if searchValue == "" {
+		createUrl := fmt.Sprintf("%s/%s", baseURL, endpoint)
+		req, err := http.NewRequest("POST", createUrl, bytes.NewBufferString(encoded))
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+s.apiKey)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		fmt.Printf("Making request to Stripe to create object: %s\n", createUrl)
+		fmt.Println("Stripe create form data:", form.Encode())
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create object at stripe route %s, error making request: %w", createUrl, err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create object at stripe route %s, error reading response body: %w", createUrl, err)
+		}
+
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("failed to create object at stripe route %s, status code: %d, response: %s", createUrl, resp.StatusCode, string(body))
+		}
+
+		fmt.Println("Stripe created object:", string(body))
+		expiringObj := newExpiringMapAny(object, s.app.config.keepDuplicatesFor)
+		s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType], expiringObj)
+		return body, nil
+	}
+
+	// Otherwise, update it
+	updateUrl := fmt.Sprintf("%s/%s/%s", baseURL, endpoint, searchValue)
 	req, err := http.NewRequest("POST", updateUrl, bytes.NewBufferString(encoded))
 	if err != nil {
 		return nil, err
@@ -246,46 +280,10 @@ func (s Stripe) upsertObject(endpoint string, object map[string]interface{}, obj
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response body from stripe route %s, error reading response body: %w", updateUrl, err)
 	}
 
-	if resp.StatusCode >= 400 {
-
-		s.app.logger.Error("Failed to update object in Stripe", "error", err, "objectType", objectType, "statusCode", resp.StatusCode, "response", string(body))
-
-		createUrl := fmt.Sprintf("%s/%s", baseURL, endpoint)
-		req, err := http.NewRequest("POST", createUrl, bytes.NewBufferString(encoded))
-		if err != nil {
-			return nil, err
-		}
-
-		req.Header.Set("Authorization", "Bearer "+s.apiKey)
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-		fmt.Printf("Making request to Stripe to create object: %s\n", createUrl)
-		fmt.Println("Stripe create form data:", form.Encode())
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create object in Stripe: %s, error making request: %w", objectType, err)
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create object in Stripe: %s, error reading response body: %w", objectType, err)
-		}
-
-		if resp.StatusCode >= 400 {
-			return nil, fmt.Errorf("failed to create object in Stripe: %s, status code: %d, response: %s", objectType, resp.StatusCode, string(body))
-		}
-
-		fmt.Println("Stripe created object:", string(body))
-		return body, nil
-	}
-
-	// fmt.Printf("Stripe upserted object (route: %s): %s\n", endpoint, string(body))
 	expiringObj := newExpiringMapAny(object, s.app.config.keepDuplicatesFor)
-	// Add the expiring object to the duplicate checker
 	s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType], expiringObj)
 
 	return body, nil
@@ -330,7 +328,10 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		newModel := map[string]interface{}{}
 
 		for keyInObj, location := range fieldMap {
-			if location.Pull {
+
+			if strings.HasPrefix(keyInObj, "metadata") {
+
+			if location.Pull || location.SearchKey {
 				newModel[location.Field] = obj[keyInObj]
 			}
 		}
@@ -346,9 +347,17 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		for k, v := range obj {
+			if v == nil {
+				delete(obj, k)
+			}
+		}
+
+		fmt.Println("About to validate new object against schema:", schemaName, obj)
+
 		err = schema.Validate(obj)
 		if err != nil {
-			fmt.Printf("Object failed schema validation for '%s': %v\n", objectName, err)
+			fmt.Printf("Object failed stripe schema validation for '%s': %v\n", objectName, err)
 			return
 		}
 
@@ -378,16 +387,11 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 		if !foundDuplicate {
 
-			prettyObj, err := json.MarshalIndent(obj, "", "  ")
-			if err != nil {
-				fmt.Printf("Error pretty printing object for storage: %v\n", err)
-			} else {
-				fmt.Printf("Stripe is storing object (schema: %s):\n%s\n", schemaName, string(prettyObj))
-			}
-
+			fmt.Println("Stripe no duplicate found for object, adding to queue", obj)
 			s.app.storageEngine.addSafeObject(obj, schemaName)
+
+			fmt.Println("Stripe no duplicate found for object, adding to duplicate checker", obj)
 			expiringObj := newExpiringMapAny(obj, s.app.config.keepDuplicatesFor)
-			// Add the expiring object to the duplicate checker
 			s.duplicateChecker[schemaName] = append(s.duplicateChecker[schemaName], expiringObj)
 		}
 	}

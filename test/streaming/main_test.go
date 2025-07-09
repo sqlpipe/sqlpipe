@@ -26,7 +26,7 @@ func createPostgresqlProductsTable(t *testing.T, db *sql.DB) {
 					   stripe_id TEXT UNIQUE,
 					   name TEXT NOT NULL,
 					   active BOOLEAN DEFAULT TRUE,
-					   price decimal(10, 2),
+					   price int,
 					   created TIMESTAMPTZ,
 					   updated TIMESTAMPTZ,
 					   description TEXT,

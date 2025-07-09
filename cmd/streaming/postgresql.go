@@ -142,12 +142,8 @@ func (p Postgresql) watchQueue() {
 
 			if !foundDuplicate {
 				fmt.Println("No duplicate found for object, upserting to PostgreSQL", obj)
-				// If we didn't find a duplicate, add the object to the duplicate checker
-				expiringObj := newExpiringMapAny(objectVal, p.app.config.keepDuplicatesFor)
-				p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType], expiringObj)
-
-				newObj := map[string]interface{}{}
 				for locationInSystem, fieldMap := range p.pushFieldMap[objectType] {
+					newObj := map[string]interface{}{}
 					for keyInSchema, location := range fieldMap {
 						if _, ok := objectVal[keyInSchema]; ok {
 							if location.Push || location.SearchKey {
@@ -180,61 +176,85 @@ func (p Postgresql) handleWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []string, locationInSystem string, objectType string) error {
-	// Find the first available search field in data
+	var foundMatch bool
 	var conflictField string
+	var conflictValue interface{}
+
 	for _, field := range searchFields {
-		if _, ok := data[field]; ok {
-			conflictField = field
-			break
-		}
-	}
-	if conflictField == "" {
-		return fmt.Errorf("none of the search fields found in data")
-	}
-
-	// Collect column names and values
-	columns := make([]string, 0, len(data))
-	placeholders := make([]string, 0, len(data))
-	values := make([]interface{}, 0, len(data))
-
-	idx := 1
-	for k, v := range data {
-		columns = append(columns, k)
-		placeholders = append(placeholders, fmt.Sprintf("$%d", idx))
-		values = append(values, v)
-		idx++
-	}
-
-	// Build ON CONFLICT SET clause, excluding conflict field
-	updates := make([]string, 0, len(columns))
-	for _, col := range columns {
-		if col != conflictField {
-			updates = append(updates, fmt.Sprintf("%s = EXCLUDED.%s", col, col))
+		if v, ok := data[field]; ok {
+			// Check if a row exists with this search field
+			query := fmt.Sprintf("SELECT 1 FROM %s WHERE %s = $1 LIMIT 1", locationInSystem, field)
+			row := p.db.QueryRow(query, v)
+			var dummy int
+			err := row.Scan(&dummy)
+			if err == nil {
+				foundMatch = true
+				conflictField = field
+				conflictValue = v
+				break
+			}
+			if err != sql.ErrNoRows && err != nil {
+				p.app.logger.Error("error checking for existing row", "error", err, "query", query, "value", v)
+				return fmt.Errorf("error checking for existing row: %v", err)
+			}
 		}
 	}
 
-	// Assemble SQL
-	query := fmt.Sprintf(`
-		INSERT INTO %s (%s)
-		VALUES (%s)
-		ON CONFLICT (%s) DO UPDATE SET %s
-	`,
-		locationInSystem,
-		strings.Join(columns, ", "),
-		strings.Join(placeholders, ", "),
-		conflictField,
-		strings.Join(updates, ", "),
-	)
+	if foundMatch {
+		// Prepare UPDATE: set all columns except the conflict field
+		setCols := make([]string, 0, len(data))
+		values := make([]interface{}, 0, len(data))
+		idx := 1
+		for k, v := range data {
+			if k != conflictField {
+				setCols = append(setCols, fmt.Sprintf("%s = $%d", k, idx))
+				values = append(values, v)
+				idx++
+			}
+		}
+		// Add WHERE for the conflict field
+		whereClause := fmt.Sprintf("%s = $%d", conflictField, idx)
+		values = append(values, conflictValue)
 
-	// Execute
-	_, err := p.db.Exec(query, values...)
-	if err != nil {
-		p.app.logger.Error("error executing upsert query", "error", err, "query", query, "values", values)
-		return fmt.Errorf("error executing upsert query: %v", err)
+		updateQuery := fmt.Sprintf(
+			"UPDATE %s SET %s WHERE %s",
+			locationInSystem,
+			strings.Join(setCols, ", "),
+			whereClause,
+		)
+
+		_, err := p.db.Exec(updateQuery, values...)
+		if err != nil {
+			p.app.logger.Error("error executing update query", "error", err, "query", updateQuery, "values", values)
+			return fmt.Errorf("error executing update query: %v", err)
+		}
+	} else {
+		// Build INSERT
+		columns := make([]string, 0, len(data))
+		placeholders := make([]string, 0, len(data))
+		insertValues := make([]interface{}, 0, len(data))
+
+		idx := 1
+		for k, v := range data {
+			columns = append(columns, k)
+			placeholders = append(placeholders, fmt.Sprintf("$%d", idx))
+			insertValues = append(insertValues, v)
+			idx++
+		}
+		insertQuery := fmt.Sprintf(
+			"INSERT INTO %s (%s) VALUES (%s)",
+			locationInSystem,
+			strings.Join(columns, ", "),
+			strings.Join(placeholders, ", "),
+		)
+		_, err := p.db.Exec(insertQuery, insertValues...)
+		if err != nil {
+			p.app.logger.Error("error executing insert query", "error", err, "query", insertQuery, "values", insertValues)
+			return fmt.Errorf("error executing insert query: %v", err)
+		}
 	}
 
 	expiringObj := newExpiringMapAny(data, p.app.config.keepDuplicatesFor)
-	// Add the expiring object to the duplicate checker
 	p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType], expiringObj)
 
 	return nil
@@ -392,7 +412,9 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 			newObj := map[string]interface{}{}
 
 			for keyInObj, location := range fieldMap {
-				newObj[location.Field] = obj[keyInObj]
+				if location.Pull || location.SearchKey {
+					newObj[location.Field] = obj[keyInObj]
+				}
 			}
 
 			newObjs[schemaName] = newObj
@@ -415,7 +437,7 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 
 			err = schema.Validate(obj)
 			if err != nil {
-				return fmt.Errorf("object failed schema validation for '%s': %v", objectName, err)
+				return fmt.Errorf("object failed postgresql schema validation for '%s': %v", objectName, err)
 			}
 
 			var objectIsDuplicate bool
@@ -441,14 +463,14 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 			}
 
 			if !foundDuplicate {
-				fmt.Println("PostgreSQL no duplicate found for object, adding to queue", obj)
-				// If we didn't find a duplicate, add the object to the duplicate checker
-				expiringObj := newExpiringMapAny(obj, p.app.config.keepDuplicatesFor)
-				p.duplicateChecker[schemaName] = append(p.duplicateChecker[schemaName], expiringObj)
 
 				// also add to storage engine
-				fmt.Println("PostgreSQL is storing object", obj)
+				fmt.Println("PostgreSQL is storing object in queue", obj)
 				p.app.storageEngine.addSafeObject(obj, schemaName)
+
+				fmt.Println("PostgreSQL no duplicate found for object, adding to duplicate checker", obj)
+				expiringObj := newExpiringMapAny(obj, p.app.config.keepDuplicatesFor)
+				p.duplicateChecker[schemaName] = append(p.duplicateChecker[schemaName], expiringObj)
 			}
 		}
 	}
