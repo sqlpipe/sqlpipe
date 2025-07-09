@@ -23,7 +23,7 @@ func createPostgresqlProductsTable(t *testing.T, db *sql.DB) {
 	_, err := db.Exec(`
 			   CREATE TABLE products (
 					   id bigserial PRIMARY KEY,
-					   stripe_id TEXT NOT NULL UNIQUE,
+					   stripe_id TEXT UNIQUE,
 					   name TEXT NOT NULL,
 					   active BOOLEAN DEFAULT TRUE,
 					   price decimal(10, 2),
@@ -285,6 +285,7 @@ func TestStreaming(t *testing.T) {
 	stripeCmd := exec.Command("stripe", "trigger", "product.created")
 	stripeCmd.Stdout = os.Stdout
 	stripeCmd.Stderr = os.Stderr
+	fmt.Println("stripe api key: ", os.Getenv("STRIPE_API_KEY"))
 	stripeCmd.Env = append(os.Environ(), fmt.Sprintf("STRIPE_API_KEY=%s", os.Getenv("STRIPE_API_KEY")))
 	err = stripeCmd.Run()
 	if err != nil {

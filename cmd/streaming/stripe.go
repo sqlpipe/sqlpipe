@@ -1,26 +1,33 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"time"
 
 	"github.com/stripe/stripe-go/v82"
+	"golang.org/x/time/rate"
 )
 
 type Stripe struct {
-	client          *stripe.Client
-	app             *application
-	receiveFieldMap map[string]map[string]map[string]Location
-	pushFieldMap    map[string]map[string]map[string]Location
-	systemInfo      SystemInfo
+	client           *stripe.Client
+	apiKey           string
+	app              *application
+	receiveFieldMap  map[string]map[string]map[string]Location
+	pushFieldMap     map[string]map[string]map[string]Location
+	limiter          *rate.Limiter
+	systemInfo       SystemInfo
+	duplicateChecker map[string][]ExpiringMapAny
 }
 
-func (app *application) newStripe(systemInfo SystemInfo) (system SystemInterface, err error) {
+func (app *application) newStripe(systemInfo SystemInfo, duplicateChecker map[string][]ExpiringMapAny) (system SystemInterface, err error) {
 
 	if systemInfo.UseCliListener {
 
@@ -65,21 +72,231 @@ func (app *application) newStripe(systemInfo SystemInfo) (system SystemInterface
 	app.logger.Info("Stripe test api call was successful", "system", systemInfo.Name)
 
 	stripeSystem := &Stripe{
-		client:          stripeClient,
-		app:             app,
-		receiveFieldMap: app.receiveFieldMap[systemInfo.Name],
-		pushFieldMap:    app.pushFieldMap[systemInfo.Name],
-		systemInfo:      systemInfo,
+		client:           stripeClient,
+		app:              app,
+		receiveFieldMap:  app.receiveFieldMap[systemInfo.Name],
+		pushFieldMap:     app.pushFieldMap[systemInfo.Name],
+		limiter:          rate.NewLimiter(rate.Limit(systemInfo.RateLimit), systemInfo.RateBucketSize),
+		systemInfo:       systemInfo,
+		duplicateChecker: duplicateChecker,
+		apiKey:           systemInfo.ApiKey,
 	}
 
+	app.storageEngine.setSafeIndexMap(systemInfo.Name, 0)
+
+	go stripeSystem.watchQueue()
+
 	return stripeSystem, nil
+}
+
+func (s Stripe) watchQueue() {
+	var index int64
+	for {
+		// Get the last safe object index for this system
+		var exists bool
+		index, exists = s.app.storageEngine.getSafeIndexMap(s.systemInfo.Name)
+		if !exists {
+			panic(fmt.Sprintf("safe index not found for system %s", s.systemInfo.Name))
+		}
+
+		// Wait for rate limiter
+		err := s.limiter.Wait(context.Background())
+		if err != nil {
+			// Optionally log or handle error, then break or continue
+			continue
+		}
+
+		// Query safeObjects after lastIndex
+		objects := s.app.storageEngine.getSafeObjectsFromIndex(index)
+		if len(objects) > 0 {
+			// Process new objects as needed
+			index += int64(len(objects))
+		}
+
+		for _, obj := range objects {
+
+			fmt.Printf("Stripe got object from queue: %v\n", obj)
+			var searchKey string
+			var searchValue string
+
+			// searchFields := []string{}
+			object := obj.(map[string]interface{})
+
+			// ensure there is only 1 key. that is the object type
+			if len(object) != 1 {
+				s.app.logger.Error("object does not have exactly one key", "object", obj)
+				continue
+			}
+
+			// Get the object type (the only key in the map)
+			var objectType string
+			for key := range object {
+				objectType = key
+			}
+
+			objectVal := object[objectType].(map[string]interface{})
+
+			var objectIsDuplicate bool
+			foundDuplicate := false
+			for i, expiringObj := range s.duplicateChecker[objectType] {
+
+				fmt.Println("Stripe checking duplicate checker for object:", expiringObj.Object)
+
+				objectIsDuplicate = true
+
+				for k, v := range expiringObj.Object {
+					if v != objectVal[k] {
+						objectIsDuplicate = false
+						break
+					}
+				}
+
+				if objectIsDuplicate {
+					fmt.Println("Stripe found duplicate object in duplicate checker while watching queue:", expiringObj.Object)
+					// If we found a duplicate, we can remove it from the duplicate checker
+					s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType][:i], s.duplicateChecker[objectType][i+1:]...)
+					foundDuplicate = true
+					break
+				}
+			}
+
+			if !foundDuplicate {
+				newObj := map[string]interface{}{}
+				for locationInSystem, fieldMap := range s.pushFieldMap[objectType] {
+					for keyInSchema, location := range fieldMap {
+						if _, ok := objectVal[keyInSchema]; ok {
+							if location.Push || location.SearchKey {
+								newObj[location.Field] = objectVal[keyInSchema]
+							}
+
+							if location.SearchKey {
+								// If this is a search key, we need to set it as the search key for the object
+								searchKey = location.Field
+								searchValue = newObj[location.Field].(string)
+							}
+						}
+					}
+
+					fmt.Printf("Stripe is upserting object (route: %s): %v\n", locationInSystem, newObj)
+					// Upsert the object to Stripe
+					_, err := s.upsertObject(locationInSystem, newObj, objectType, searchKey, searchValue)
+					if err != nil {
+						s.app.logger.Error("Failed to upsert object to Stripe", "error", err, "object", newObj)
+						continue
+					}
+				}
+			}
+
+		}
+
+		// Update the safe index map for this system
+		s.app.storageEngine.setSafeIndexMap(s.systemInfo.Name, index)
+	}
+}
+
+func (s Stripe) upsertObject(endpoint string, object map[string]interface{}, objectType string, searchKey, searchValue string) ([]byte, error) {
+	// Replace with your actual secret key or use an environment variable
+	form := url.Values{}
+
+	for key, value := range object {
+
+		if key == searchKey {
+			continue
+		}
+
+		switch v := value.(type) {
+		case string:
+			form.Set(key, v)
+		case int, int64, float64:
+			form.Set(key, fmt.Sprintf("%v", v))
+		case bool:
+			if v {
+				form.Set(key, "true")
+			} else {
+				form.Set(key, "false")
+			}
+		default:
+			return nil, fmt.Errorf("unsupported value type for key %s: %T", key, value)
+		}
+	}
+
+	fmt.Println("stripe form:", form)
+	fmt.Println("stripe search key:", searchKey)
+	fmt.Println("stripe search value:", searchValue)
+
+	baseURL := "https://api.stripe.com/v1"
+	updateUrl := fmt.Sprintf("%s/%s/%s", baseURL, endpoint, searchValue)
+	encoded := form.Encode()
+
+	// try updating first
+	req, err := http.NewRequest("POST", updateUrl, bytes.NewBufferString(encoded))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	fmt.Printf("Making request to Stripe: %s\n", updateUrl)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= 400 {
+
+		s.app.logger.Error("Failed to update object in Stripe", "error", err, "objectType", objectType, "statusCode", resp.StatusCode, "response", string(body))
+
+		createUrl := fmt.Sprintf("%s/%s", baseURL, endpoint)
+		req, err := http.NewRequest("POST", createUrl, bytes.NewBufferString(encoded))
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Authorization", "Bearer "+s.apiKey)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		fmt.Printf("Making request to Stripe to create object: %s\n", createUrl)
+		fmt.Println("Stripe create form data:", form.Encode())
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create object in Stripe: %s, error making request: %w", objectType, err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create object in Stripe: %s, error reading response body: %w", objectType, err)
+		}
+
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("failed to create object in Stripe: %s, status code: %d, response: %s", objectType, resp.StatusCode, string(body))
+		}
+
+		fmt.Println("Stripe created object:", string(body))
+		return body, nil
+	}
+
+	// fmt.Printf("Stripe upserted object (route: %s): %s\n", endpoint, string(body))
+	expiringObj := newExpiringMapAny(object, s.app.config.keepDuplicatesFor)
+	// Add the expiring object to the duplicate checker
+	s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType], expiringObj)
+
+	return body, nil
 }
 
 func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Immediately acknowledge receipt to Stripe
 	w.WriteHeader(http.StatusOK)
+	var err error
 
-	fmt.Println("Received Stripe webhook")
+	// fmt.Println("Received Stripe webhook")
 
 	var event stripe.Event
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
@@ -87,7 +304,12 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.app.logger.Info("Received Stripe webhook", "type", event.Type)
+	prettyData, err := json.MarshalIndent(event, "", "  ")
+	if err != nil {
+		s.app.logger.Error("Failed to pretty print Stripe event", "error", err)
+	} else {
+		fmt.Printf("Received Stripe event:\n%s\n", string(prettyData))
+	}
 
 	objectName := string(event.Type)
 	// If the event type contains a period, we only want the part before it
@@ -96,7 +318,7 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var obj map[string]interface{}
-	err := json.Unmarshal(event.Data.Raw, &obj)
+	err = json.Unmarshal(event.Data.Raw, &obj)
 	if err != nil {
 		s.app.logger.Error("Failed to unmarshal Stripe event data", "error", err)
 		return
@@ -107,9 +329,9 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	for schemaName, fieldMap := range s.receiveFieldMap[objectName] {
 		newModel := map[string]interface{}{}
 
-		for keyInObj, desiredKey := range fieldMap {
-			if desiredKey.Pull {
-				newModel[desiredKey.Field] = obj[keyInObj]
+		for keyInObj, location := range fieldMap {
+			if location.Pull {
+				newModel[location.Field] = obj[keyInObj]
 			}
 		}
 
@@ -130,7 +352,44 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.app.storageEngine.addSafeObject(obj, schemaName)
+		var objectIsDuplicate bool
+		foundDuplicate := false
+		for i, expiringObj := range s.duplicateChecker[schemaName] {
+
+			fmt.Println("Stripe checking duplicate checker for object:", expiringObj.Object)
+
+			objectIsDuplicate = true
+
+			for k, v := range obj {
+				if v != expiringObj.Object[k] {
+					objectIsDuplicate = false
+					break
+				}
+			}
+
+			if objectIsDuplicate {
+				fmt.Println("Stripe found duplicate object in duplicate checker while handling cdc event:", expiringObj.Object)
+				// If we found a duplicate, we can remove it from the duplicate checker
+				s.duplicateChecker[schemaName] = append(s.duplicateChecker[schemaName][:i], s.duplicateChecker[schemaName][i+1:]...)
+				foundDuplicate = true
+				break
+			}
+		}
+
+		if !foundDuplicate {
+
+			prettyObj, err := json.MarshalIndent(obj, "", "  ")
+			if err != nil {
+				fmt.Printf("Error pretty printing object for storage: %v\n", err)
+			} else {
+				fmt.Printf("Stripe is storing object (schema: %s):\n%s\n", schemaName, string(prettyObj))
+			}
+
+			s.app.storageEngine.addSafeObject(obj, schemaName)
+			expiringObj := newExpiringMapAny(obj, s.app.config.keepDuplicatesFor)
+			// Add the expiring object to the duplicate checker
+			s.duplicateChecker[schemaName] = append(s.duplicateChecker[schemaName], expiringObj)
+		}
 	}
 }
 

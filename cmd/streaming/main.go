@@ -175,7 +175,16 @@ func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo, duplic
 
 	for systemName, systemInfo := range systemInfoMap {
 		go func(systemName string, systemInfo SystemInfo) {
-			system, err := app.NewSystem(systemInfo, app.config.port, duplicateChecker)
+			// Create a new copy of duplicateChecker for each system
+			dupCheckerCopy := make(map[string][]ExpiringMapAny, len(duplicateChecker))
+			for k, v := range duplicateChecker {
+				// Create a new slice for each key to avoid sharing underlying arrays
+				copiedSlice := make([]ExpiringMapAny, len(v))
+				copy(copiedSlice, v)
+				dupCheckerCopy[k] = copiedSlice
+			}
+
+			system, err := app.NewSystem(systemInfo, app.config.port, dupCheckerCopy)
 			if err != nil {
 				errCh <- err
 			} else {
@@ -204,10 +213,12 @@ func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo, duplic
 }
 
 type Location struct {
-	Object    string `json:"object,omitempty"`
-	Field     string `json:"field,omitempty"`
-	SearchKey bool   `json:"search_key,omitempty"`
-	Pull      bool   `json:"pull,omitempty"`
+	PullObject string `json:"pull_object,omitempty"`
+	PushObject string `json:"push_object,omitempty"`
+	Field      string `json:"field,omitempty"`
+	SearchKey  bool   `json:"search_key,omitempty"`
+	Pull       bool   `json:"pull,omitempty"`
+	Push       bool   `json:"push,omitempty"`
 }
 
 type PropertySystemConfig struct {
@@ -313,52 +324,55 @@ func createModelMap(cfg config) (
 
 				for _, location := range system.Receive {
 
-					if _, ok := receiveFieldMap[systemName][location.Object]; !ok {
-						receiveFieldMap[systemName][location.Object] = make(map[string]map[string]Location)
+					if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
+						receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
 					}
 
-					if _, ok := receiveFieldMap[systemName][location.Object][schema.Title]; !ok {
-						receiveFieldMap[systemName][location.Object][schema.Title] = make(map[string]Location)
+					if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
+						receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
 					}
 
-					receiveFieldMap[systemName][location.Object][schema.Title][location.Field] = Location{
+					receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
 						Field:     propertyNameInSchema,
 						SearchKey: location.SearchKey,
 						Pull:      true,
+						Push:      false,
 					}
 				}
 
 				for _, location := range system.Sync {
 
-					if _, ok := receiveFieldMap[systemName][location.Object]; !ok {
-						receiveFieldMap[systemName][location.Object] = make(map[string]map[string]Location)
+					if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
+						receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
 					}
 
-					if _, ok := receiveFieldMap[systemName][location.Object][schema.Title]; !ok {
-						receiveFieldMap[systemName][location.Object][schema.Title] = make(map[string]Location)
+					if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
+						receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
 					}
 
-					receiveFieldMap[systemName][location.Object][schema.Title][location.Field] = Location{
+					receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
 						Field:     propertyNameInSchema,
 						SearchKey: location.SearchKey,
 						Pull:      true,
+						Push:      true,
 					}
 				}
 
 				for _, location := range system.Push {
 
-					if _, ok := receiveFieldMap[systemName][location.Object]; !ok {
-						receiveFieldMap[systemName][location.Object] = make(map[string]map[string]Location)
+					if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
+						receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
 					}
 
-					if _, ok := receiveFieldMap[systemName][location.Object][schema.Title]; !ok {
-						receiveFieldMap[systemName][location.Object][schema.Title] = make(map[string]Location)
+					if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
+						receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
 					}
 
-					receiveFieldMap[systemName][location.Object][schema.Title][location.Field] = Location{
+					receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
 						Field:     propertyNameInSchema,
 						SearchKey: location.SearchKey,
 						Pull:      false,
+						Push:      true,
 					}
 				}
 
@@ -371,14 +385,16 @@ func createModelMap(cfg config) (
 						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
 					}
 
-					if _, ok := pushFieldMap[systemName][schema.Title][location.Object]; !ok {
-						pushFieldMap[systemName][schema.Title][location.Object] = make(map[string]Location)
+					if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
+						pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
 					}
 
-					pushFieldMap[systemName][schema.Title][location.Object][propertyNameInSchema] = Location{
-						Field:     location.Field,
-						SearchKey: location.SearchKey,
-						Pull:      false,
+					pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
+						Field:      location.Field,
+						SearchKey:  location.SearchKey,
+						Pull:       false,
+						Push:       false,
+						PushObject: location.PushObject,
 					}
 				}
 
@@ -387,14 +403,16 @@ func createModelMap(cfg config) (
 						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
 					}
 
-					if _, ok := pushFieldMap[systemName][schema.Title][location.Object]; !ok {
-						pushFieldMap[systemName][schema.Title][location.Object] = make(map[string]Location)
+					if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
+						pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
 					}
 
-					pushFieldMap[systemName][schema.Title][location.Object][propertyNameInSchema] = Location{
-						Field:     location.Field,
-						SearchKey: location.SearchKey,
-						Pull:      false,
+					pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
+						Field:      location.Field,
+						SearchKey:  location.SearchKey,
+						Pull:       false,
+						Push:       true,
+						PushObject: location.PushObject,
 					}
 				}
 
@@ -403,14 +421,16 @@ func createModelMap(cfg config) (
 						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
 					}
 
-					if _, ok := pushFieldMap[systemName][schema.Title][location.Object]; !ok {
-						pushFieldMap[systemName][schema.Title][location.Object] = make(map[string]Location)
+					if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
+						pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
 					}
 
-					pushFieldMap[systemName][schema.Title][location.Object][propertyNameInSchema] = Location{
-						Field:     location.Field,
-						SearchKey: location.SearchKey,
-						Pull:      false,
+					pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
+						Field:      location.Field,
+						SearchKey:  location.SearchKey,
+						Pull:       false,
+						Push:       true,
+						PushObject: location.PushObject,
 					}
 				}
 			}

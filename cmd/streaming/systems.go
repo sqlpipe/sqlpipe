@@ -63,7 +63,7 @@ func (app *application) NewSystem(systemInfo SystemInfo, port int, duplicateChec
 	case TypeSnowflake:
 		return newSnowflake(systemInfo)
 	case TypeStripe:
-		return app.newStripe(systemInfo)
+		return app.newStripe(systemInfo, duplicateChecker)
 	default:
 		return system, fmt.Errorf("unsupported system type %v", systemInfo.Type)
 	}

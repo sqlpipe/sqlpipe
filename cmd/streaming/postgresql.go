@@ -61,8 +61,7 @@ func (app *application) newPostgresql(systemInfo SystemInfo, duplicateChecker ma
 	postgresql.pushFieldMap = app.pushFieldMap[systemInfo.Name]
 	postgresql.duplicateChecker = duplicateChecker
 
-	var index int64 = 0
-	app.storageEngine.setSafeIndexMap(systemInfo.Name, index)
+	app.storageEngine.setSafeIndexMap(systemInfo.Name, 0)
 
 	go postgresql.watchQueue()
 	go postgresql.watchCDC()
@@ -98,6 +97,13 @@ func (p Postgresql) watchQueue() {
 			searchFields := []string{}
 			object := obj.(map[string]interface{})
 
+			prettyObj, err := json.MarshalIndent(object, "", "  ")
+			if err != nil {
+				p.app.logger.Error("error pretty printing object", "error", err)
+			} else {
+				fmt.Printf("Postgresql got object from queue:\n%s\n", string(prettyObj))
+			}
+
 			// ensure there is only 1 key. that is the object type
 			if len(object) != 1 {
 				p.app.logger.Error("object does not have exactly one key", "object", obj)
@@ -112,20 +118,54 @@ func (p Postgresql) watchQueue() {
 
 			objectVal := object[objectType].(map[string]interface{})
 
-			newObj := map[string]interface{}{}
-			for locationInSystem, fieldMap := range p.pushFieldMap[objectType] {
-				for keyInSchema, desiredKey := range fieldMap {
-					if _, ok := objectVal[keyInSchema]; ok {
-						newObj[desiredKey.Field] = objectVal[keyInSchema]
-						if fieldMap[keyInSchema].SearchKey {
-							searchFields = append(searchFields, desiredKey.Field)
-						}
+			var objectIsDuplicate bool
+			foundDuplicate := false
+			for i, expiringObj := range p.duplicateChecker[objectType] {
+
+				objectIsDuplicate = true
+
+				for k, v := range expiringObj.Object {
+					if v != objectVal[k] {
+						objectIsDuplicate = false
+						break
 					}
 				}
 
-				err = p.upsertJSON(newObj, searchFields, locationInSystem, objectType)
-				if err != nil {
-					p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", objectType, "locationInSystem", locationInSystem, "data", newObj)
+				if objectIsDuplicate {
+					fmt.Println("Postgresql found duplicate object in duplicate checker while watching queue:", expiringObj.Object)
+					// If we found a duplicate, we can remove it from the duplicate checker
+					p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType][:i], p.duplicateChecker[objectType][i+1:]...)
+					foundDuplicate = true
+					break
+				}
+			}
+
+			if !foundDuplicate {
+				fmt.Println("No duplicate found for object, upserting to PostgreSQL", obj)
+				// If we didn't find a duplicate, add the object to the duplicate checker
+				expiringObj := newExpiringMapAny(objectVal, p.app.config.keepDuplicatesFor)
+				p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType], expiringObj)
+
+				newObj := map[string]interface{}{}
+				for locationInSystem, fieldMap := range p.pushFieldMap[objectType] {
+					for keyInSchema, location := range fieldMap {
+						if _, ok := objectVal[keyInSchema]; ok {
+							if location.Push || location.SearchKey {
+								newObj[location.Field] = objectVal[keyInSchema]
+							}
+
+							if fieldMap[keyInSchema].SearchKey {
+								searchFields = append(searchFields, location.Field)
+							}
+						}
+					}
+
+					fmt.Printf("PostgreSQL is upserting object: %v\n", newObj)
+
+					err = p.upsertJSON(objectVal, searchFields, locationInSystem, objectType)
+					if err != nil {
+						p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", objectType, "locationInSystem", locationInSystem, "data", newObj)
+					}
 				}
 			}
 		}
@@ -141,13 +181,14 @@ func (p Postgresql) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []string, locationInSystem string, objectType string) error {
 	// Find the first available search field in data
-	var conflictFields []string
+	var conflictField string
 	for _, field := range searchFields {
 		if _, ok := data[field]; ok {
-			conflictFields = append(conflictFields, field)
+			conflictField = field
+			break
 		}
 	}
-	if len(conflictFields) == 0 {
+	if conflictField == "" {
 		return fmt.Errorf("none of the search fields found in data")
 	}
 
@@ -164,14 +205,10 @@ func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []strin
 		idx++
 	}
 
-	// Build ON CONFLICT SET clause, excluding conflict fields
+	// Build ON CONFLICT SET clause, excluding conflict field
 	updates := make([]string, 0, len(columns))
-	conflictFieldSet := make(map[string]struct{}, len(conflictFields))
-	for _, f := range conflictFields {
-		conflictFieldSet[f] = struct{}{}
-	}
 	for _, col := range columns {
-		if _, isConflict := conflictFieldSet[col]; !isConflict {
+		if col != conflictField {
 			updates = append(updates, fmt.Sprintf("%s = EXCLUDED.%s", col, col))
 		}
 	}
@@ -185,7 +222,7 @@ func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []strin
 		locationInSystem,
 		strings.Join(columns, ", "),
 		strings.Join(placeholders, ", "),
-		strings.Join(conflictFields, ", "),
+		conflictField,
 		strings.Join(updates, ", "),
 	)
 
@@ -325,7 +362,7 @@ type CdcEvent struct {
 
 func (p Postgresql) handleCdcEvent(jsonString string) error {
 
-	fmt.Println("receive field map: ", p.receiveFieldMap)
+	// fmt.Println("receive field map: ", p.receiveFieldMap)
 
 	var event CdcEvent
 	err := json.Unmarshal([]byte(jsonString), &event)
@@ -340,9 +377,10 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 
 		// fmt.Println("Received CDC event", objectName)
 
-		// fmt.Println("Raw cdc data:", jsonString)
+		fmt.Println("Raw cdc data:", jsonString)
 
 		obj := map[string]interface{}{}
+		newObjs := make(map[string]map[string]interface{})
 
 		for i, colName := range change.ColumnNames {
 			if change.ColumnValues[i] != nil {
@@ -350,21 +388,25 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 			}
 		}
 
-		// objs = append(objs, obj)
-
-		newObjs := make(map[string]map[string]interface{})
-
 		for schemaName, fieldMap := range p.receiveFieldMap[objectName] {
-			newModel := map[string]interface{}{}
+			newObj := map[string]interface{}{}
 
-			for keyInObj, desiredKey := range fieldMap {
-				newModel[desiredKey.Field] = obj[keyInObj]
+			for keyInObj, location := range fieldMap {
+				newObj[location.Field] = obj[keyInObj]
 			}
 
-			newObjs[schemaName] = newModel
+			newObjs[schemaName] = newObj
 		}
 
 		for schemaName, obj := range newObjs {
+
+			for k, v := range obj {
+				if v == nil {
+					delete(obj, k)
+				}
+			}
+
+			fmt.Println("Postgresql validating / dupe scanning obj:", obj)
 
 			schema, inMap := p.app.schemaMap[schemaName]
 			if !inMap {
@@ -376,28 +418,21 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 				return fmt.Errorf("object failed schema validation for '%s': %v", objectName, err)
 			}
 
-			for k, v := range obj {
-				if v == nil {
-					delete(obj, k)
-				}
-			}
-
-			fmt.Println("Adding object to storage engine", obj)
-
 			var objectIsDuplicate bool
 			foundDuplicate := false
 			for i, expiringObj := range p.duplicateChecker[schemaName] {
 
 				objectIsDuplicate = true
 
-				for k, v := range expiringObj.Object {
-					if v != obj[k] {
+				for k, v := range obj {
+					if v != expiringObj.Object[k] {
 						objectIsDuplicate = false
 						break
 					}
 				}
 
 				if objectIsDuplicate {
+					fmt.Println("Postgresql found duplicate object in duplicate checker while handling cdc event:", expiringObj.Object)
 					// If we found a duplicate, we can remove it from the duplicate checker
 					p.duplicateChecker[schemaName] = append(p.duplicateChecker[schemaName][:i], p.duplicateChecker[schemaName][i+1:]...)
 					foundDuplicate = true
@@ -406,17 +441,19 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 			}
 
 			if !foundDuplicate {
+				fmt.Println("PostgreSQL no duplicate found for object, adding to queue", obj)
 				// If we didn't find a duplicate, add the object to the duplicate checker
 				expiringObj := newExpiringMapAny(obj, p.app.config.keepDuplicatesFor)
 				p.duplicateChecker[schemaName] = append(p.duplicateChecker[schemaName], expiringObj)
 
 				// also add to storage engine
+				fmt.Println("PostgreSQL is storing object", obj)
 				p.app.storageEngine.addSafeObject(obj, schemaName)
 			}
 		}
 	}
 
-	p.app.storageEngine.printAllContents()
+	// p.app.storageEngine.printAllContents()
 
 	return nil
 }
