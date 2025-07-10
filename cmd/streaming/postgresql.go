@@ -162,14 +162,14 @@ func (p Postgresql) watchQueue() {
 
 				if !foundDuplicate {
 					fmt.Println("No duplicate found for object, upserting to PostgreSQL", obj)
+					fmt.Printf("PostgreSQL is upserting object: %v\n", newObj)
+
+					err = p.upsertJSON(objectVal, searchFields, locationInSystem, objectType)
+					if err != nil {
+						p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", objectType, "locationInSystem", locationInSystem, "data", newObj)
+					}
 				}
 
-				fmt.Printf("PostgreSQL is upserting object: %v\n", newObj)
-
-				err = p.upsertJSON(objectVal, searchFields, locationInSystem, objectType)
-				if err != nil {
-					p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", objectType, "locationInSystem", locationInSystem, "data", newObj)
-				}
 			}
 		}
 

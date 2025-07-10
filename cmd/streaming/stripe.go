@@ -136,48 +136,48 @@ func (s Stripe) watchQueue() {
 
 			objectVal := object[objectType].(map[string]any)
 
-			var objectIsDuplicate bool
-			foundDuplicate := false
-			for i, expiringObj := range s.duplicateChecker[objectType] {
+			for locationInSystem, pushLocation := range s.systemInfo.PushRouter[objectType] {
+				newObj := map[string]any{}
+				for keyInSchema, field := range pushLocation {
+					if _, ok := objectVal[keyInSchema]; ok {
+						newObj[field.Field] = objectVal[keyInSchema]
 
-				fmt.Println("Stripe checking duplicate checker for object:", expiringObj.Object)
+						if field.SearchKey {
+							searchKey = field.Field
+							searchValue = fmt.Sprint(newObj[field.Field])
+						}
+					}
 
-				objectIsDuplicate = true
+					if field.Hardcode != nil && !isZeroValue(field.Hardcode) {
+						newObj[field.Field] = field.Hardcode
+					}
+				}
 
-				for k, v := range expiringObj.Object {
-					if v != objectVal[k] {
-						objectIsDuplicate = false
+				var objectIsDuplicate bool
+				foundDuplicate := false
+				for i, expiringObj := range s.duplicateChecker[objectType] {
+
+					fmt.Println("Stripe checking duplicate checker for object:", expiringObj.Object)
+
+					objectIsDuplicate = true
+
+					for k, v := range expiringObj.Object {
+						if v != objectVal[k] {
+							objectIsDuplicate = false
+							break
+						}
+					}
+
+					if objectIsDuplicate {
+						fmt.Println("Stripe found duplicate object in duplicate checker while watching queue:", expiringObj.Object)
+						// If we found a duplicate, we can remove it from the duplicate checker
+						s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType][:i], s.duplicateChecker[objectType][i+1:]...)
+						foundDuplicate = true
 						break
 					}
 				}
 
-				if objectIsDuplicate {
-					fmt.Println("Stripe found duplicate object in duplicate checker while watching queue:", expiringObj.Object)
-					// If we found a duplicate, we can remove it from the duplicate checker
-					s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType][:i], s.duplicateChecker[objectType][i+1:]...)
-					foundDuplicate = true
-					break
-				}
-			}
-
-			if !foundDuplicate {
-				for locationInSystem, pushLocation := range s.systemInfo.PushRouter[objectType] {
-					newObj := map[string]any{}
-					for keyInSchema, field := range pushLocation {
-						if _, ok := objectVal[keyInSchema]; ok {
-							newObj[field.Field] = objectVal[keyInSchema]
-
-							if field.SearchKey {
-								searchKey = field.Field
-								searchValue = fmt.Sprint(newObj[field.Field])
-							}
-						}
-
-						if field.Hardcode != nil && !isZeroValue(field.Hardcode) {
-							newObj[field.Field] = field.Hardcode
-						}
-					}
-
+				if !foundDuplicate {
 					fmt.Printf("Stripe is upserting object. Search key: %v, Search value: %v (route: %s): %v\n", searchKey, searchValue, locationInSystem, newObj)
 					// Upsert the object to Stripe
 					_, err := s.upsertObject(locationInSystem, newObj, objectType, searchKey, searchValue)
