@@ -29,6 +29,20 @@ var (
 	DriverSnowflake  = "snowflake"
 )
 
+type Field struct {
+	Field     string `yaml:"field" json:"field"`
+	SearchKey bool   `yaml:"search_key,omitempty" json:"search_key,omitempty"`
+	Hardcode  any    `yaml:"hardcode,omitempty" json:"hardcode,omitempty"`
+}
+
+type PullObject map[string]Field
+type PullLocation map[string]PullObject
+type ReceiveRouter map[string]PullLocation
+
+type PushRouter map[string]PushObject
+type PushObject map[string]PushLocation
+type PushLocation map[string]Field
+
 type SystemInfo struct {
 	Name               string        `yaml:"name" json:"name"`
 	Type               string        `yaml:"type" json:"type"`
@@ -48,6 +62,8 @@ type SystemInfo struct {
 	RateLimit          int           `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
 	RateBucketSize     int           `yaml:"rate_bucket_size,omitempty" json:"rate_bucket_size,omitempty"`
 	UseCliListener     bool          `yaml:"use_cli_listener,omitempty" json:"use_cli_listener,omitempty"`
+	ReceiveRouter      ReceiveRouter `yaml:"receive_router,omitempty" json:"receive_router,omitempty"`
+	PushRouter         PushRouter    `yaml:"push_router,omitempty" json:"push_router,omitempty"`
 }
 
 type SystemInterface interface {

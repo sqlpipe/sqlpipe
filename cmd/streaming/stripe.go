@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/stripe/stripe-go/v82"
@@ -18,11 +17,11 @@ import (
 )
 
 type Stripe struct {
-	client           *stripe.Client
-	apiKey           string
-	app              *application
-	receiveFieldMap  map[string]map[string]map[string]Location
-	pushFieldMap     map[string]map[string]map[string]Location
+	client *stripe.Client
+	apiKey string
+	app    *application
+	// receiveFieldMap  map[string]map[string]map[string]Location
+	// pushFieldMap     map[string]map[string]map[string]Location
 	limiter          *rate.Limiter
 	systemInfo       SystemInfo
 	duplicateChecker map[string][]ExpiringMapAny
@@ -73,10 +72,10 @@ func (app *application) newStripe(systemInfo SystemInfo, duplicateChecker map[st
 	app.logger.Info("Stripe test api call was successful", "system", systemInfo.Name)
 
 	stripeSystem := &Stripe{
-		client:           stripeClient,
-		app:              app,
-		receiveFieldMap:  app.receiveFieldMap[systemInfo.Name],
-		pushFieldMap:     app.pushFieldMap[systemInfo.Name],
+		client: stripeClient,
+		app:    app,
+		// receiveFieldMap:  app.receiveFieldMap[systemInfo.Name],
+		// pushFieldMap:     app.pushFieldMap[systemInfo.Name],
 		limiter:          rate.NewLimiter(rate.Limit(systemInfo.RateLimit), systemInfo.RateBucketSize),
 		systemInfo:       systemInfo,
 		duplicateChecker: duplicateChecker,
@@ -121,7 +120,7 @@ func (s Stripe) watchQueue() {
 			var searchValue string
 
 			// searchFields := []string{}
-			object := obj.(map[string]interface{})
+			object := obj.(map[string]any)
 
 			// ensure there is only 1 key. that is the object type
 			if len(object) != 1 {
@@ -135,7 +134,7 @@ func (s Stripe) watchQueue() {
 				objectType = key
 			}
 
-			objectVal := object[objectType].(map[string]interface{})
+			objectVal := object[objectType].(map[string]any)
 
 			var objectIsDuplicate bool
 			foundDuplicate := false
@@ -162,19 +161,20 @@ func (s Stripe) watchQueue() {
 			}
 
 			if !foundDuplicate {
-				for locationInSystem, fieldMap := range s.pushFieldMap[objectType] {
-					newObj := map[string]interface{}{}
-					for keyInSchema, location := range fieldMap {
+				for locationInSystem, pushLocation := range s.systemInfo.PushRouter[objectType] {
+					newObj := map[string]any{}
+					for keyInSchema, field := range pushLocation {
 						if _, ok := objectVal[keyInSchema]; ok {
-							if location.Push || location.SearchKey {
-								newObj[location.Field] = objectVal[keyInSchema]
-							}
+							newObj[field.Field] = objectVal[keyInSchema]
 
-							if location.SearchKey {
-								// If this is a search key, we need to set it as the search key for the object
-								searchKey = location.Field
-								searchValue = fmt.Sprint(newObj[location.Field])
+							if field.SearchKey {
+								searchKey = field.Field
+								searchValue = fmt.Sprint(newObj[field.Field])
 							}
+						}
+
+						if field.Hardcode != nil && !isZeroValue(field.Hardcode) {
+							newObj[field.Field] = field.Hardcode
 						}
 					}
 
@@ -194,7 +194,7 @@ func (s Stripe) watchQueue() {
 	}
 }
 
-func (s Stripe) upsertObject(endpoint string, object map[string]interface{}, objectType string, searchKey, searchValue string) ([]byte, error) {
+func (s Stripe) upsertObject(endpoint string, object map[string]any, objectType string, searchKey, searchValue string) ([]byte, error) {
 	// Replace with your actual secret key or use an environment variable
 	form := url.Values{}
 
@@ -315,24 +315,23 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		objectName = objectName[:idx]
 	}
 
-	var obj map[string]interface{}
+	var obj map[string]any
 	err = json.Unmarshal(event.Data.Raw, &obj)
 	if err != nil {
 		s.app.logger.Error("Failed to unmarshal Stripe event data", "error", err)
 		return
 	}
 
-	newObjs := make(map[string]map[string]interface{})
+	newObjs := make(map[string]map[string]any)
 
-	for schemaName, fieldMap := range s.receiveFieldMap[objectName] {
-		newModel := map[string]interface{}{}
+	for schemaName, fields := range s.systemInfo.ReceiveRouter[objectName] {
+		newModel := map[string]any{}
 
-		for keyInObj, location := range fieldMap {
-
-			if strings.HasPrefix(keyInObj, "metadata") {
-
-			if location.Pull || location.SearchKey {
-				newModel[location.Field] = obj[keyInObj]
+		for keyInObj, field := range fields {
+			if field.Hardcode != nil && !isZeroValue(field.Hardcode) {
+				newModel[field.Field] = field.Hardcode
+			} else {
+				newModel[field.Field] = getNestedValue(obj, keyInObj)
 			}
 		}
 

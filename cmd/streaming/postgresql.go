@@ -18,8 +18,8 @@ import (
 )
 
 type ExpiringMapAny struct {
-	Object map[string]interface{} `json:"object"`
-	Expiry time.Time              `json:"expiry"`
+	Object map[string]any `json:"object"`
+	Expiry time.Time      `json:"expiry"`
 }
 
 func newExpiringMapAny(object map[string]any, timeFromNow time.Duration) ExpiringMapAny {
@@ -30,12 +30,12 @@ func newExpiringMapAny(object map[string]any, timeFromNow time.Duration) Expirin
 }
 
 type Postgresql struct {
-	db               *sql.DB
-	replConn         *pgconn.PgConn
-	app              *application
-	systemInfo       SystemInfo
-	receiveFieldMap  map[string]map[string]map[string]Location
-	pushFieldMap     map[string]map[string]map[string]Location
+	db         *sql.DB
+	replConn   *pgconn.PgConn
+	app        *application
+	systemInfo SystemInfo
+	// receiveRouter    map[string]map[string]map[string]Location
+	// pushRouter       map[string]map[string]map[string]Location
 	limiter          *rate.Limiter
 	duplicateChecker map[string][]ExpiringMapAny
 }
@@ -56,9 +56,13 @@ func (app *application) newPostgresql(systemInfo SystemInfo, duplicateChecker ma
 	postgresql.replConn = replConn
 	postgresql.app = app
 	postgresql.systemInfo = systemInfo
+	// fmt.Println("Receive router: ", postgresql.systemInfo.ReceiveRouter)
 	postgresql.limiter = rate.NewLimiter(rate.Limit(systemInfo.RateLimit), systemInfo.RateBucketSize)
-	postgresql.receiveFieldMap = app.receiveFieldMap[systemInfo.Name]
-	postgresql.pushFieldMap = app.pushFieldMap[systemInfo.Name]
+	// postgresql.receiveRouter, err = postgresql.createReceiveRouter()
+	// if err != nil {
+	// 	return postgresql, fmt.Errorf("error creating receive router for postgresql system %s: %v", systemInfo.Name, err)
+	// }
+	// postgresql.pushFieldMap = app.pushFieldMap[systemInfo.Name]
 	postgresql.duplicateChecker = duplicateChecker
 
 	app.storageEngine.setSafeIndexMap(systemInfo.Name, 0)
@@ -95,7 +99,7 @@ func (p Postgresql) watchQueue() {
 
 		for _, obj := range objects {
 			searchFields := []string{}
-			object := obj.(map[string]interface{})
+			object := obj.(map[string]any)
 
 			prettyObj, err := json.MarshalIndent(object, "", "  ")
 			if err != nil {
@@ -116,7 +120,7 @@ func (p Postgresql) watchQueue() {
 				objectType = key
 			}
 
-			objectVal := object[objectType].(map[string]interface{})
+			objectVal := object[objectType].(map[string]any)
 
 			var objectIsDuplicate bool
 			foundDuplicate := false
@@ -142,15 +146,13 @@ func (p Postgresql) watchQueue() {
 
 			if !foundDuplicate {
 				fmt.Println("No duplicate found for object, upserting to PostgreSQL", obj)
-				for locationInSystem, fieldMap := range p.pushFieldMap[objectType] {
-					newObj := map[string]interface{}{}
-					for keyInSchema, location := range fieldMap {
+				for locationInSystem, fields := range p.systemInfo.PushRouter[objectType] {
+					newObj := map[string]any{}
+					for keyInSchema, location := range fields {
 						if _, ok := objectVal[keyInSchema]; ok {
-							if location.Push || location.SearchKey {
-								newObj[location.Field] = objectVal[keyInSchema]
-							}
+							newObj[location.Field] = objectVal[keyInSchema]
 
-							if fieldMap[keyInSchema].SearchKey {
+							if fields[keyInSchema].SearchKey {
 								searchFields = append(searchFields, location.Field)
 							}
 						}
@@ -175,10 +177,10 @@ func (p Postgresql) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	p.app.logger.Error("PostgreSQL does not support webhooks", "system", p.systemInfo.Name)
 }
 
-func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []string, locationInSystem string, objectType string) error {
+func (p Postgresql) upsertJSON(data map[string]any, searchFields []string, locationInSystem string, objectType string) error {
 	var foundMatch bool
 	var conflictField string
-	var conflictValue interface{}
+	var conflictValue any
 
 	for _, field := range searchFields {
 		if v, ok := data[field]; ok {
@@ -203,7 +205,7 @@ func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []strin
 	if foundMatch {
 		// Prepare UPDATE: set all columns except the conflict field
 		setCols := make([]string, 0, len(data))
-		values := make([]interface{}, 0, len(data))
+		values := make([]any, 0, len(data))
 		idx := 1
 		for k, v := range data {
 			if k != conflictField {
@@ -232,7 +234,7 @@ func (p Postgresql) upsertJSON(data map[string]interface{}, searchFields []strin
 		// Build INSERT
 		columns := make([]string, 0, len(data))
 		placeholders := make([]string, 0, len(data))
-		insertValues := make([]interface{}, 0, len(data))
+		insertValues := make([]any, 0, len(data))
 
 		idx := 1
 		for k, v := range data {
@@ -368,12 +370,12 @@ func (p *Postgresql) watchCDC() {
 }
 
 type CdcChange struct {
-	Kind         string        `json:"kind"`
-	Schema       string        `json:"schema"`
-	Table        string        `json:"table"`
-	ColumnNames  []string      `json:"columnnames"`
-	ColumnTypes  []string      `json:"columntypes"`
-	ColumnValues []interface{} `json:"columnvalues"`
+	Kind         string   `json:"kind"`
+	Schema       string   `json:"schema"`
+	Table        string   `json:"table"`
+	ColumnNames  []string `json:"columnnames"`
+	ColumnTypes  []string `json:"columntypes"`
+	ColumnValues []any    `json:"columnvalues"`
 }
 
 type CdcEvent struct {
@@ -390,17 +392,17 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 		return fmt.Errorf("error unmarshalling CDC event: %v", err)
 	}
 
-	// objs := []map[string]interface{}{}
+	// objs := []map[string]any{}
 
 	for _, change := range event.Change {
-		objectName := change.Schema + "." + change.Table
+		pullLocation := change.Schema + "." + change.Table
 
 		// fmt.Println("Received CDC event", objectName)
 
-		fmt.Println("Raw cdc data:", jsonString)
+		fmt.Println("Received cdc data from PostgreSQL:", jsonString)
 
-		obj := map[string]interface{}{}
-		newObjs := make(map[string]map[string]interface{})
+		obj := map[string]any{}
+		newObjs := make(map[string]map[string]any)
 
 		for i, colName := range change.ColumnNames {
 			if change.ColumnValues[i] != nil {
@@ -408,16 +410,14 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 			}
 		}
 
-		for schemaName, fieldMap := range p.receiveFieldMap[objectName] {
-			newObj := map[string]interface{}{}
+		for objectType, pullObject := range p.systemInfo.ReceiveRouter[pullLocation] {
+			newObj := map[string]any{}
 
-			for keyInObj, location := range fieldMap {
-				if location.Pull || location.SearchKey {
-					newObj[location.Field] = obj[keyInObj]
-				}
+			for keyInObj, fields := range pullObject {
+				newObj[fields.Field] = obj[keyInObj]
 			}
 
-			newObjs[schemaName] = newObj
+			newObjs[objectType] = newObj
 		}
 
 		for schemaName, obj := range newObjs {
@@ -432,12 +432,12 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 
 			schema, inMap := p.app.schemaMap[schemaName]
 			if !inMap {
-				return fmt.Errorf("no schema found for object: %s", objectName)
+				return fmt.Errorf("no schema found for pull location: %s", pullLocation)
 			}
 
 			err = schema.Validate(obj)
 			if err != nil {
-				return fmt.Errorf("object failed postgresql schema validation for '%s': %v", objectName, err)
+				return fmt.Errorf("object failed postgresql schema validation for '%s': %v", pullLocation, err)
 			}
 
 			var objectIsDuplicate bool
@@ -465,7 +465,7 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 			if !foundDuplicate {
 
 				// also add to storage engine
-				fmt.Println("PostgreSQL is storing object in queue", obj)
+				fmt.Println("PostgreSQL no duplicate found. Storing object in queue", obj)
 				p.app.storageEngine.addSafeObject(obj, schemaName)
 
 				fmt.Println("PostgreSQL no duplicate found for object, adding to duplicate checker", obj)
@@ -474,8 +474,6 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 			}
 		}
 	}
-
-	// p.app.storageEngine.printAllContents()
 
 	return nil
 }

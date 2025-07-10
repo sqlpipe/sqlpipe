@@ -280,7 +280,7 @@ func TestStreaming(t *testing.T) {
 	// stripeCmd := exec.Command("stripe", "trigger", "price.created")
 	// stripeCmd := exec.Command("stripe", "trigger", "tax_rate.created")
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	stripeCmd := exec.Command("stripe", "trigger", "product.created")
 	stripeCmd.Stdout = os.Stdout

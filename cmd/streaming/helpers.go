@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
+	"strings"
 	"time"
 )
 
@@ -70,4 +72,29 @@ func (app *application) receiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.systemMap[path].handleWebhook(w, r)
+}
+
+// getNestedValue traverses a map[string]any using dot notation for nested fields
+func getNestedValue(obj map[string]any, dottedKey string) any {
+	keys := strings.Split(dottedKey, ".")
+	var val any = obj
+	for _, k := range keys {
+		m, ok := val.(map[string]any)
+		if !ok {
+			return nil
+		}
+		val, ok = m[k]
+		if !ok {
+			return nil
+		}
+	}
+	return val
+}
+
+// isZeroValue checks if the given value is the zero value for its type.
+func isZeroValue(x interface{}) bool {
+	if x == nil {
+		return true
+	}
+	return reflect.ValueOf(x).IsZero()
 }

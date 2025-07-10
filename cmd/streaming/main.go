@@ -35,15 +35,15 @@ type config struct {
 }
 
 type application struct {
-	config          config
-	logger          *slog.Logger
-	wg              sync.WaitGroup
-	systemMap       map[string]SystemInterface
-	receiveFieldMap map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
-	pushFieldMap    map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_schema.key_name_for_obj]
-	schemaMap       map[string]*jsonschema.Schema
-	storageEngine   *storageEngine
-	schemaRootMap   map[string]*SchemaRoot
+	config    config
+	logger    *slog.Logger
+	wg        sync.WaitGroup
+	systemMap map[string]SystemInterface
+	// receiveRouter map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_obj.key_name_from_schema
+	// pushFieldMap  map[string]map[string]map[string]map[string]Location // system_name.object_name.model_name.key_name_from_schema.key_name_for_obj]
+	schemaMap     map[string]*jsonschema.Schema
+	storageEngine *storageEngine
+	schemaRootMap map[string]*SchemaRoot
 }
 
 func main() {
@@ -72,7 +72,7 @@ func main() {
 		return time.Now().Unix()
 	}))
 
-	schemaMap, receiveFieldMap, pushFieldMap, schemaRootMap, err := createModelMap(cfg)
+	schemaMap, schemaRootMap, err := createModelMap(cfg)
 	if err != nil {
 		logger.Error("failed to load model schemas", "error", err)
 		os.Exit(1)
@@ -91,14 +91,14 @@ func main() {
 	}
 
 	app := &application{
-		config:          cfg,
-		logger:          logger,
-		systemMap:       make(map[string]SystemInterface),
-		schemaMap:       schemaMap,
-		receiveFieldMap: receiveFieldMap,
-		pushFieldMap:    pushFieldMap,
-		storageEngine:   storageEngine,
-		schemaRootMap:   schemaRootMap,
+		config:    cfg,
+		logger:    logger,
+		systemMap: make(map[string]SystemInterface),
+		schemaMap: schemaMap,
+		// receiveRouter: receiveRouter,
+		// pushFieldMap:  pushFieldMap,
+		storageEngine: storageEngine,
+		schemaRootMap: schemaRootMap,
 	}
 
 	serveQuitCh := make(chan struct{})
@@ -254,8 +254,6 @@ type SchemaRoot struct {
 
 func createModelMap(cfg config) (
 	schemaMap map[string]*jsonschema.Schema,
-	receiveFieldMap map[string]map[string]map[string]map[string]Location,
-	pushFieldMap map[string]map[string]map[string]map[string]Location,
 	schemaRoot map[string]*SchemaRoot,
 	err error,
 ) {
@@ -274,13 +272,13 @@ func createModelMap(cfg config) (
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	schemaMap = make(map[string]*jsonschema.Schema)
 	// fieldMapper = map[string]map[string][]FieldRemaps{}
-	receiveFieldMap = make(map[string]map[string]map[string]map[string]Location)
-	pushFieldMap = make(map[string]map[string]map[string]map[string]Location)
+	// receiveRouter = make(map[string]map[string]map[string]map[string]Location)
+	// pushFieldMap = make(map[string]map[string]map[string]map[string]Location)
 	// searchFieldMap = make(map[string]map[string]map[string]bool)
 	schemaRootMap := map[string]*SchemaRoot{}
 	compiler := jsonschema.NewCompiler()
@@ -292,164 +290,164 @@ func createModelMap(cfg config) (
 		url := "file://" + filepath.ToSlash(path)
 		schema, err := compiler.Compile(url)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("compile %s: %w", path, err)
+			return nil, nil, fmt.Errorf("compile %s: %w", path, err)
 		}
 
 		if schema.Title == "" {
-			return nil, nil, nil, nil, fmt.Errorf("schema %s has no title", path)
+			return nil, nil, fmt.Errorf("schema %s has no title", path)
 		}
 
 		schemaMap[schema.Title] = schema
 
 		f, err := os.Open(path)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to open model file %s: %w", path, err)
+			return nil, nil, fmt.Errorf("failed to open model file %s: %w", path, err)
 		}
 		defer f.Close()
 
 		decoder := json.NewDecoder(f)
 		if err := decoder.Decode(&schemaRoot); err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to decode model file %s: %w", path, err)
+			return nil, nil, fmt.Errorf("failed to decode model file %s: %w", path, err)
 		}
 
 		schemaRootMap[schema.Title] = schemaRoot
 
-		for propertyNameInSchema, schemaProperty := range schemaRoot.Properties {
+		// for propertyNameInSchema, schemaProperty := range schemaRoot.Properties {
 
-			for systemName, system := range schemaProperty.Systems {
+		// 	for systemName, system := range schemaProperty.Systems {
 
-				if _, ok := receiveFieldMap[systemName]; !ok {
-					receiveFieldMap[systemName] = make(map[string]map[string]map[string]Location)
-				}
+		// 		if _, ok := receiveFieldMap[systemName]; !ok {
+		// 			receiveFieldMap[systemName] = make(map[string]map[string]map[string]Location)
+		// 		}
 
-				for _, location := range system.Receive {
+		// 		for _, location := range system.Receive {
 
-					if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
-						receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
-					}
+		// 			if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
+		// 				receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
+		// 			}
 
-					if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
-						receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
-					}
+		// 			if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
+		// 				receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
+		// 			}
 
-					receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
-						Field:     propertyNameInSchema,
-						SearchKey: location.SearchKey,
-						Pull:      true,
-						Push:      false,
-					}
-				}
+		// 			receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
+		// 				Field:     propertyNameInSchema,
+		// 				SearchKey: location.SearchKey,
+		// 				Pull:      true,
+		// 				Push:      false,
+		// 			}
+		// 		}
 
-				for _, location := range system.Sync {
+		// 		for _, location := range system.Sync {
 
-					if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
-						receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
-					}
+		// 			if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
+		// 				receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
+		// 			}
 
-					if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
-						receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
-					}
+		// 			if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
+		// 				receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
+		// 			}
 
-					receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
-						Field:     propertyNameInSchema,
-						SearchKey: location.SearchKey,
-						Pull:      true,
-						Push:      true,
-					}
-				}
+		// 			receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
+		// 				Field:     propertyNameInSchema,
+		// 				SearchKey: location.SearchKey,
+		// 				Pull:      true,
+		// 				Push:      true,
+		// 			}
+		// 		}
 
-				for _, location := range system.Push {
+		// 		for _, location := range system.Push {
 
-					if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
-						receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
-					}
+		// 			if _, ok := receiveFieldMap[systemName][location.PullObject]; !ok {
+		// 				receiveFieldMap[systemName][location.PullObject] = make(map[string]map[string]Location)
+		// 			}
 
-					if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
-						receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
-					}
+		// 			if _, ok := receiveFieldMap[systemName][location.PullObject][schema.Title]; !ok {
+		// 				receiveFieldMap[systemName][location.PullObject][schema.Title] = make(map[string]Location)
+		// 			}
 
-					receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
-						Field:     propertyNameInSchema,
-						SearchKey: location.SearchKey,
-						Pull:      false,
-						Push:      true,
-					}
-				}
+		// 			receiveFieldMap[systemName][location.PullObject][schema.Title][location.Field] = Location{
+		// 				Field:     propertyNameInSchema,
+		// 				SearchKey: location.SearchKey,
+		// 				Pull:      false,
+		// 				Push:      true,
+		// 			}
+		// 		}
 
-				if _, ok := pushFieldMap[systemName]; !ok {
-					pushFieldMap[systemName] = make(map[string]map[string]map[string]Location)
-				}
+		// 		if _, ok := pushFieldMap[systemName]; !ok {
+		// 			pushFieldMap[systemName] = make(map[string]map[string]map[string]Location)
+		// 		}
 
-				for _, location := range system.Receive {
-					if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
-						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
-					}
+		// 		for _, location := range system.Receive {
+		// 			if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
+		// 				pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
+		// 			}
 
-					if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
-						pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
-					}
+		// 			if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
+		// 				pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
+		// 			}
 
-					pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
-						Field:      location.Field,
-						SearchKey:  location.SearchKey,
-						Pull:       false,
-						Push:       false,
-						PushObject: location.PushObject,
-					}
-				}
+		// 			pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
+		// 				Field:      location.Field,
+		// 				SearchKey:  location.SearchKey,
+		// 				Pull:       false,
+		// 				Push:       false,
+		// 				PushObject: location.PushObject,
+		// 			}
+		// 		}
 
-				for _, location := range system.Push {
-					if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
-						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
-					}
+		// 		for _, location := range system.Push {
+		// 			if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
+		// 				pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
+		// 			}
 
-					if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
-						pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
-					}
+		// 			if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
+		// 				pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
+		// 			}
 
-					pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
-						Field:      location.Field,
-						SearchKey:  location.SearchKey,
-						Pull:       false,
-						Push:       true,
-						PushObject: location.PushObject,
-					}
-				}
+		// 			pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
+		// 				Field:      location.Field,
+		// 				SearchKey:  location.SearchKey,
+		// 				Pull:       false,
+		// 				Push:       true,
+		// 				PushObject: location.PushObject,
+		// 			}
+		// 		}
 
-				for _, location := range system.Sync {
-					if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
-						pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
-					}
+		// 		for _, location := range system.Sync {
+		// 			if _, ok := pushFieldMap[systemName][schema.Title]; !ok {
+		// 				pushFieldMap[systemName][schema.Title] = make(map[string]map[string]Location)
+		// 			}
 
-					if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
-						pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
-					}
+		// 			if _, ok := pushFieldMap[systemName][schema.Title][location.PushObject]; !ok {
+		// 				pushFieldMap[systemName][schema.Title][location.PushObject] = make(map[string]Location)
+		// 			}
 
-					pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
-						Field:      location.Field,
-						SearchKey:  location.SearchKey,
-						Pull:       false,
-						Push:       true,
-						PushObject: location.PushObject,
-					}
-				}
-			}
-		}
+		// 			pushFieldMap[systemName][schema.Title][location.PushObject][propertyNameInSchema] = Location{
+		// 				Field:      location.Field,
+		// 				SearchKey:  location.SearchKey,
+		// 				Pull:       false,
+		// 				Push:       true,
+		// 				PushObject: location.PushObject,
+		// 			}
+		// 		}
+		// 	}
+		// }
 	}
 
-	b, err := json.MarshalIndent(receiveFieldMap, "", "  ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to marshal receiveFieldMap: %v\n", err)
-	} else {
-		fmt.Printf("receiveFieldMap:\n%s\n", string(b))
-	}
+	// b, err := json.MarshalIndent(receiveFieldMap, "", "  ")
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "failed to marshal receiveFieldMap: %v\n", err)
+	// } else {
+	// 	fmt.Printf("receiveFieldMap:\n%s\n", string(b))
+	// }
 
-	b, err = json.MarshalIndent(pushFieldMap, "", "  ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to marshal pushFieldMap: %v\n", err)
-	} else {
-		fmt.Printf("pushFieldMap:\n%s\n", string(b))
-	}
+	// b, err = json.MarshalIndent(pushFieldMap, "", "  ")
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "failed to marshal pushFieldMap: %v\n", err)
+	// } else {
+	// 	fmt.Printf("pushFieldMap:\n%s\n", string(b))
+	// }
 
-	return schemaMap, receiveFieldMap, pushFieldMap, schemaRootMap, nil
+	return schemaMap, schemaRootMap, nil
 }
