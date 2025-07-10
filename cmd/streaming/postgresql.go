@@ -122,48 +122,53 @@ func (p Postgresql) watchQueue() {
 
 			objectVal := object[objectType].(map[string]any)
 
-			var objectIsDuplicate bool
-			foundDuplicate := false
-			for i, expiringObj := range p.duplicateChecker[objectType] {
+			for locationInSystem, fields := range p.systemInfo.PushRouter[objectType] {
+				newObj := map[string]any{}
+				for keyInSchema, location := range fields {
+					if _, ok := objectVal[keyInSchema]; ok {
+						newObj[location.Field] = objectVal[keyInSchema]
 
-				objectIsDuplicate = true
+						if fields[keyInSchema].SearchKey {
+							searchFields = append(searchFields, location.Field)
+						}
+					}
+				}
 
-				for k, v := range expiringObj.Object {
-					if v != objectVal[k] {
-						objectIsDuplicate = false
+				var objectIsDuplicate bool
+				foundDuplicate := false
+				for i, expiringObj := range p.duplicateChecker[objectType] {
+
+					objectIsDuplicate = true
+
+					for k, v := range newObj {
+						if _, ok := expiringObj.Object[k]; !ok {
+							objectIsDuplicate = false
+							break
+						}
+						if v != expiringObj.Object[k] {
+							objectIsDuplicate = false
+							break
+						}
+					}
+
+					if objectIsDuplicate {
+						fmt.Println("Postgresql found duplicate object in duplicate checker while watching queue:", expiringObj.Object)
+						// If we found a duplicate, we can remove it from the duplicate checker
+						p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType][:i], p.duplicateChecker[objectType][i+1:]...)
+						foundDuplicate = true
 						break
 					}
 				}
 
-				if objectIsDuplicate {
-					fmt.Println("Postgresql found duplicate object in duplicate checker while watching queue:", expiringObj.Object)
-					// If we found a duplicate, we can remove it from the duplicate checker
-					p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType][:i], p.duplicateChecker[objectType][i+1:]...)
-					foundDuplicate = true
-					break
+				if !foundDuplicate {
+					fmt.Println("No duplicate found for object, upserting to PostgreSQL", obj)
 				}
-			}
 
-			if !foundDuplicate {
-				fmt.Println("No duplicate found for object, upserting to PostgreSQL", obj)
-				for locationInSystem, fields := range p.systemInfo.PushRouter[objectType] {
-					newObj := map[string]any{}
-					for keyInSchema, location := range fields {
-						if _, ok := objectVal[keyInSchema]; ok {
-							newObj[location.Field] = objectVal[keyInSchema]
+				fmt.Printf("PostgreSQL is upserting object: %v\n", newObj)
 
-							if fields[keyInSchema].SearchKey {
-								searchFields = append(searchFields, location.Field)
-							}
-						}
-					}
-
-					fmt.Printf("PostgreSQL is upserting object: %v\n", newObj)
-
-					err = p.upsertJSON(objectVal, searchFields, locationInSystem, objectType)
-					if err != nil {
-						p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", objectType, "locationInSystem", locationInSystem, "data", newObj)
-					}
+				err = p.upsertJSON(objectVal, searchFields, locationInSystem, objectType)
+				if err != nil {
+					p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", objectType, "locationInSystem", locationInSystem, "data", newObj)
 				}
 			}
 		}

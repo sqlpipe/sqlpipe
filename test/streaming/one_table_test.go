@@ -42,7 +42,7 @@ func createPostgresqlProductsTable(t *testing.T, db *sql.DB) {
 	}
 }
 
-func TestStreaming(t *testing.T) {
+func TestOneTableStreaming(t *testing.T) {
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {
@@ -115,35 +115,6 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("Could not create docker network: %s", err)
 	}
 
-	// postgresqlContainer, err = pool.RunWithOptions(&dockertest.RunOptions{
-	// 	Repository: "postgres",
-	// 	Tag:        "17",
-	// 	Name:       "test-postgres",
-	// 	Env: []string{
-	// 		fmt.Sprintf("POSTGRES_USER=%v", postgresqlUsername),
-	// 		fmt.Sprintf("POSTGRES_PASSWORD=%v", postgresqlPassword),
-	// 		fmt.Sprintf("POSTGRES_DB=%v", postgresqlDatabase),
-	// 	},
-	// 	NetworkID:    network.Network.ID,
-	// 	ExposedPorts: []string{"5432/tcp"},
-	// 	PortBindings: map[docker.Port][]docker.PortBinding{
-	// 		"5432/tcp": {{HostIP: "0.0.0.0", HostPort: "5432"}},
-	// 	},
-	// 	Cmd: []string{
-	// 		"postgres",
-	// 		"-c", "wal_level=logical",
-	// 		"-c", "max_replication_slots=5",
-	// 		"-c", "max_wal_senders=5",
-	// 		"-c", "max_connections=100",
-	// 	},
-	// }, func(config *docker.HostConfig) {
-	// 	config.AutoRemove = true
-	// 	config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	// })
-	// if err != nil {
-	// 	t.Fatalf("Could not start PostgreSQL: %s", err)
-	// }
-
 	postgresqlContainer, err = pool.BuildAndRunWithOptions("../../postgresql.dockerfile", &dockertest.RunOptions{
 		Name: "test-postgres",
 		Env: []string{
@@ -202,7 +173,7 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("Failed to build streaming app: %v", err)
 	}
 
-	systemsHostDir, err := filepath.Abs("./config/systems")
+	systemsHostDir, err := filepath.Abs("./config/one-table/systems")
 	if err != nil {
 		t.Fatalf("Failed to get absolute path for systems config: %v", err)
 	}
@@ -210,7 +181,7 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("Systems config directory does not exist: %s", systemsHostDir)
 	}
 
-	modelsHostDir, err := filepath.Abs("./config/models")
+	modelsHostDir, err := filepath.Abs("./config/one-table/models")
 	if err != nil {
 		t.Fatalf("Failed to get absolute path for models config: %v", err)
 	}
@@ -222,14 +193,12 @@ func TestStreaming(t *testing.T) {
 		Name: "sqlpipe-streaming",
 		Env: []string{
 			"PORT=4000",
-			"SYSTEMS_DIR=/config/systems",
-			"MODELS_DIR=/config/models",
-			// "QUEUE_DIR=/tmp/sqlpipe/queue",
-			// "SEGMENT_SIZE=1000",
+			"SYSTEMS_DIR=/config/one-table/systems",
+			"MODELS_DIR=/config/one-table/models",
 		},
 		Mounts: []string{
-			fmt.Sprintf("%s:/config/systems", systemsHostDir),
-			fmt.Sprintf("%s:/config/models", modelsHostDir),
+			fmt.Sprintf("%s:/config/one-table/systems", systemsHostDir),
+			fmt.Sprintf("%s:/config/one-table/models", modelsHostDir),
 		},
 		NetworkID: network.Network.ID,
 	})

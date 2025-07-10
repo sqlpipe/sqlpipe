@@ -118,3 +118,15 @@ build/docker:
 test:
 	@echo 'Running tests in the /test directory...'
 	STRIPE_API_KEY=$(STRIPE_API_KEY) go test -v -count=1 ./test/...
+
+## one-table: run the two_table_test.go test in the /test directory
+.PHONY: one-table
+one-table:
+	@echo 'Running one_table_test.go in the /test directory...'
+	STRIPE_API_KEY=$(STRIPE_API_KEY) go test -v -count=1 ./test/streaming/one_table_test.go
+
+## two-table: run the two_table_test.go test in the /test directory
+.PHONY: two-tables
+two-table:
+	@echo 'Running two_tables_test.go in the /test directory...'
+	STRIPE_API_KEY=$(STRIPE_API_KEY) go test -v -count=1 ./test/streaming/two_tables_test.go
