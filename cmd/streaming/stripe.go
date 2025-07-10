@@ -16,6 +16,41 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// deleteFromStripe simulates deleting an object from Stripe based on the searchKey and searchValue.
+func (s Stripe) deleteFromStripe(endpoint string, object Object, searchKey, searchValue string) error {
+	if searchKey == "" || searchValue == "" {
+		return fmt.Errorf("deleteFromStripe: searchKey and searchValue must be provided")
+	}
+
+	baseURL := "https://api.stripe.com/v1"
+	deleteUrl := fmt.Sprintf("%s/%s/%s", baseURL, endpoint, searchValue)
+	req, err := http.NewRequest("DELETE", deleteUrl, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	fmt.Printf("Making DELETE request to Stripe: %s\n", deleteUrl)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete object at stripe route %s, error making request: %w", deleteUrl, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body from stripe route %s, error reading response body: %w", deleteUrl, err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("failed to delete object at stripe route %s, status code: %d, response: %s", deleteUrl, resp.StatusCode, string(body))
+	}
+
+	fmt.Println("Stripe deleted object:", string(body))
+	return nil
+}
+
 type Stripe struct {
 	client *stripe.Client
 	apiKey string
@@ -24,10 +59,10 @@ type Stripe struct {
 	// pushFieldMap     map[string]map[string]map[string]Location
 	limiter          *rate.Limiter
 	systemInfo       SystemInfo
-	duplicateChecker map[string][]ExpiringMapAny
+	duplicateChecker map[string][]ExpiringObject
 }
 
-func (app *application) newStripe(systemInfo SystemInfo, duplicateChecker map[string][]ExpiringMapAny) (system SystemInterface, err error) {
+func (app *application) newStripe(systemInfo SystemInfo, duplicateChecker map[string][]ExpiringObject) (system SystemInterface, err error) {
 
 	if systemInfo.UseCliListener {
 
@@ -72,10 +107,8 @@ func (app *application) newStripe(systemInfo SystemInfo, duplicateChecker map[st
 	app.logger.Info("Stripe test api call was successful", "system", systemInfo.Name)
 
 	stripeSystem := &Stripe{
-		client: stripeClient,
-		app:    app,
-		// receiveFieldMap:  app.receiveFieldMap[systemInfo.Name],
-		// pushFieldMap:     app.pushFieldMap[systemInfo.Name],
+		client:           stripeClient,
+		app:              app,
 		limiter:          rate.NewLimiter(rate.Limit(systemInfo.RateLimit), systemInfo.RateBucketSize),
 		systemInfo:       systemInfo,
 		duplicateChecker: duplicateChecker,
@@ -113,77 +146,70 @@ func (s Stripe) watchQueue() {
 			index += int64(len(objects))
 		}
 
-		for _, obj := range objects {
+		for _, object := range objects {
 
-			fmt.Printf("Stripe got object from queue: %v\n", obj)
+			fmt.Printf("Stripe got object from queue: %v\n", object)
 			var searchKey string
 			var searchValue string
 
-			// searchFields := []string{}
-			object := obj.(map[string]any)
-
-			// ensure there is only 1 key. that is the object type
-			if len(object) != 1 {
-				s.app.logger.Error("object does not have exactly one key", "object", obj)
-				continue
-			}
-
-			// Get the object type (the only key in the map)
-			var objectType string
-			for key := range object {
-				objectType = key
-			}
-
-			objectVal := object[objectType].(map[string]any)
-
-			for locationInSystem, pushLocation := range s.systemInfo.PushRouter[objectType] {
-				newObj := map[string]any{}
+			for locationInSystem, pushLocation := range s.systemInfo.PushRouter[object.Type] {
+				newObj := Object{
+					Payload:   make(map[string]any),
+					Operation: object.Operation,
+					Type:      object.Type,
+				}
 				for keyInSchema, field := range pushLocation {
-					if _, ok := objectVal[keyInSchema]; ok {
-						newObj[field.Field] = objectVal[keyInSchema]
+					if _, ok := object.Payload[keyInSchema]; ok {
+						newObj.Payload[field.Field] = object.Payload[keyInSchema]
 
 						if field.SearchKey {
 							searchKey = field.Field
-							searchValue = fmt.Sprint(newObj[field.Field])
+							searchValue = fmt.Sprint(newObj.Payload[field.Field])
 						}
 					}
 
 					if field.Hardcode != nil && !isZeroValue(field.Hardcode) {
-						newObj[field.Field] = field.Hardcode
+						newObj.Payload[field.Field] = field.Hardcode
 					}
 				}
 
 				var objectIsDuplicate bool
 				foundDuplicate := false
-				for i, expiringObj := range s.duplicateChecker[objectType] {
-
+				for i, expiringObj := range s.duplicateChecker[object.Type] {
 					fmt.Println("Stripe checking duplicate checker for object:", expiringObj.Object)
-
 					objectIsDuplicate = true
-
-					for k, v := range expiringObj.Object {
-						if v != objectVal[k] {
+					for k, v := range expiringObj.Object.Payload {
+						if v != object.Payload[k] {
 							objectIsDuplicate = false
 							break
 						}
 					}
-
 					if objectIsDuplicate {
 						fmt.Println("Stripe found duplicate object in duplicate checker while watching queue:", expiringObj.Object)
 						// If we found a duplicate, we can remove it from the duplicate checker
-						s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType][:i], s.duplicateChecker[objectType][i+1:]...)
+						s.duplicateChecker[object.Type] = append(s.duplicateChecker[object.Type][:i], s.duplicateChecker[object.Type][i+1:]...)
 						foundDuplicate = true
 						break
 					}
 				}
 
 				if !foundDuplicate {
-					fmt.Printf("Stripe is upserting object. Search key: %v, Search value: %v (route: %s): %v\n", searchKey, searchValue, locationInSystem, newObj)
-					// Upsert the object to Stripe
-					_, err := s.upsertObject(locationInSystem, newObj, objectType, searchKey, searchValue)
-					if err != nil {
-						s.app.logger.Error("Failed to upsert object to Stripe", "error", err, "object", newObj)
-						continue
+					switch object.Operation {
+					case "upsert":
+						fmt.Printf("Stripe is upserting object. Search key: %v, Search value: %v (route: %s): %v\n", searchKey, searchValue, locationInSystem, newObj)
+						// Upsert the object to Stripe
+						_, err := s.upsertObject(locationInSystem, newObj, object.Type, searchKey, searchValue)
+						if err != nil {
+							s.app.logger.Error("Failed to upsert object to Stripe", "error", err, "object", newObj)
+							continue
+						}
+					case "delete":
+						fmt.Printf("Stripe is deleting object. Search key: %v, Search value: %v (route: %s): %v\n", searchKey, searchValue, locationInSystem, newObj)
+						err := s.deleteFromStripe(locationInSystem, newObj, searchKey, searchValue)
+						if err != nil {
+							s.app.logger.Error("Failed to delete object from Stripe", "error", err, "object", newObj)
+							continue
+						}
 					}
 				}
 			}
@@ -194,11 +220,11 @@ func (s Stripe) watchQueue() {
 	}
 }
 
-func (s Stripe) upsertObject(endpoint string, object map[string]any, objectType string, searchKey, searchValue string) ([]byte, error) {
+func (s Stripe) upsertObject(endpoint string, object Object, objectType string, searchKey, searchValue string) ([]byte, error) {
 	// Replace with your actual secret key or use an environment variable
 	form := url.Values{}
 
-	for key, value := range object {
+	for key, value := range object.Payload {
 
 		if key == searchKey {
 			continue
@@ -256,7 +282,7 @@ func (s Stripe) upsertObject(endpoint string, object map[string]any, objectType 
 		}
 
 		fmt.Println("Stripe created object:", string(body))
-		expiringObj := newExpiringMapAny(object, s.app.config.keepDuplicatesFor)
+		expiringObj := newExpiringObject(object, s.app.config.keepDuplicatesFor)
 		s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType], expiringObj)
 		return body, nil
 	}
@@ -283,7 +309,7 @@ func (s Stripe) upsertObject(endpoint string, object map[string]any, objectType 
 		return nil, fmt.Errorf("failed to read response body from stripe route %s, error reading response body: %w", updateUrl, err)
 	}
 
-	expiringObj := newExpiringMapAny(object, s.app.config.keepDuplicatesFor)
+	expiringObj := newExpiringObject(object, s.app.config.keepDuplicatesFor)
 	s.duplicateChecker[objectType] = append(s.duplicateChecker[objectType], expiringObj)
 
 	return body, nil
@@ -310,9 +336,21 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	objectName := string(event.Type)
+	var operationType string
 	// If the event type contains a period, we only want the part before it
 	if idx := indexOfPeriod(objectName); idx > 0 {
+		operationType = objectName[idx+1:]
 		objectName = objectName[:idx]
+	}
+
+	switch operationType {
+	case "created", "updated":
+		operationType = "upsert"
+	case "deleted":
+		operationType = "delete"
+	default:
+		s.app.logger.Error("Unknown Stripe event type", "event_type", event.Type)
+		return
 	}
 
 	var obj map[string]any
@@ -369,7 +407,7 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			objectIsDuplicate = true
 
 			for k, v := range obj {
-				if v != expiringObj.Object[k] {
+				if v != expiringObj.Object.Payload[k] {
 					objectIsDuplicate = false
 					break
 				}
@@ -386,11 +424,17 @@ func (s *Stripe) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 		if !foundDuplicate {
 
+			object := Object{
+				Type:      schemaName,
+				Operation: operationType,
+				Payload:   obj,
+			}
+
 			fmt.Println("Stripe no duplicate found for object, adding to queue", obj)
-			s.app.storageEngine.addSafeObject(obj, schemaName)
+			s.app.storageEngine.addSafeObject(object)
 
 			fmt.Println("Stripe no duplicate found for object, adding to duplicate checker", obj)
-			expiringObj := newExpiringMapAny(obj, s.app.config.keepDuplicatesFor)
+			expiringObj := newExpiringObject(object, s.app.config.keepDuplicatesFor)
 			s.duplicateChecker[schemaName] = append(s.duplicateChecker[schemaName], expiringObj)
 		}
 	}

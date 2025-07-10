@@ -22,8 +22,7 @@ import (
 func createPostgresqlProductsAndPricesTables(t *testing.T, db *sql.DB) {
 	_, err := db.Exec(`
 			   CREATE TABLE products (
-					   id bigserial PRIMARY KEY,
-					   stripe_id TEXT UNIQUE,
+					   id TEXT PRIMARY KEY,
 					   name TEXT NOT NULL,
 					   default_price_id TEXT UNIQUE,
 					   active BOOLEAN DEFAULT TRUE,
@@ -43,10 +42,8 @@ func createPostgresqlProductsAndPricesTables(t *testing.T, db *sql.DB) {
 
 	_, err = db.Exec(`
 			   CREATE TABLE prices (
-					   id bigserial PRIMARY KEY,
-					   stripe_id text UNIQUE,
-					   -- product_id BIGINT REFERENCES products(id) ON DELETE CASCADE,
-					   product_stripe_id TEXT NOT NULL,
+					   id text PRIMARY KEY,
+					   product_id TEXT NOT NULL,
 					   unit_amount INT NOT NULL,
 					   currency TEXT NOT NULL
 			   );

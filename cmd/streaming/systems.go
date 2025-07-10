@@ -72,7 +72,7 @@ type SystemInterface interface {
 	// createModels(obj map[string]interface{}) (map[string]interface{}, error)
 }
 
-func (app *application) NewSystem(systemInfo SystemInfo, port int, duplicateChecker map[string][]ExpiringMapAny) (system SystemInterface, err error) {
+func (app *application) NewSystem(systemInfo SystemInfo, port int, duplicateChecker map[string][]ExpiringObject) (system SystemInterface, err error) {
 	switch systemInfo.Type {
 	case TypePostgreSQL:
 		return app.newPostgresql(systemInfo, duplicateChecker)

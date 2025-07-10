@@ -17,30 +17,28 @@ import (
 	"golang.org/x/time/rate"
 )
 
-type ExpiringMapAny struct {
-	Object map[string]any `json:"object"`
-	Expiry time.Time      `json:"expiry"`
+type ExpiringObject struct {
+	Object Object    `json:"object"`
+	Expiry time.Time `json:"expiry"`
 }
 
-func newExpiringMapAny(object map[string]any, timeFromNow time.Duration) ExpiringMapAny {
-	return ExpiringMapAny{
+func newExpiringObject(object Object, timeFromNow time.Duration) ExpiringObject {
+	return ExpiringObject{
 		Object: object,
 		Expiry: time.Now().Add(timeFromNow),
 	}
 }
 
 type Postgresql struct {
-	db         *sql.DB
-	replConn   *pgconn.PgConn
-	app        *application
-	systemInfo SystemInfo
-	// receiveRouter    map[string]map[string]map[string]Location
-	// pushRouter       map[string]map[string]map[string]Location
+	db               *sql.DB
+	replConn         *pgconn.PgConn
+	app              *application
+	systemInfo       SystemInfo
 	limiter          *rate.Limiter
-	duplicateChecker map[string][]ExpiringMapAny
+	duplicateChecker map[string][]ExpiringObject
 }
 
-func (app *application) newPostgresql(systemInfo SystemInfo, duplicateChecker map[string][]ExpiringMapAny) (postgresql Postgresql, err error) {
+func (app *application) newPostgresql(systemInfo SystemInfo, duplicateChecker map[string][]ExpiringObject) (postgresql Postgresql, err error) {
 	db, err := openConnectionPool(systemInfo.Name, systemInfo.ConnectionString, DriverPostgreSQL)
 	if err != nil {
 		return postgresql, fmt.Errorf("error opening postgresql db :: %v", err)
@@ -56,13 +54,7 @@ func (app *application) newPostgresql(systemInfo SystemInfo, duplicateChecker ma
 	postgresql.replConn = replConn
 	postgresql.app = app
 	postgresql.systemInfo = systemInfo
-	// fmt.Println("Receive router: ", postgresql.systemInfo.ReceiveRouter)
 	postgresql.limiter = rate.NewLimiter(rate.Limit(systemInfo.RateLimit), systemInfo.RateBucketSize)
-	// postgresql.receiveRouter, err = postgresql.createReceiveRouter()
-	// if err != nil {
-	// 	return postgresql, fmt.Errorf("error creating receive router for postgresql system %s: %v", systemInfo.Name, err)
-	// }
-	// postgresql.pushFieldMap = app.pushFieldMap[systemInfo.Name]
 	postgresql.duplicateChecker = duplicateChecker
 
 	app.storageEngine.setSafeIndexMap(systemInfo.Name, 0)
@@ -97,9 +89,8 @@ func (p Postgresql) watchQueue() {
 			index += int64(len(objects))
 		}
 
-		for _, obj := range objects {
+		for _, object := range objects {
 			searchFields := []string{}
-			object := obj.(map[string]any)
 
 			prettyObj, err := json.MarshalIndent(object, "", "  ")
 			if err != nil {
@@ -108,25 +99,11 @@ func (p Postgresql) watchQueue() {
 				fmt.Printf("Postgresql got object from queue:\n%s\n", string(prettyObj))
 			}
 
-			// ensure there is only 1 key. that is the object type
-			if len(object) != 1 {
-				p.app.logger.Error("object does not have exactly one key", "object", obj)
-				continue
-			}
-
-			// Get the object type (the only key in the map)
-			var objectType string
-			for key := range object {
-				objectType = key
-			}
-
-			objectVal := object[objectType].(map[string]any)
-
-			for locationInSystem, fields := range p.systemInfo.PushRouter[objectType] {
+			for locationInSystem, fields := range p.systemInfo.PushRouter[object.Type] {
 				newObj := map[string]any{}
 				for keyInSchema, location := range fields {
-					if _, ok := objectVal[keyInSchema]; ok {
-						newObj[location.Field] = objectVal[keyInSchema]
+					if _, ok := object.Payload[keyInSchema]; ok {
+						newObj[location.Field] = object.Payload[keyInSchema]
 
 						if fields[keyInSchema].SearchKey {
 							searchFields = append(searchFields, location.Field)
@@ -136,16 +113,16 @@ func (p Postgresql) watchQueue() {
 
 				var objectIsDuplicate bool
 				foundDuplicate := false
-				for i, expiringObj := range p.duplicateChecker[objectType] {
+				for i, expiringObj := range p.duplicateChecker[object.Type] {
 
 					objectIsDuplicate = true
 
 					for k, v := range newObj {
-						if _, ok := expiringObj.Object[k]; !ok {
+						if _, ok := expiringObj.Object.Payload[k]; !ok {
 							objectIsDuplicate = false
 							break
 						}
-						if v != expiringObj.Object[k] {
+						if v != expiringObj.Object.Payload[k] {
 							objectIsDuplicate = false
 							break
 						}
@@ -154,19 +131,27 @@ func (p Postgresql) watchQueue() {
 					if objectIsDuplicate {
 						fmt.Println("Postgresql found duplicate object in duplicate checker while watching queue:", expiringObj.Object)
 						// If we found a duplicate, we can remove it from the duplicate checker
-						p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType][:i], p.duplicateChecker[objectType][i+1:]...)
+						p.duplicateChecker[object.Type] = append(p.duplicateChecker[object.Type][:i], p.duplicateChecker[object.Type][i+1:]...)
 						foundDuplicate = true
 						break
 					}
 				}
 
 				if !foundDuplicate {
-					fmt.Println("No duplicate found for object, upserting to PostgreSQL", obj)
+					fmt.Println("No duplicate found for object, upserting to PostgreSQL", object)
 					fmt.Printf("PostgreSQL is upserting object: %v\n", newObj)
 
-					err = p.upsertJSON(objectVal, searchFields, locationInSystem, objectType)
-					if err != nil {
-						p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", objectType, "locationInSystem", locationInSystem, "data", newObj)
+					switch object.Operation {
+					case "upsert":
+						err = p.upsertJSON(object.Payload, searchFields, locationInSystem, object.Type)
+						if err != nil {
+							p.app.logger.Error("error upserting JSON to PostgreSQL", "error", err, "objectType", object.Type, "locationInSystem", locationInSystem, "data", newObj)
+						}
+					case "delete":
+						err = p.deleteFromPostgresql(object.Payload, searchFields, locationInSystem)
+						if err != nil {
+							p.app.logger.Error("error deleting from PostgreSQL", "error", err, "objectType", object.Type, "locationInSystem", locationInSystem, "data", newObj)
+						}
 					}
 				}
 
@@ -261,7 +246,12 @@ func (p Postgresql) upsertJSON(data map[string]any, searchFields []string, locat
 		}
 	}
 
-	expiringObj := newExpiringMapAny(data, p.app.config.keepDuplicatesFor)
+	object := Object{
+		Type:    objectType,
+		Payload: data,
+	}
+
+	expiringObj := newExpiringObject(object, p.app.config.keepDuplicatesFor)
 	p.duplicateChecker[objectType] = append(p.duplicateChecker[objectType], expiringObj)
 
 	return nil
@@ -374,6 +364,11 @@ func (p *Postgresql) watchCDC() {
 	}
 }
 
+type OldKeys struct {
+	KeyNames  []string `json:"keynames"`
+	KeyValues []any    `json:"keyvalues,omitempty"` // Optional, if not provided, the old keys are not included
+}
+
 type CdcChange struct {
 	Kind         string   `json:"kind"`
 	Schema       string   `json:"schema"`
@@ -381,6 +376,7 @@ type CdcChange struct {
 	ColumnNames  []string `json:"columnnames"`
 	ColumnTypes  []string `json:"columntypes"`
 	ColumnValues []any    `json:"columnvalues"`
+	OldKeys      OldKeys  `json:"oldkeys,omitempty"` // Optional, if not provided, the old keys are not included
 }
 
 type CdcEvent struct {
@@ -401,19 +397,31 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 
 	for _, change := range event.Change {
 		pullLocation := change.Schema + "." + change.Table
-
-		// fmt.Println("Received CDC event", objectName)
-
-		fmt.Println("Received cdc data from PostgreSQL:", jsonString)
+		operationType := change.Kind
 
 		obj := map[string]any{}
 		newObjs := make(map[string]map[string]any)
 
-		for i, colName := range change.ColumnNames {
-			if change.ColumnValues[i] != nil {
-				obj[colName] = change.ColumnValues[i]
+		switch operationType {
+		case "insert", "update":
+			operationType = "upsert"
+			for i, colName := range change.ColumnNames {
+				if change.ColumnValues[i] != nil {
+					obj[colName] = change.ColumnValues[i]
+				}
 			}
+		case "delete":
+			operationType = "delete"
+			for i, colName := range change.OldKeys.KeyNames {
+				if change.OldKeys.KeyValues != nil {
+					obj[colName] = change.OldKeys.KeyValues[i]
+				}
+			}
+		default:
+			return fmt.Errorf("unknown operation type: %s", operationType)
 		}
+
+		fmt.Println("Received cdc data from PostgreSQL:", jsonString)
 
 		for objectType, pullObject := range p.systemInfo.ReceiveRouter[pullLocation] {
 			newObj := map[string]any{}
@@ -452,7 +460,7 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 				objectIsDuplicate = true
 
 				for k, v := range obj {
-					if v != expiringObj.Object[k] {
+					if v != expiringObj.Object.Payload[k] {
 						objectIsDuplicate = false
 						break
 					}
@@ -469,16 +477,50 @@ func (p Postgresql) handleCdcEvent(jsonString string) error {
 
 			if !foundDuplicate {
 
+				object := Object{
+					Operation: operationType,
+					Type:      schemaName,
+					Payload:   obj,
+				}
+
 				// also add to storage engine
 				fmt.Println("PostgreSQL no duplicate found. Storing object in queue", obj)
-				p.app.storageEngine.addSafeObject(obj, schemaName)
+				p.app.storageEngine.addSafeObject(object)
 
 				fmt.Println("PostgreSQL no duplicate found for object, adding to duplicate checker", obj)
-				expiringObj := newExpiringMapAny(obj, p.app.config.keepDuplicatesFor)
+				expiringObj := newExpiringObject(object, p.app.config.keepDuplicatesFor)
 				p.duplicateChecker[schemaName] = append(p.duplicateChecker[schemaName], expiringObj)
 			}
 		}
 	}
 
+	return nil
+}
+
+// deleteFromPostgresql deletes a row from PostgreSQL based on the searchFields and payload.
+func (p Postgresql) deleteFromPostgresql(payload map[string]any, searchFields []string, locationInSystem string) error {
+	if len(searchFields) == 0 {
+		return fmt.Errorf("no search fields provided for delete operation")
+	}
+
+	whereClauses := make([]string, 0, len(searchFields))
+	values := make([]any, 0, len(searchFields))
+	idx := 1
+	for _, field := range searchFields {
+		val, ok := payload[field]
+		if !ok {
+			return fmt.Errorf("search field '%s' not found in payload", field)
+		}
+		whereClauses = append(whereClauses, fmt.Sprintf("%s = $%d", field, idx))
+		values = append(values, val)
+		idx++
+	}
+
+	deleteQuery := fmt.Sprintf("DELETE FROM %s WHERE %s", locationInSystem, strings.Join(whereClauses, " AND "))
+	_, err := p.db.Exec(deleteQuery, values...)
+	if err != nil {
+		p.app.logger.Error("error executing delete query", "error", err, "query", deleteQuery, "values", values)
+		return fmt.Errorf("error executing delete query: %v", err)
+	}
 	return nil
 }

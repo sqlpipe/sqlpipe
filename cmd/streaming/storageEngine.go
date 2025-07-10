@@ -5,17 +5,23 @@ import (
 	"sync"
 )
 
+type Object struct {
+	Type      string         `json:"type"`
+	Operation string         `json:"operation"`
+	Payload   map[string]any `json:"payload"`
+}
+
 type storageEngine struct {
 	safeIndexMap map[string]int64
 	indexMapMu   sync.RWMutex
-	safeObjects  []any
+	safeObjects  []Object
 	objectsMu    sync.RWMutex
 }
 
 func newStorageEngine() (*storageEngine, error) {
 	storageEngine := &storageEngine{
 		safeIndexMap: make(map[string]int64),
-		safeObjects:  make([]any, 0),
+		safeObjects:  make([]Object, 0),
 	}
 	return storageEngine, nil
 }
@@ -33,16 +39,13 @@ func (s *storageEngine) getSafeIndexMap(key string) (int64, bool) {
 	return index, exists
 }
 
-func (s *storageEngine) addSafeObject(obj any, objType string) {
+func (s *storageEngine) addSafeObject(object Object) {
 	s.objectsMu.Lock()
 	defer s.objectsMu.Unlock()
-	payload := map[string]any{
-		objType: obj,
-	}
-	s.safeObjects = append(s.safeObjects, payload)
+	s.safeObjects = append(s.safeObjects, object)
 }
 
-func (s *storageEngine) getSafeObjectsFromIndex(index int64) []any {
+func (s *storageEngine) getSafeObjectsFromIndex(index int64) []Object {
 	s.objectsMu.RLock()
 	defer s.objectsMu.RUnlock()
 

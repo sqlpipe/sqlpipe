@@ -103,10 +103,10 @@ func main() {
 
 	serveQuitCh := make(chan struct{})
 
-	duplicateChecker := make(map[string][]ExpiringMapAny)
+	duplicateChecker := make(map[string][]ExpiringObject)
 
 	for schemaName := range app.schemaMap {
-		duplicateChecker[schemaName] = []ExpiringMapAny{}
+		duplicateChecker[schemaName] = []ExpiringObject{}
 	}
 
 	// The server must be running to check that webhooks are valid (needed for system initialization)
@@ -168,7 +168,7 @@ func createSystemInfoMap(cfg config) (map[string]SystemInfo, error) {
 	return systemInfoMap, nil
 }
 
-func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo, duplicateChecker map[string][]ExpiringMapAny) {
+func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo, duplicateChecker map[string][]ExpiringObject) {
 	var systemMapMu sync.Mutex
 	errCh := make(chan error, len(systemInfoMap))
 	doneCh := make(chan struct{}, len(systemInfoMap))
@@ -176,10 +176,10 @@ func (app *application) setSystemMap(systemInfoMap map[string]SystemInfo, duplic
 	for systemName, systemInfo := range systemInfoMap {
 		go func(systemName string, systemInfo SystemInfo) {
 			// Create a new copy of duplicateChecker for each system
-			dupCheckerCopy := make(map[string][]ExpiringMapAny, len(duplicateChecker))
+			dupCheckerCopy := make(map[string][]ExpiringObject, len(duplicateChecker))
 			for k, v := range duplicateChecker {
 				// Create a new slice for each key to avoid sharing underlying arrays
-				copiedSlice := make([]ExpiringMapAny, len(v))
+				copiedSlice := make([]ExpiringObject, len(v))
 				copy(copiedSlice, v)
 				dupCheckerCopy[k] = copiedSlice
 			}
