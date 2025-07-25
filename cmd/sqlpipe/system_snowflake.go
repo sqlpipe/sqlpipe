@@ -143,7 +143,7 @@ func (system Snowflake) pipeTypeToCreateType(
 	case "float32":
 		return "real", nil
 	case "decimal":
-		return "number", nil
+		return "real", nil
 	case "money":
 		return "number", nil
 	case "datetime":
