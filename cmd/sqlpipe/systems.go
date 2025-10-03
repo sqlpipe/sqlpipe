@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unicode"
@@ -822,6 +823,8 @@ func convertPipeFiles(
 					return
 				}
 			}
+
+			runtime.GC()
 		}
 
 		infoLog.Printf("transfer %v finished converting pipe files to final csvs", transfer.Id)
@@ -859,6 +862,8 @@ func insertFinalCsvs(
 				return fmt.Errorf("error removing final csv :: %v", err)
 			}
 		}
+
+		runtime.GC()
 	}
 
 	infoLog.Printf("transfer %v finished inserting final csvs", transfer.Id)
